@@ -52,7 +52,7 @@ nav button[aria-current=page]{color:var(--pri);font-weight:700}
 .snd{float:right;border:0;background:rgba(255,255,255,.18);color:var(--onpri);font:700 13px inherit;font-family:inherit;padding:7px 11px;border-radius:99px}
 .seg{display:flex;gap:8px}.seg label{flex:1;margin:0;position:relative}.seg input{position:absolute;opacity:0;width:1px;height:1px}.seg span{display:block;text-align:center;padding:13px 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);font-weight:700}.seg input:checked+span{background:var(--pri);color:var(--onpri);border-color:var(--pri)}.seg input:focus-visible+span{outline:3px solid var(--warn);outline-offset:2px}
 .sync{font-size:12px;opacity:.9;margin-top:8px}
-.tabs{display:flex;border-bottom:2px solid var(--line);margin:0 0 10px}.tabs button{flex:1;border:0;background:none;color:var(--mut);font:600 14px inherit;font-family:inherit;padding:11px 4px;border-bottom:3px solid transparent;margin-bottom:-2px}.tabs button[aria-selected=true]{color:var(--pri);border-bottom-color:var(--pri);font-weight:800}.tabs i{font-style:normal;background:var(--chip);border-radius:99px;padding:1px 8px;font-size:12px;margin-left:4px}
+.tabs{display:flex;border-bottom:2px solid var(--line);margin:0 0 10px}.tabs button{flex:1;border:0;background:none;color:var(--mut);font:600 13px inherit;font-family:inherit;padding:10px 2px;border-bottom:3px solid transparent;margin-bottom:-2px}.tabs button[aria-selected=true]{color:var(--pri);border-bottom-color:var(--pri);font-weight:800}.tabs i{font-style:normal;background:var(--chip);border-radius:99px;padding:1px 8px;font-size:12px;margin-left:4px}
 .toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;right:12px;max-width:536px;margin:auto;background:#1d7a46;color:#fff;padding:14px;border-radius:12px;font-weight:700;z-index:40;display:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 </style>
 </head>
@@ -67,7 +67,7 @@ nav button[aria-current=page]{color:var(--pri);font-weight:700}
 <div class="toast" id="toast" role="status"></div>
 <div class="sheet" id="sheet"><div id="sbody"></div></div>
 <script>
-const ST=[["Tiếp nhận","#6b7280"],["Đang kiểm tra","#0369a1"],["Chờ linh kiện","#b45309"],["Đang sửa","#7c3aed"],["Hoàn tất","#1d7a46"],["Đã giao","#475569"],["Đang treo","#b45309"]];
+const ST=[["Tiếp nhận","#6b7280"],["Đang kiểm tra","#0369a1"],["Chờ linh kiện","#b45309"],["Đang sửa","#7c3aed"],["Hoàn tất","#1d7a46"],["Đã trả hàng","#475569"],["Đã duyệt, chờ trả","#b45309"]];
 let D=[],view="list",flt=-1,q="";
 const KEY="bh_tickets_v1";
 let GR=["Nhóm điện","Nhóm âm thanh","Nhóm điện lạnh","Nhóm khác"],gf="";
@@ -75,13 +75,23 @@ try{const g=JSON.parse(localStorage.getItem("bh_groups")||"null");if(g&&g.length
 let tab="Hàng bảo hành";const typeOf=x=>x.type||(warr(x.buy,x.mo).ok?"Hàng bảo hành":"Hàng sửa chữa");
 const HOLD=5,DAY=864e5;let ovf=false,tT;
 const dueAt=x=>new Date(new Date(x.hold||x.at).getTime()+HOLD*DAY);
-const isOver=x=>x.conf!="Trả lại khách"&&x.s!=5&&dueAt(x)<new Date();
-const holdTxt=x=>{if(x.conf=="Trả lại khách"||x.s==5)return"";if(isOver(x))return" · ⚠ quá hạn";if(x.s==6)return" · còn "+Math.ceil((dueAt(x)-new Date())/DAY)+" ngày";return""};
+const PEND=3;
+const isPend=x=>(x.conf=="Chờ duyệt"||x.conf=="Chờ xác nhận")&&x.s!=5;
+const pendDays=x=>Math.floor((Date.now()-new Date(x.at).getTime())/DAY);
+const pendOver=x=>isPend(x)&&new Date(x.at).getTime()+PEND*DAY<Date.now();
+const cnt=n=>D.filter(x=>n=="Đang treo"?isPend(x):typeOf(x)==n&&!isPend(x)).length;
+const isOver=x=>x.conf!="Trả lại khách"&&x.s!=5&&!isPend(x)&&dueAt(x)<new Date();
+const holdTxt=x=>{if(isPend(x))return pendOver(x)?" · ⚠ treo quá "+PEND+" ngày":" · chờ duyệt "+pendDays(x)+" ngày";if(x.conf=="Trả lại khách"||x.s==5)return"";if(isOver(x))return" · ⚠ quá hạn";if(x.s==6)return" · còn "+Math.ceil((dueAt(x)-new Date())/DAY)+" ngày";return""};
 const toast=(t,bg)=>{const e=document.querySelector("#toast");e.textContent=t;e.style.background=bg||"#1d7a46";e.style.display="block";clearTimeout(tT);tT=setTimeout(()=>e.style.display="none",10000)};
 const done=x=>{say("Đã sửa xong "+x.name);toast("✅ Đã sửa xong: "+x.name+" — "+x.dev)};
 const overBanner=()=>{const o=D.filter(isOver);return o.length?`<button class="t" style="--c:#b45309;margin:0 0 10px" id="ov"><b>⏰ ${o.length} hàng quá ${HOLD} ngày chưa trả khách</b><br><small>${o.slice(0,3).map(x=>esc(x.name)).join(", ")}${o.length>3?"…":""} — chạm để ${ovf?"xem tất cả":"chỉ xem các phiếu này"}</small></button>`:""};
+const pendBanner=()=>{const o=D.filter(pendOver);return o.length?`<button class="t" data-tab="Đang treo" style="--c:#b3261e;margin:0 0 10px"><b>⏳ ${o.length} hàng đang treo quá ${PEND} ngày chưa có lệnh duyệt</b><br><small>${o.slice(0,3).map(x=>esc(x.name)).join(", ")}${o.length>3?"…":""} — chạm để xem danh sách</small></button>`:""};
+const pendCheck=()=>{const o=D.filter(pendOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem2")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem2",day)}catch(e){}
+ toast("⏳ "+o.length+" hàng đang treo quá "+PEND+" ngày chưa có lệnh duyệt","#b3261e");say("Có "+o.length+" hàng đang treo quá "+PEND+" ngày chưa có lệnh duyệt")};
 const remindCheck=()=>{const o=D.filter(isOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem",day)}catch(e){}
  toast("⏰ Nhắc nhở: "+o.length+" hàng quá "+HOLD+" ngày chưa trả khách","#b45309");say("Nhắc nhở: có "+o.length+" hàng chưa trả khách")};
+const getPin=()=>{try{return localStorage.getItem("bh_pin")||""}catch(e){return""}};
+const setPin=v=>{try{localStorage.setItem("bh_pin",v)}catch(e){}};
 const saveGR=()=>{try{localStorage.setItem("bh_groups",JSON.stringify(GR))}catch(e){}};
 const grList=id=>`<datalist id="${id}">${GR.map(g=>`<option value="${esc(g)}">`).join("")}</datalist>`;
 try{D=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){D=[]}
@@ -112,39 +122,52 @@ const fd=d=>d?new Date(d).toLocaleDateString("vi-VN"):"—";
 function warr(buy,mo){if(!buy)return{t:"Chưa có ngày mua",c:"var(--mut)"};const e=new Date(buy);e.setMonth(e.getMonth()+(+mo||12));const days=Math.ceil((e-new Date())/864e5);
  return days>=0?{t:"Còn bảo hành đến "+fd(e)+" (còn "+days+" ngày)",c:"var(--ok)",ok:1}:{t:"Hết bảo hành từ "+fd(e)+" — tính phí sửa",c:"var(--bad)"}}
 function stats(){const o=D.filter(x=>x.s!=4&&x.s!=5).length,r=D.filter(x=>x.s==4).length;
- $("#stats").innerHTML=`<div class="stat"><b>${D.length}</b><span>Tổng phiếu</span></div><div class="stat"><b>${o}</b><span>Đang xử lý</span></div><div class="stat"><b>${r}</b><span>Chờ giao</span></div>`}
+ $("#stats").innerHTML=`<div class="stat"><b>${D.length}</b><span>Tổng phiếu</span></div><div class="stat"><b>${o}</b><span>Đang xử lý</span></div><div class="stat"><b>${r}</b><span>Chờ trả hàng</span></div>`}
 function render(){
  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.v==view?"page":"false"));
  stats();
  if(view=="list"){
-  const L=D.filter(x=>(flt<0||x.s==flt)&&(ovf?isOver(x):(tab==""||typeOf(x)==tab))&&(!q||(x.name+x.phone+x.dev+x.sn+x.id+(x.grp||"")).toLowerCase().includes(q.toLowerCase())));
-  $("#app").innerHTML=`${overBanner()}<div class="tabs" role="tablist">${["Hàng bảo hành","Hàng sửa chữa"].map(n=>`<button role="tab" aria-selected="${tab==n}" data-tab="${n}">${n}<i>${D.filter(x=>typeOf(x)==n).length}</i></button>`).join("")}</div><input id="q" type="search" placeholder="Tìm tên, SĐT, thiết bị, serial…" value="${esc(q)}" aria-label="Tìm phiếu">
+  const L=D.filter(x=>(flt<0||x.s==flt)&&(ovf?isOver(x):(tab=="Đang treo"?isPend(x):((tab==""||typeOf(x)==tab)&&!isPend(x))))&&(!q||(x.name+x.phone+x.dev+x.sn+x.id+(x.grp||"")).toLowerCase().includes(q.toLowerCase())));
+  $("#app").innerHTML=`${pendBanner()}${overBanner()}<div class="tabs" role="tablist">${["Hàng bảo hành","Hàng sửa chữa","Đang treo"].map(n=>`<button role="tab" aria-selected="${tab==n}" data-tab="${n}">${n}<i>${cnt(n)}</i></button>`).join("")}</div><input id="q" type="search" placeholder="Tìm tên, SĐT, thiết bị, serial…" value="${esc(q)}" aria-label="Tìm phiếu">
   <div class="chips"><button class="chip" aria-pressed="${flt<0}" data-f="-1">Tất cả</button>${ST.map((s,i)=>`<button class="chip" aria-pressed="${flt==i}" data-f="${i}">${s[0]}</button>`).join("")}</div>
   
   ${L.length?L.map(x=>`<button class="t" style="--c:${ST[x.s][1]}" data-id="${x.id}"><div class="r"><b>${esc(x.dev)}</b><span class="st">${ST[x.s][0]}${holdTxt(x)}</span></div><div>${esc(x.name)}${x.phone?" · "+esc(x.phone):""}</div><small><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · SL ${x.qty||1} · ${fd(x.at)} · ${esc(x.issue).slice(0,60)}</small></button>`).join(""):`<div class="empty">${D.length?"Không có phiếu phù hợp.":"Chưa có phiếu nào. Chạm “Tạo phiếu” để tiếp nhận máy đầu tiên."}</div>`}`;
   const qi=$("#q");qi.oninput=e=>{q=e.target.value;const p=qi.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
  }
  if(view=="new"){
-  $("#app").innerHTML=`<label>Tên khách hàng *</label><input id="n"><label>Số điện thoại</label><input id="p" type="tel" inputmode="tel">
-  <label>Tên sản phẩm *</label><input id="d"><label>Số lượng</label><input id="qty" type="number" inputmode="numeric" min="1" value="1"><div class="row"><div><label>Ngày bán ra</label><input id="b" type="date"></div><div><label>Bảo hành (tháng)</label><input id="m" type="number" value="12" min="0"></div></div><div id="auto" class="res" role="status" style="display:none;font-size:14px"></div><label id="tl">Loại hàng * <span class="mut" style="font-weight:400">(tự chọn theo ngày bán)</span></label><div class="seg" role="radiogroup" aria-labelledby="tl"><label><input type="radio" name="tp" value="Hàng bảo hành" checked><span>Hàng bảo hành</span></label><label><input type="radio" name="tp" value="Hàng sửa chữa"><span>Hàng sửa chữa</span></label></div><label id="cl2">Xác nhận *</label><div class="seg" role="radiogroup" aria-labelledby="cl2"><label><input type="radio" name="cf" value="Xác nhận sửa" checked><span>Xác nhận sửa</span></label><label><input type="radio" name="cf" value="Trả lại khách"><span>Trả lại khách</span></label></div><div id="kw"><label id="kl">Mục đích *</label><div class="seg" role="radiogroup" aria-labelledby="kl"><label><input type="radio" name="k" value="Sửa chữa" checked><span>Sửa chữa</span></label><label><input type="radio" name="k" value="Thay mới"><span>Thay mới</span></label></div></div><label>Số serial</label><input id="sn">
-  
-  <label>Chẩn đoán bệnh</label><textarea id="i"></textarea><label>Phụ kiện đi kèm / ghi chú</label><input id="a">
+  $("#app").innerHTML=`<label>Tên khách hàng *</label><input id="n" autocomplete="off"><label>Tên sản phẩm *</label><input id="d" autocomplete="off"><label>Số seri</label><input id="sn" autocomplete="off">
+  <label id="tl">Chọn loại xử lý *</label><div class="seg" role="radiogroup" aria-labelledby="tl"><label><input type="radio" name="tp" value="Hàng bảo hành" checked><span>Bảo hành</span></label><label><input type="radio" name="tp" value="Hàng sửa chữa"><span>Sửa chữa</span></label></div>
+  <div id="wb"><div class="row"><div><label>Ngày bán ra</label><input id="b" type="date"></div><div><label>Thời hạn bảo hành (tháng)</label><input id="m" type="number" value="12" min="0"></div></div></div>
+  <div id="auto" class="res" role="status" style="display:none;font-size:14px"></div>
+  <div id="rb" style="display:none"><label id="kl">Hình thức *</label><div class="seg" role="radiogroup" aria-labelledby="kl"><label><input type="radio" name="k" value="Sửa chữa" checked><span>Sửa chữa</span></label><label><input type="radio" name="k" value="Thay mới"><span>Thay mới</span></label><label><input type="radio" name="k" value="Cập nhật PM"><span>Cập nhật PM</span></label></div>
+  <div id="cb"><label>Cấp trên duyệt sửa</label><div class="row" style="align-items:stretch"><input id="pin" type="password" inputmode="numeric" placeholder="Nhập mã duyệt" autocomplete="off"><button type="button" class="btn sec" id="cfb" style="margin:0;flex:none;width:auto">Xác nhận sửa</button></div><div id="pm" class="mut" style="margin-top:6px">Chưa có mã: bấm Lưu phiếu, cấp trên duyệt sau trong chi tiết phiếu.</div></div></div>
+  <label>Chẩn đoán bệnh</label><textarea id="i"></textarea>
   <p id="err" class="mut" role="alert" style="color:var(--bad)"></p><button class="btn" id="sv">Lưu phiếu tiếp nhận</button>`;
-  const autoT=()=>{const a=$("#auto");if(!$("#b").value){a.style.display="none";return}
-  const w=warr($("#b").value,$("#m").value),t=w.ok?"Hàng bảo hành":"Hàng sửa chữa";
-  document.querySelector('input[name=tp][value="'+t+'"]').checked=true;a.style.display="block";a.style.setProperty("--c",w.c);a.textContent=w.t+" → "+t};
+  let cfm=false;
+  const T=()=>document.querySelector('input[name=tp]:checked').value,K=()=>document.querySelector('input[name=k]:checked').value;
+  const vis=()=>{const bh=T()=="Hàng bảo hành";$("#wb").style.display=bh?"":"none";$("#rb").style.display=bh?"none":"";$("#cb").style.display=(!bh&&K()=="Sửa chữa")?"":"none"};
+  const autoT=()=>{const a=$("#auto");if(!$("#b").value){a.style.display="none";return}const w=warr($("#b").value,$("#m").value);document.querySelector('input[name=tp][value="'+(w.ok?"Hàng bảo hành":"Hàng sửa chữa")+'"]').checked=true;vis();a.style.display="block";a.style.setProperty("--c",w.c);a.textContent=w.t+(w.ok?" → mặc định Bảo hành":" → chuyển sang Sửa chữa, cần cấp trên duyệt")};
+  document.querySelectorAll('input[name=tp],input[name=k]').forEach(r=>r.onchange=vis);
   $("#b").oninput=autoT;$("#m").oninput=autoT;
-  document.querySelectorAll('input[name=cf]').forEach(r=>r.onchange=()=>{$("#kw").style.display=document.querySelector('input[name=cf]:checked').value=="Trả lại khách"?"none":"";alertFor(document.querySelector('input[name=cf]:checked').value)});$("#sv").onclick=()=>{const g=i=>$("#"+i).value.trim(),r={n:g("n"),p:g("p"),d:g("d"),i:g("i")};
-   if(!r.n||!r.d){$("#err").textContent="Nhập tên khách hàng và tên sản phẩm.";return}
-   const id="BH"+String(Date.now()).slice(-6);
-   D.unshift({id,name:r.n,phone:r.p,dev:r.d,type:document.querySelector('input[name=tp]:checked').value,conf:document.querySelector('input[name=cf]:checked').value,kind:document.querySelector('input[name=cf]:checked').value=="Trả lại khách"?"Trả lại khách":document.querySelector('input[name=k]:checked').value,sn:g("sn"),buy:g("b"),mo:g("m"),issue:r.i,acc:g("a"),qty:Math.max(1,+g("qty")||1),s:(document.querySelector('input[name=cf]:checked').value=="Xác nhận sửa")?6:0,cost:0,at:new Date().toISOString(),hold:new Date().toISOString(),log:[{t:new Date().toISOString(),x:"Tiếp nhận máy"}]});
-   save();alertFor(D[0].conf);tab=D[0].type;view="list";flt=-1;q="";render();open(id)};
+  $("#sn").oninput=()=>{const v=$("#sn").value.trim().toLowerCase();if(!v||$("#b").value)return;const f=D.find(x=>x.sn&&x.sn.toLowerCase()==v&&x.buy);if(f){$("#b").value=f.buy;$("#m").value=f.mo||12;autoT()}};
+  $("#cfb").onclick=()=>{if(cfm)return;const pm=$("#pm");if(!getPin()){pm.textContent="Chưa đặt mã duyệt. Cấp trên vào tab Tra cứu BH để đặt mã.";return}if($("#pin").value.trim()!==getPin()){pm.textContent="Mã duyệt sai.";return}cfm=true;pm.textContent="";const c=$("#cfb");c.textContent="☑ Đã duyệt";c.style.background="var(--pri)";c.style.color="var(--onpri)";$("#pin").disabled=true;chime()};
+  $("#sv").onclick=()=>{const g=i=>$("#"+i).value.trim(),n=g("n"),d=g("d");
+   if(!n||!d){$("#err").textContent="Nhập tên khách hàng và tên sản phẩm.";return}
+   const bh=T()=="Hàng bảo hành",kind=bh?"Bảo hành":K(),ok=!bh&&kind=="Sửa chữa"&&cfm;
+   const conf=bh?"Bảo hành":(kind=="Thay mới"||kind=="Cập nhật PM")?kind:(cfm?"Xác nhận sửa":"Chờ duyệt");
+   const now=new Date().toISOString(),id="BH"+String(Date.now()).slice(-6);
+   const o={id,name:n,phone:"",dev:d,type:T(),conf,kind,sn:g("sn"),buy:g("b"),mo:g("m"),issue:g("i"),acc:"",qty:1,s:ok?6:0,cost:0,at:now,log:[{t:now,x:"Tiếp nhận máy — "+conf+(ok?" (cấp trên đã duyệt)":"")}]};
+   if(ok)o.hold=now;
+   D.unshift(o);save();alertFor(conf);tab=isPend(o)?"Đang treo":o.type;view="list";flt=-1;q="";render();open(id)};
  }
  if(view=="chk"){
   $("#app").innerHTML=`<label>Ngày mua</label><input id="b" type="date"><label>Thời hạn bảo hành (tháng)</label><input id="m" type="number" value="12" min="0">
-  <div id="o"></div><label>Hoặc tìm theo serial đã tiếp nhận</label><input id="s" placeholder="Nhập serial"><div id="o2"></div>`;
+  <div id="o"></div><label>Hoặc tìm theo serial đã tiếp nhận</label><input id="s" placeholder="Nhập serial"><div id="o2"></div>
+  <div class="box"><b>Mã duyệt của cấp trên</b><div class="mut" id="pst"></div><div id="pold"><label>Mã hiện tại</label><input id="po" type="password" inputmode="numeric" autocomplete="off"></div><label>Mã mới (từ 4 ký tự)</label><input id="pn" type="password" inputmode="numeric" autocomplete="off"><button class="btn sec" id="ps">Lưu mã duyệt</button><div id="pmsg" class="mut" style="margin-top:6px"></div></div>`;
   const f=()=>{const w=warr($("#b").value,$("#m").value);$("#o").innerHTML=`<div class="res" style="--c:${w.c}">${w.t}</div>`};
   $("#b").oninput=f;$("#m").oninput=f;
+  const rp=()=>{$("#pold").style.display=getPin()?"":"none";$("#pst").textContent=getPin()?"Đã đặt mã duyệt trên máy này.":"Chưa đặt mã duyệt. Cấp trên đặt mã trước khi dùng."};rp();
+  $("#ps").onclick=()=>{const n=$("#pn").value.trim(),o=$("#po").value.trim();if(n.length<4){$("#pmsg").textContent="Mã mới cần từ 4 ký tự.";return}if(getPin()&&o!==getPin()){$("#pmsg").textContent="Mã hiện tại sai.";return}setPin(n);$("#pn").value="";$("#po").value="";$("#pmsg").textContent="Đã lưu mã duyệt.";rp()};
   $("#s").oninput=e=>{const v=e.target.value.trim().toLowerCase();const m=v&&D.filter(x=>x.sn&&x.sn.toLowerCase()==v);
    $("#o2").innerHTML=m&&m.length?m.map(x=>{const w=warr(x.buy,x.mo);return`<div class="res" style="--c:${w.c}">${esc(x.dev)} (${esc(x.id)})<br>${w.t}</div>`}).join(""):v?`<p class="mut">Không thấy serial này.</p>`:""};
  }
@@ -152,7 +175,9 @@ function render(){
 function open(id){const x=D.find(t=>t.id==id);if(!x)return;const w=warr(x.buy,x.mo);
  $("#sbody").innerHTML=`<button class="x" id="cl" aria-label="Đóng">×</button><h2 style="margin:0 0 4px;font-size:18px">${esc(x.dev)}</h2><div class="mut"><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · Serial: ${esc(x.sn||"—")} · Nhận ${fd(x.at)}</div>
  <div class="res" style="--c:${w.c};font-size:14px">${w.t}</div>
- <div class="box"><b>${esc(x.name)}</b> · <a href="tel:${esc(x.phone)}" style="color:var(--pri);font-weight:700">${esc(x.phone)}</a><p style="margin:8px 0 0"><b>Chẩn đoán:</b> ${esc(x.issue||"—")}<br>Số lượng: ${x.qty||1}</p>${x.acc?`<p class="mut" style="margin:4px 0 0">Kèm: ${esc(x.acc)}</p>`:""}</div>
+ <div class="box"><b>${esc(x.name)}</b>${x.phone?` · <a href="tel:${esc(x.phone)}" style="color:var(--pri);font-weight:700">${esc(x.phone)}</a>`:""}<p style="margin:8px 0 0"><b>Chẩn đoán:</b> ${esc(x.issue||"—")}<br>Số lượng: ${x.qty||1}</p>${x.acc?`<p class="mut" style="margin:4px 0 0">Kèm: ${esc(x.acc)}</p>`:""}</div>
+ ${x.conf=="Chờ duyệt"||x.conf=="Chờ xác nhận"?`<div class="box" style="border-color:#b45309"><b>Chờ cấp trên duyệt sửa</b><div class="row" style="align-items:stretch;margin-top:8px"><input id="dpin" type="password" inputmode="numeric" placeholder="Mã duyệt" autocomplete="off"><button class="btn" id="cfd" style="margin:0;flex:none;width:auto;background:#b45309;color:#fff">✔ Duyệt sửa</button></div><div id="dmsg" class="mut" style="margin-top:6px"></div></div>`:""}
+ ${x.s!=5?`<button class="btn" id="rt" style="background:#475569;color:#fff">📦 Đã trả hàng</button>`:""}
  ${x.s!=4&&x.s!=5?`<button class="btn" id="dn" style="background:#1d7a46;color:#fff">✅ Sửa xong — báo khách</button>`:""}
  <label>Trạng thái</label><div class="steps">${ST.map((s,i)=>`<button class="chip" aria-pressed="${x.s==i}" data-s="${i}">${s[0]}</button>`).join("")}</div>
  <label>Loại hàng</label><select id="gx"><option${typeOf(x)=="Hàng bảo hành"?" selected":""}>Hàng bảo hành</option><option${typeOf(x)=="Hàng sửa chữa"?" selected":""}>Hàng sửa chữa</option></select><label>Chi phí linh kiện / công (đ)</label><input id="c" type="number" inputmode="numeric" value="${x.cost||""}" placeholder="${w.ok?"0 nếu trong bảo hành":"0"}">
@@ -166,6 +191,8 @@ function open(id){const x=D.find(t=>t.id==id);if(!x)return;const w=warr(x.buy,x.
   try{if(navigator.share){await navigator.share({text:t});return}}catch(e){if(e&&e.name=='AbortError')return}
   try{await navigator.clipboard.writeText(t);alert('Đã chép nội dung. Dán vào nhóm Zalo/Telegram của kỹ thuật.')}catch(e){prompt('Chép nội dung này:',t)}};
  $("#gx").onchange=e=>{x.type=e.target.value;x.log.push({t:new Date().toISOString(),x:"Chuyển loại hàng: "+x.type});tab=x.type;upd()};
+ if($("#cfd"))$("#cfd").onclick=()=>{const m=$("#dmsg");if(!getPin()){m.textContent="Chưa đặt mã duyệt. Cấp trên vào tab Tra cứu BH để đặt mã.";return}if($("#dpin").value.trim()!==getPin()){m.textContent="Mã duyệt sai.";return}x.conf="Xác nhận sửa";x.s=6;x.hold=new Date().toISOString();x.log.push({t:new Date().toISOString(),x:"Cấp trên duyệt sửa — treo 5 ngày"});tab=typeOf(x);chime();upd()};
+ if($("#rt"))$("#rt").onclick=()=>{x.s=5;x.log.push({t:new Date().toISOString(),x:"Đã trả hàng cho khách"});toast("📦 Đã trả hàng: "+x.name+" — "+x.dev,"#475569");upd()};
  if($("#dn"))$("#dn").onclick=()=>{x.s=4;x.log.push({t:new Date().toISOString(),x:"Sửa xong"});done(x);upd()};
  $("#c").onchange=e=>{x.cost=+e.target.value||0;x.log.push({t:new Date().toISOString(),x:"Cập nhật chi phí: "+money(x.cost)});upd()};
  document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{x.s=+b.dataset.s;x.log.push({t:new Date().toISOString(),x:"Chuyển trạng thái: "+ST[x.s][0]});if(x.s==4)done(x);upd()});
@@ -196,7 +223,7 @@ setSync('Đang kết nối dữ liệu dùng chung…');
   if(view=='new'||(ae&&(ae.id=='q'||ae.id=='nt'||ae.id=='c')))stats();else render();
  },()=>setSync('Mất kết nối dữ liệu chung'));
 })();
-render();setTimeout(remindCheck,1500);setInterval(remindCheck,30*60*1000);
+render();setTimeout(pendCheck,1500);setTimeout(remindCheck,14000);setInterval(pendCheck,30*60*1000);setInterval(remindCheck,31*60*1000);
 </script>
 </body>
 </html>
