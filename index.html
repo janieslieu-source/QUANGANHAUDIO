@@ -54,16 +54,20 @@ nav button[aria-current=page]{color:var(--pri);font-weight:700}
 .sync{font-size:12px;opacity:.9;margin-top:8px}
 .tabs{display:flex;border-bottom:2px solid var(--line);margin:0 0 10px}.tabs button{flex:1;border:0;background:none;color:var(--mut);font:600 13px inherit;font-family:inherit;padding:10px 2px;border-bottom:3px solid transparent;margin-bottom:-2px}.tabs button[aria-selected=true]{color:var(--pri);border-bottom-color:var(--pri);font-weight:800}.tabs i{font-style:normal;background:var(--chip);border-radius:99px;padding:1px 8px;font-size:12px;margin-left:4px}
 .toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;right:12px;max-width:536px;margin:auto;background:#1d7a46;color:#fff;padding:14px;border-radius:12px;font-weight:700;z-index:40;display:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.login{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;overflow:auto;padding:calc(24px + env(safe-area-inset-top,0px)) 16px 24px}
+.dept{display:flex;gap:6px;padding:10px 14px 0;max-width:560px;margin:0 auto}.dept button{flex:1;border:1.5px solid var(--line);background:var(--card);color:var(--ink);font:700 13px/1.2 inherit;font-family:inherit;padding:11px 4px;border-radius:10px}.dept button[aria-selected=true]{background:var(--pri);color:var(--onpri);border-color:var(--pri)}
 </style>
 </head>
 <body>
 <header><button id="snd" class="snd" type="button"></button><h1>Bảo hành &amp; sửa chữa</h1><div class="stats" id="stats"></div><div class="sync" id="sync" role="status"></div></header>
+<div class="dept" id="dept" role="tablist" aria-label="Bộ phận"></div>
 <main id="app"></main>
 <nav>
 <button data-v="list" aria-current="page"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Phiếu</button>
 <button data-v="new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Tạo phiếu</button>
 <button data-v="chk"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Tra cứu BH</button>
 </nav>
+<div class="login" id="login"></div>
 <div class="toast" id="toast" role="status"></div>
 <div class="sheet" id="sheet"><div id="sbody"></div></div>
 <script>
@@ -79,17 +83,46 @@ const PEND=3;
 const isPend=x=>(x.conf=="Chờ duyệt"||x.conf=="Chờ xác nhận")&&x.s!=5;
 const pendDays=x=>Math.floor((Date.now()-new Date(x.at).getTime())/DAY);
 const pendOver=x=>isPend(x)&&new Date(x.at).getTime()+PEND*DAY<Date.now();
-const cnt=n=>D.filter(x=>n=="Đang treo"?isPend(x):typeOf(x)==n&&!isPend(x)).length;
+const cnt=n=>isKT()?D.filter(x=>n=="Đã chẩn đoán"?!!x.dlock:!x.dlock).length:D.filter(x=>n=="Đang treo"?isPend(x):typeOf(x)==n&&!isPend(x)).length;
 const isOver=x=>x.conf!="Trả lại khách"&&x.s!=5&&!isPend(x)&&dueAt(x)<new Date();
 const holdTxt=x=>{if(isPend(x))return pendOver(x)?" · ⚠ treo quá "+PEND+" ngày":" · chờ duyệt "+pendDays(x)+" ngày";if(x.conf=="Trả lại khách"||x.s==5)return"";if(isOver(x))return" · ⚠ quá hạn";if(x.s==6)return" · còn "+Math.ceil((dueAt(x)-new Date())/DAY)+" ngày";return""};
 const toast=(t,bg)=>{const e=document.querySelector("#toast");e.textContent=t;e.style.background=bg||"#1d7a46";e.style.display="block";clearTimeout(tT);tT=setTimeout(()=>e.style.display="none",10000)};
 const done=x=>{say("Đã sửa xong "+x.name);toast("✅ Đã sửa xong: "+x.name+" — "+x.dev)};
 const overBanner=()=>{const o=D.filter(isOver);return o.length?`<button class="t" style="--c:#b45309;margin:0 0 10px" id="ov"><b>⏰ ${o.length} hàng quá ${HOLD} ngày chưa trả khách</b><br><small>${o.slice(0,3).map(x=>esc(x.name)).join(", ")}${o.length>3?"…":""} — chạm để ${ovf?"xem tất cả":"chỉ xem các phiếu này"}</small></button>`:""};
 const pendBanner=()=>{const o=D.filter(pendOver);return o.length?`<button class="t" data-tab="Đang treo" style="--c:#b3261e;margin:0 0 10px"><b>⏳ ${o.length} hàng đang treo quá ${PEND} ngày chưa có lệnh duyệt</b><br><small>${o.slice(0,3).map(x=>esc(x.name)).join(", ")}${o.length>3?"…":""} — chạm để xem danh sách</small></button>`:""};
-const pendCheck=()=>{const o=D.filter(pendOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem2")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem2",day)}catch(e){}
+const pendCheck=()=>{if(!isGD())return;const o=D.filter(pendOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem2")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem2",day)}catch(e){}
  toast("⏳ "+o.length+" hàng đang treo quá "+PEND+" ngày chưa có lệnh duyệt","#b3261e");say("Có "+o.length+" hàng đang treo quá "+PEND+" ngày chưa có lệnh duyệt")};
-const remindCheck=()=>{const o=D.filter(isOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem",day)}catch(e){}
+const remindCheck=()=>{if(!role||isKT())return;const o=D.filter(isOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem",day)}catch(e){}
  toast("⏰ Nhắc nhở: "+o.length+" hàng quá "+HOLD+" ngày chưa trả khách","#b45309");say("Nhắc nhở: có "+o.length+" hàng chưa trả khách")};
+const ROLES=["Tiếp nhận","Kỹ thuật","Giám đốc"];
+let role="";try{role=sessionStorage.getItem("bh_role")||""}catch(e){}
+const isTN=()=>role=="Tiếp nhận",isKT=()=>role=="Kỹ thuật",isGD=()=>role=="Giám đốc";
+const PK={"Tiếp nhận":"bh_pin_tn","Kỹ thuật":"bh_pin_kt","Giám đốc":"bh_pin"};
+const rolePin=r=>{try{return localStorage.getItem(PK[r])||""}catch(e){return""}};
+const setRolePin=(r,v)=>{try{localStorage.setItem(PK[r],v)}catch(e){}};
+const KT_TABS=["Chờ chẩn đoán","Đã chẩn đoán"];
+const tabNames=()=>isKT()?KT_TABS:["Hàng bảo hành","Hàng sửa chữa","Đang treo"];
+const tabOk=x=>isKT()?(tab=="Đã chẩn đoán"?!!x.dlock:!x.dlock):(ovf?isOver(x):(tab=="Đang treo"?isPend(x):((tab==""||typeOf(x)==tab)&&!isPend(x))));
+let tnOk=false;
+const ttPass=()=>rolePin("Tiếp nhận")||"TT";
+const gdPass=()=>rolePin("Giám đốc")||"VICKY";
+const ktPass=()=>rolePin("Kỹ thuật")||"KT";
+function lockView(){stats();document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current","false"));
+ $("#app").innerHTML=`<div class="box"><b>Tiếp nhận thông tin</b><p class="mut" style="margin:6px 0 0">Gõ mã mật khẩu để nhập thông tin sản phẩm.</p><input id="tt" type="password" autocomplete="off" placeholder="Mã mật khẩu" style="margin-top:10px"><p id="terr" class="mut" role="alert" style="color:var(--bad);margin:6px 0 0"></p><button class="btn" id="ttgo">Vào</button></div>`;
+ const go=()=>{if($("#tt").value.trim().toUpperCase()!==ttPass().toUpperCase()){$("#terr").textContent="Mã mật khẩu sai.";return}tnOk=true;view="new";render()};
+ $("#ttgo").onclick=go;$("#tt").onkeydown=e=>{if(e.key=="Enter")go()}}
+const DEPT=[["Tiếp nhận","Tiếp nhận thông tin"],["Giám đốc","Duyệt sửa"],["Kỹ thuật","Kỹ thuật"]];
+function drawDept(){$("#dept").innerHTML=DEPT.map(([r,l])=>`<button role="tab" aria-selected="${role==r}" data-r="${r}">${l}</button>`).join("")}
+function applyRole(){try{sessionStorage.setItem("bh_role",role)}catch(e){}
+ $("#login").style.display="none";drawDept();
+ document.querySelector('nav button[data-v="new"]').style.display=isTN()?"":"none";
+ tab=isKT()?"Chờ chẩn đoán":isGD()?"Đang treo":"Hàng bảo hành";
+ if(!isTN()&&view=="new")view="list";ovf=false;render()}
+function gotoRole(r){if(r==role)return;if(r=="Giám đốc"||r=="Kỹ thuật"){askPin(r);return}if(r=="Tiếp nhận")tnOk=false;role=r;applyRole();setTimeout(pendCheck,800);setTimeout(remindCheck,12000)}
+function askPin(r){const E=$("#login");E.style.display="block";
+ E.innerHTML=`<div style="max-width:520px;margin:0 auto"><h1 style="font-size:20px;color:var(--pri);margin:0 0 6px">${r=="Giám đốc"?"Duyệt sửa":"Kỹ thuật"}</h1><p class="mut">Nhập mã để vào tab này.</p><input id="lp" type="password" inputmode="numeric" autocomplete="off"><p id="lerr" class="mut" role="alert" style="color:var(--bad)"></p><button class="btn" id="lgo">Vào</button><button class="btn sec" id="lcx">Hủy</button></div>`;
+ $("#lgo").onclick=()=>{if($("#lp").value.trim().toUpperCase()!==(r=="Giám đốc"?gdPass():ktPass()).toUpperCase()){$("#lerr").textContent="Mã sai.";return}role=r;applyRole();setTimeout(pendCheck,800);setTimeout(remindCheck,12000)};
+ $("#lcx").onclick=()=>{E.style.display="none"};$("#lp").onkeydown=e=>{if(e.key=="Enter")$("#lgo").click()};$("#lp").focus()}
 const getPin=()=>{try{return localStorage.getItem("bh_pin")||""}catch(e){return""}};
 const setPin=v=>{try{localStorage.setItem("bh_pin",v)}catch(e){}};
 const saveGR=()=>{try{localStorage.setItem("bh_groups",JSON.stringify(GR))}catch(e){}};
@@ -119,88 +152,99 @@ function sndLbl(){$('#snd').textContent=mute?'🔕 Chuông tắt':'🔔 Chuông 
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const money=n=>(+n||0).toLocaleString("vi-VN")+"đ";
 const fd=d=>d?new Date(d).toLocaleDateString("vi-VN"):"—";
-function warr(buy,mo){if(!buy)return{t:"Chưa có ngày mua",c:"var(--mut)"};const e=new Date(buy);e.setMonth(e.getMonth()+(+mo||12));const days=Math.ceil((e-new Date())/864e5);
+function warr(buy,mo){if(!buy)return{t:mo==="end"?"Chưa nhập ngày kết thúc bảo hành":"Chưa có ngày mua",c:"var(--mut)"};const e=new Date(buy);if(mo==="end")e.setHours(23,59,59);else e.setMonth(e.getMonth()+(+mo||12));const days=Math.ceil((e-new Date())/864e5);
  return days>=0?{t:"Còn bảo hành đến "+fd(e)+" (còn "+days+" ngày)",c:"var(--ok)",ok:1}:{t:"Hết bảo hành từ "+fd(e)+" — tính phí sửa",c:"var(--bad)"}}
-function stats(){const o=D.filter(x=>x.s!=4&&x.s!=5).length,r=D.filter(x=>x.s==4).length;
+function stats(){if(isKT()){const a=D.filter(x=>!x.dlock).length;$("#stats").innerHTML=`<div class="stat"><b>${D.length}</b><span>Tổng phiếu</span></div><div class="stat"><b>${a}</b><span>Chờ chẩn đoán</span></div><div class="stat"><b>${D.length-a}</b><span>Đã chẩn đoán</span></div>`;return}const o=D.filter(x=>x.s!=4&&x.s!=5).length,r=D.filter(x=>x.s==4).length;
  $("#stats").innerHTML=`<div class="stat"><b>${D.length}</b><span>Tổng phiếu</span></div><div class="stat"><b>${o}</b><span>Đang xử lý</span></div><div class="stat"><b>${r}</b><span>Chờ trả hàng</span></div>`}
 function render(){
+ if(isTN()&&!tnOk){lockView();return}
  document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.v==view?"page":"false"));
  stats();
  if(view=="list"){
-  const L=D.filter(x=>(flt<0||x.s==flt)&&(ovf?isOver(x):(tab=="Đang treo"?isPend(x):((tab==""||typeOf(x)==tab)&&!isPend(x))))&&(!q||(x.name+x.phone+x.dev+x.sn+x.id+(x.grp||"")).toLowerCase().includes(q.toLowerCase())));
-  $("#app").innerHTML=`${pendBanner()}${overBanner()}<div class="tabs" role="tablist">${["Hàng bảo hành","Hàng sửa chữa","Đang treo"].map(n=>`<button role="tab" aria-selected="${tab==n}" data-tab="${n}">${n}<i>${cnt(n)}</i></button>`).join("")}</div><input id="q" type="search" placeholder="Tìm tên, SĐT, thiết bị, serial…" value="${esc(q)}" aria-label="Tìm phiếu">
+  const L=D.filter(x=>(flt<0||x.s==flt)&&tabOk(x)&&(!q||(x.name+x.phone+x.dev+x.sn+x.id+(x.grp||"")).toLowerCase().includes(q.toLowerCase())));
+  $("#app").innerHTML=`${(isGD()&&!rolePin("Giám đốc"))?`<div class="box" style="border-color:#b45309;margin:0 0 10px"><b>Đang dùng mật khẩu mặc định</b><div class="mut">Nên đổi: mở <b>Tra cứu BH</b>, kéo xuống khung <b>Mã vào các tab</b>.</div></div>`:""}${isGD()?pendBanner():""}${isKT()?"":overBanner()}<div class="tabs" role="tablist">${tabNames().map(n=>`<button role="tab" aria-selected="${tab==n}" data-tab="${n}">${n}<i>${cnt(n)}</i></button>`).join("")}</div><input id="q" type="search" placeholder="Tìm tên, SĐT, thiết bị, serial…" value="${esc(q)}" aria-label="Tìm phiếu">
   <div class="chips"><button class="chip" aria-pressed="${flt<0}" data-f="-1">Tất cả</button>${ST.map((s,i)=>`<button class="chip" aria-pressed="${flt==i}" data-f="${i}">${s[0]}</button>`).join("")}</div>
   
-  ${L.length?L.map(x=>`<button class="t" style="--c:${ST[x.s][1]}" data-id="${x.id}"><div class="r"><b>${esc(x.dev)}</b><span class="st">${ST[x.s][0]}${holdTxt(x)}</span></div><div>${esc(x.name)}${x.phone?" · "+esc(x.phone):""}</div><small><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · SL ${x.qty||1} · ${fd(x.at)} · ${esc(x.issue).slice(0,60)}</small></button>`).join(""):`<div class="empty">${D.length?"Không có phiếu phù hợp.":"Chưa có phiếu nào. Chạm “Tạo phiếu” để tiếp nhận máy đầu tiên."}</div>`}`;
+  ${L.length?L.map(x=>`<button class="t" style="--c:${ST[x.s][1]}" data-id="${x.id}"><div class="r"><b>${esc(x.dev)}</b><span class="st">${ST[x.s][0]}${isKT()?"":holdTxt(x)}</span></div><div>${esc(x.name)}${x.phone?" · "+esc(x.phone):""}</div><small><b>${esc(isKT()?(x.kind||""):(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa")))}</b> · ${esc(x.id)} · ${x.cost&&!isKT()?money(x.cost)+" · ":""}${fd(x.at)} · ${esc(x.issue).slice(0,60)}</small></button>`).join(""):`<div class="empty">${D.length?"Không có phiếu phù hợp.":"Chưa có phiếu nào. Chạm “Tạo phiếu” để tiếp nhận máy đầu tiên."}</div>`}`;
   const qi=$("#q");qi.oninput=e=>{q=e.target.value;const p=qi.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
  }
  if(view=="new"){
   $("#app").innerHTML=`<label>Tên khách hàng *</label><input id="n" autocomplete="off"><label>Tên sản phẩm *</label><input id="d" autocomplete="off"><label>Số seri</label><input id="sn" autocomplete="off">
-  <label id="tl">Chọn loại xử lý *</label><div class="seg" role="radiogroup" aria-labelledby="tl"><label><input type="radio" name="tp" value="Hàng bảo hành" checked><span>Bảo hành</span></label><label><input type="radio" name="tp" value="Hàng sửa chữa"><span>Sửa chữa</span></label></div>
-  <div id="wb"><div class="row"><div><label>Ngày bán ra</label><input id="b" type="date"></div><div><label>Thời hạn bảo hành (tháng)</label><input id="m" type="number" value="12" min="0"></div></div></div>
+  <label id="tl">Bảo hành hay sửa chữa? *</label><div class="seg" role="radiogroup" aria-labelledby="tl"><label><input type="radio" name="tp" value="Hàng bảo hành" checked><span>Bảo hành</span></label><label><input type="radio" name="tp" value="Hàng sửa chữa"><span>Sửa chữa</span></label></div>
+  <div id="wb"><label>Thời gian kết thúc bảo hành *</label><input id="b" type="date"></div>
   <div id="auto" class="res" role="status" style="display:none;font-size:14px"></div>
   <div id="rb" style="display:none"><label id="kl">Hình thức *</label><div class="seg" role="radiogroup" aria-labelledby="kl"><label><input type="radio" name="k" value="Sửa chữa" checked><span>Sửa chữa</span></label><label><input type="radio" name="k" value="Thay mới"><span>Thay mới</span></label><label><input type="radio" name="k" value="Cập nhật PM"><span>Cập nhật PM</span></label></div>
-  <div id="cb"><label>Cấp trên duyệt sửa</label><div class="row" style="align-items:stretch"><input id="pin" type="password" inputmode="numeric" placeholder="Nhập mã duyệt" autocomplete="off"><button type="button" class="btn sec" id="cfb" style="margin:0;flex:none;width:auto">Xác nhận sửa</button></div><div id="pm" class="mut" style="margin-top:6px">Chưa có mã: bấm Lưu phiếu, cấp trên duyệt sau trong chi tiết phiếu.</div></div></div>
-  <label>Chẩn đoán bệnh</label><textarea id="i"></textarea>
+  <div class="mut" style="margin-top:8px">Phiếu sửa chữa sẽ chờ giám đốc duyệt ở tab <b>Duyệt sửa</b>.</div></div>
   <p id="err" class="mut" role="alert" style="color:var(--bad)"></p><button class="btn" id="sv">Lưu phiếu tiếp nhận</button>`;
-  let cfm=false;
   const T=()=>document.querySelector('input[name=tp]:checked').value,K=()=>document.querySelector('input[name=k]:checked').value;
-  const vis=()=>{const bh=T()=="Hàng bảo hành";$("#wb").style.display=bh?"":"none";$("#rb").style.display=bh?"none":"";$("#cb").style.display=(!bh&&K()=="Sửa chữa")?"":"none"};
-  const autoT=()=>{const a=$("#auto");if(!$("#b").value){a.style.display="none";return}const w=warr($("#b").value,$("#m").value);document.querySelector('input[name=tp][value="'+(w.ok?"Hàng bảo hành":"Hàng sửa chữa")+'"]').checked=true;vis();a.style.display="block";a.style.setProperty("--c",w.c);a.textContent=w.t+(w.ok?" → mặc định Bảo hành":" → chuyển sang Sửa chữa, cần cấp trên duyệt")};
-  document.querySelectorAll('input[name=tp],input[name=k]').forEach(r=>r.onchange=vis);
-  $("#b").oninput=autoT;$("#m").oninput=autoT;
-  $("#sn").oninput=()=>{const v=$("#sn").value.trim().toLowerCase();if(!v||$("#b").value)return;const f=D.find(x=>x.sn&&x.sn.toLowerCase()==v&&x.buy);if(f){$("#b").value=f.buy;$("#m").value=f.mo||12;autoT()}};
-  $("#cfb").onclick=()=>{if(cfm)return;const pm=$("#pm");if(!getPin()){pm.textContent="Chưa đặt mã duyệt. Cấp trên vào tab Tra cứu BH để đặt mã.";return}if($("#pin").value.trim()!==getPin()){pm.textContent="Mã duyệt sai.";return}cfm=true;pm.textContent="";const c=$("#cfb");c.textContent="☑ Đã duyệt";c.style.background="var(--pri)";c.style.color="var(--onpri)";$("#pin").disabled=true;chime()};
-  $("#sv").onclick=()=>{const g=i=>$("#"+i).value.trim(),n=g("n"),d=g("d");
-   if(!n||!d){$("#err").textContent="Nhập tên khách hàng và tên sản phẩm.";return}
-   const bh=T()=="Hàng bảo hành",kind=bh?"Bảo hành":K(),ok=!bh&&kind=="Sửa chữa"&&cfm;
-   const conf=bh?"Bảo hành":(kind=="Thay mới"||kind=="Cập nhật PM")?kind:(cfm?"Xác nhận sửa":"Chờ duyệt");
-   const now=new Date().toISOString(),id="BH"+String(Date.now()).slice(-6);
-   const o={id,name:n,phone:"",dev:d,type:T(),conf,kind,sn:g("sn"),buy:g("b"),mo:g("m"),issue:g("i"),acc:"",qty:1,s:ok?6:0,cost:0,at:now,log:[{t:now,x:"Tiếp nhận máy — "+conf+(ok?" (cấp trên đã duyệt)":"")}]};
-   if(ok)o.hold=now;
+  const vis=()=>{const bh=T()=="Hàng bảo hành";$("#wb").style.display=bh?"":"none";$("#rb").style.display=bh?"none":""};
+  const showAuto=()=>{const a=$("#auto"),v=$("#b").value;if(!v){a.style.display="none";return}const w=warr(v,"end");a.style.display="block";a.style.setProperty("--c",w.c);a.textContent=w.t+(w.ok?" → Bảo hành":" → chuyển sang Sửa chữa, chờ giám đốc duyệt")};
+  document.querySelectorAll('input[name=tp],input[name=k]').forEach(r=>r.onchange=()=>{vis();showAuto()});
+  $("#b").oninput=()=>{const v=$("#b").value;if(v&&!warr(v,"end").ok)document.querySelector('input[name=tp][value="Hàng sửa chữa"]').checked=true;vis();showAuto()};
+  $("#sn").oninput=()=>{const v=$("#sn").value.trim().toLowerCase();if(!v||$("#b").value)return;const f=D.find(x=>x.sn&&x.sn.toLowerCase()==v&&x.mo==="end"&&x.buy);if(f){$("#b").value=f.buy;$("#b").oninput()}};
+  $("#sv").onclick=()=>{const g=i=>$("#"+i).value.trim(),n=g("n"),d=g("d"),bh=T()=="Hàng bảo hành",er=$("#err");
+   if(!n||!d){er.textContent="Nhập tên khách hàng và tên sản phẩm.";return}
+   if(bh&&!g("b")){er.textContent="Nhập thời gian kết thúc bảo hành.";return}
+   const kind=bh?"Bảo hành":K(),conf=bh?"Bảo hành":"Chờ duyệt",now=new Date().toISOString(),id="BH"+String(Date.now()).slice(-6);
+   const o={id,name:n,phone:"",dev:d,type:T(),conf,kind,sn:g("sn"),buy:g("b"),mo:"end",issue:"",acc:"",qty:1,s:0,cost:0,at:now,log:[{t:now,x:"Tiếp nhận máy — "+conf}]};
    D.unshift(o);save();alertFor(conf);tab=isPend(o)?"Đang treo":o.type;view="list";flt=-1;q="";render();open(id)};
  }
  if(view=="chk"){
   $("#app").innerHTML=`<label>Ngày mua</label><input id="b" type="date"><label>Thời hạn bảo hành (tháng)</label><input id="m" type="number" value="12" min="0">
   <div id="o"></div><label>Hoặc tìm theo serial đã tiếp nhận</label><input id="s" placeholder="Nhập serial"><div id="o2"></div>
-  <div class="box"><b>Mã duyệt của cấp trên</b><div class="mut" id="pst"></div><div id="pold"><label>Mã hiện tại</label><input id="po" type="password" inputmode="numeric" autocomplete="off"></div><label>Mã mới (từ 4 ký tự)</label><input id="pn" type="password" inputmode="numeric" autocomplete="off"><button class="btn sec" id="ps">Lưu mã duyệt</button><div id="pmsg" class="mut" style="margin-top:6px"></div></div>`;
+  ${isGD()?`<div class="box"><b>Mã vào các tab</b><div class="mut">Để trống ô nào thì giữ nguyên mã đó.</div><label>Mật khẩu tab Duyệt sửa (mặc định VICKY)</label><input id="pg" type="password" inputmode="numeric" autocomplete="off"><label>Mật khẩu tab Tiếp nhận (mặc định TT)</label><input id="pt" type="password" inputmode="numeric" autocomplete="off"><label>Mật khẩu tab Kỹ thuật (mặc định KT)</label><input id="pk" type="password" inputmode="numeric" autocomplete="off"><button class="btn sec" id="ps">Lưu mã</button><div id="pmsg" class="mut" style="margin-top:6px"></div></div>`:""}${isKT()?"":`<div class="box"><b>Sao lưu dữ liệu</b><div class="mut">Dùng khi đổi trình duyệt hoặc đổi điện thoại: tải tệp sao lưu ở máy cũ, rồi khôi phục ở máy mới.</div><button class="btn sec" id="bk">⬇ Tải bản sao lưu</button><button class="btn sec" id="csv">📊 Xuất Excel (CSV)</button><label>Khôi phục từ tệp sao lưu</label><input id="rs" type="file" accept=".json,application/json"><div id="bmsg" class="mut" style="margin-top:6px"></div></div>`}`;
   const f=()=>{const w=warr($("#b").value,$("#m").value);$("#o").innerHTML=`<div class="res" style="--c:${w.c}">${w.t}</div>`};
   $("#b").oninput=f;$("#m").oninput=f;
-  const rp=()=>{$("#pold").style.display=getPin()?"":"none";$("#pst").textContent=getPin()?"Đã đặt mã duyệt trên máy này.":"Chưa đặt mã duyệt. Cấp trên đặt mã trước khi dùng."};rp();
-  $("#ps").onclick=()=>{const n=$("#pn").value.trim(),o=$("#po").value.trim();if(n.length<4){$("#pmsg").textContent="Mã mới cần từ 4 ký tự.";return}if(getPin()&&o!==getPin()){$("#pmsg").textContent="Mã hiện tại sai.";return}setPin(n);$("#pn").value="";$("#po").value="";$("#pmsg").textContent="Đã lưu mã duyệt.";rp()};
+  if($("#ps"))$("#ps").onclick=()=>{const v={"Giám đốc":$("#pg").value.trim(),"Tiếp nhận":$("#pt").value.trim(),"Kỹ thuật":$("#pk").value.trim()},m=$("#pmsg");const ent=Object.entries(v).filter(([r,c])=>c);if(!ent.length){m.textContent="Nhập ít nhất một mã mới.";return}if(ent.some(([r,c])=>c.length<(r=="Giám đốc"?4:2))){m.textContent="Mật khẩu Tiếp nhận và Kỹ thuật từ 2 ký tự, Duyệt sửa từ 4 ký tự.";return}
+   const all={...Object.fromEntries(ROLES.map(r=>[r,rolePin(r)])),...Object.fromEntries(ent)};if(new Set(Object.values(all).filter(Boolean)).size<Object.values(all).filter(Boolean).length){m.textContent="Các mã phải khác nhau.";return}
+   ent.forEach(([r,c])=>setRolePin(r,c));["pg","pt","pk"].forEach(i=>$("#"+i).value="");m.textContent="Đã lưu mã."};
+  const dl=(name,txt,type)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()};
+  if($("#bk")){const ds=new Date().toISOString().slice(0,10);
+   $("#bk").onclick=()=>{dl("bao-hanh-sao-luu-"+ds+".json",JSON.stringify({v:1,at:new Date().toISOString(),tickets:D}),"application/json");$("#bmsg").textContent="Đã tải tệp sao lưu ("+D.length+" phiếu)."};
+   $("#csv").onclick=()=>{const H=["Mã","Khách","Sản phẩm","Serial","Loại hàng","Xác nhận","Hình thức","Trạng thái","Ngày bán","BH (tháng)","Chẩn đoán","Phí","Ngày nhận"],q2=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+    dl("bao-hanh-"+ds+".csv","\ufeff"+[H.map(q2).join(",")].concat(D.map(x=>[x.id,x.name,x.dev,x.sn,typeOf(x),x.conf,x.kind,ST[x.s][0],x.buy,x.mo,x.issue,x.cost,fd(x.at)].map(q2).join(","))).join("\r\n"),"text/csv");$("#bmsg").textContent="Đã tải tệp Excel (CSV)."};
+   $("#rs").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const j=JSON.parse(r.result),L2=Array.isArray(j)?j:j.tickets;if(!Array.isArray(L2))throw 0;let n=0;L2.forEach(t=>{if(!t||!t.id)return;const o=D.find(d=>d.id==t.id);if(!o){D.push(t);n++}else if((t.log||[]).length>(o.log||[]).length){Object.assign(o,t);n++}});D.sort((a,b)=>a.at<b.at?1:-1);save();$("#bmsg").textContent="Đã khôi phục "+n+" phiếu.";stats()}catch(err){$("#bmsg").textContent="Tệp không đúng định dạng."}};r.readAsText(f);e.target.value=""}}
   $("#s").oninput=e=>{const v=e.target.value.trim().toLowerCase();const m=v&&D.filter(x=>x.sn&&x.sn.toLowerCase()==v);
    $("#o2").innerHTML=m&&m.length?m.map(x=>{const w=warr(x.buy,x.mo);return`<div class="res" style="--c:${w.c}">${esc(x.dev)} (${esc(x.id)})<br>${w.t}</div>`}).join(""):v?`<p class="mut">Không thấy serial này.</p>`:""};
  }
 }
-function open(id){const x=D.find(t=>t.id==id);if(!x)return;const w=warr(x.buy,x.mo);
- $("#sbody").innerHTML=`<button class="x" id="cl" aria-label="Đóng">×</button><h2 style="margin:0 0 4px;font-size:18px">${esc(x.dev)}</h2><div class="mut"><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · Serial: ${esc(x.sn||"—")} · Nhận ${fd(x.at)}</div>
+function open(id){const x=D.find(t=>t.id==id);if(!x)return;const w=warr(x.buy,x.mo),kt=isKT(),gd=isGD(),pend=isPend(x),canDiag=kt&&!x.dlock;
+ const lab=kt?esc(x.kind||typeOf(x)):esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"));
+ $("#sbody").innerHTML=`<button class="x" id="cl" aria-label="Đóng">×</button><h2 style="margin:0 0 4px;font-size:18px">${esc(x.dev)}</h2><div class="mut"><b>${lab}</b> · ${esc(x.id)} · Serial: ${esc(x.sn||"—")} · Nhận ${fd(x.at)}</div>
  <div class="res" style="--c:${w.c};font-size:14px">${w.t}</div>
- <div class="box"><b>${esc(x.name)}</b>${x.phone?` · <a href="tel:${esc(x.phone)}" style="color:var(--pri);font-weight:700">${esc(x.phone)}</a>`:""}<p style="margin:8px 0 0"><b>Chẩn đoán:</b> ${esc(x.issue||"—")}<br>Số lượng: ${x.qty||1}</p>${x.acc?`<p class="mut" style="margin:4px 0 0">Kèm: ${esc(x.acc)}</p>`:""}</div>
- ${x.conf=="Chờ duyệt"||x.conf=="Chờ xác nhận"?`<div class="box" style="border-color:#b45309"><b>Chờ cấp trên duyệt sửa</b><div class="row" style="align-items:stretch;margin-top:8px"><input id="dpin" type="password" inputmode="numeric" placeholder="Mã duyệt" autocomplete="off"><button class="btn" id="cfd" style="margin:0;flex:none;width:auto;background:#b45309;color:#fff">✔ Duyệt sửa</button></div><div id="dmsg" class="mut" style="margin-top:6px"></div></div>`:""}
+ <div class="box"><b>${esc(x.name)}</b>${!kt&&x.phone?` · <a href="tel:${esc(x.phone)}" style="color:var(--pri);font-weight:700">${esc(x.phone)}</a>`:""}<p style="margin:8px 0 0"><b>Chẩn đoán:</b> ${esc(x.issue||"—")}</p>${x.dlock?`<p class="mut" style="margin:4px 0 0">🔒 Đã gửi chẩn đoán${x.diagAt?" lúc "+new Date(x.diagAt).toLocaleString("vi-VN"):""}. Không thể chỉnh sửa.</p>`:""}</div>
+ ${canDiag?`<label>Chẩn đoán bệnh *</label><textarea id="dg" placeholder="Nhập chẩn đoán của kỹ thuật"></textarea><button class="btn" id="dgs">Gửi chẩn đoán</button><div id="dgm" class="mut" style="margin-top:6px">Sau khi gửi, kỹ thuật không sửa được nữa.</div>`:""}
+ ${kt?"":`${pend?(gd?`<div class="box" style="border-color:#b45309"><b>Chờ giám đốc duyệt sửa</b><label>Phí sửa chữa (đ) *</label><input id="dfee" type="number" inputmode="numeric" min="0" value="${x.cost||""}"><button class="btn" id="cfd" style="background:#b45309;color:#fff">✔ Duyệt sửa</button><div id="dmsg" class="mut" style="margin-top:6px"></div></div>`:`<div class="box" style="border-color:#b45309"><b>⏳ Đang chờ giám đốc duyệt</b><div class="mut">Phiếu đang chờ giám đốc duyệt ở tab Duyệt sửa.</div></div>`):""}
  ${x.s!=5?`<button class="btn" id="rt" style="background:#475569;color:#fff">📦 Đã trả hàng</button>`:""}
  ${x.s!=4&&x.s!=5?`<button class="btn" id="dn" style="background:#1d7a46;color:#fff">✅ Sửa xong — báo khách</button>`:""}
  <label>Trạng thái</label><div class="steps">${ST.map((s,i)=>`<button class="chip" aria-pressed="${x.s==i}" data-s="${i}">${s[0]}</button>`).join("")}</div>
- <label>Loại hàng</label><select id="gx"><option${typeOf(x)=="Hàng bảo hành"?" selected":""}>Hàng bảo hành</option><option${typeOf(x)=="Hàng sửa chữa"?" selected":""}>Hàng sửa chữa</option></select><label>Chi phí linh kiện / công (đ)</label><input id="c" type="number" inputmode="numeric" value="${x.cost||""}" placeholder="${w.ok?"0 nếu trong bảo hành":"0"}">
- <label>Ghi chú kỹ thuật</label><div class="row" style="align-items:stretch"><input id="nt" placeholder="VD: thay main, test OK"><button class="chip" id="ad" style="flex:none">Thêm</button></div>
+ <label>Loại hàng</label><select id="gx"><option${typeOf(x)=="Hàng bảo hành"?" selected":""}>Hàng bảo hành</option><option${typeOf(x)=="Hàng sửa chữa"?" selected":""}>Hàng sửa chữa</option></select>${gd?`<label>Phí sửa chữa (đ)</label><input id="c" type="number" inputmode="numeric" value="${x.cost||""}" placeholder="${w.ok?"0 nếu trong bảo hành":"0"}">`:""}
+ <label>Ghi chú</label><div class="row" style="align-items:stretch"><input id="nt" placeholder="Ghi chú thêm"><button class="chip" id="ad" style="flex:none">Thêm</button></div>
  ${x.log.slice().reverse().map(l=>`<div class="log">${esc(l.x)}<br><small>${new Date(l.t).toLocaleString("vi-VN")}</small></div>`).join("")}
- <div class="box" style="font-weight:700">Tổng chi phí: ${money(x.cost)}</div><button class="btn" id="sh">📨 Gửi báo kỹ thuật (Zalo, Telegram…)</button><button class="btn del" id="rm">Xóa phiếu</button>`;
+ <div class="box" style="font-weight:700">Phí sửa chữa: ${money(x.cost)}</div><button class="btn" id="sh">📨 Gửi báo qua Zalo, Telegram…</button>${gd?`<button class="btn del" id="rm">Xóa phiếu</button>`:""}`}`;
  $("#sheet").classList.add("on");
  const upd=()=>{save();render();open(id)};
  $("#cl").onclick=()=>{$("#sheet").classList.remove("on")};
- $("#sh").onclick=async()=>{const t=`🔔 PHIẾU MỚI — ${x.conf||'Xác nhận sửa'}\nMã: ${x.id}\nKhách: ${x.name}${x.phone?' · '+x.phone:''}\nSản phẩm: ${x.dev}${x.sn?' (SN '+x.sn+')':''}\nLoại: ${typeOf(x)}\nHướng xử lý: ${x.kind||'Sửa chữa'}\nSố lượng: ${x.qty||1}\nChẩn đoán: ${x.issue||'—'}\nBảo hành: ${w.t}`;
+ if(canDiag){let armed=false;$("#dgs").onclick=()=>{const v=$("#dg").value.trim(),m=$("#dgm");if(!v){m.textContent="Nhập chẩn đoán trước khi gửi.";return}
+  if(!armed){armed=true;$("#dgs").textContent="Bấm lần nữa để xác nhận gửi";m.textContent="Sau khi gửi sẽ không sửa được.";return}
+  x.issue=v;x.dlock=true;x.diagAt=new Date().toISOString();x.log.push({t:x.diagAt,x:"Kỹ thuật gửi chẩn đoán: "+v});toast("✅ Đã gửi chẩn đoán: "+x.dev);upd()}}
+ if(!kt){
+ $("#sh").onclick=async()=>{const t=`🔔 PHIẾU MỚI — ${x.conf||'Xác nhận sửa'}\nMã: ${x.id}\nKhách: ${x.name}${x.phone?' · '+x.phone:''}\nSản phẩm: ${x.dev}${x.sn?' (SN '+x.sn+')':''}\nLoại: ${typeOf(x)}\nHướng xử lý: ${x.kind||'Sửa chữa'}\nPhí: ${x.cost?money(x.cost):'—'}\nChẩn đoán: ${x.issue||'—'}\nBảo hành: ${w.t}`;
   try{if(navigator.share){await navigator.share({text:t});return}}catch(e){if(e&&e.name=='AbortError')return}
-  try{await navigator.clipboard.writeText(t);alert('Đã chép nội dung. Dán vào nhóm Zalo/Telegram của kỹ thuật.')}catch(e){prompt('Chép nội dung này:',t)}};
+  try{await navigator.clipboard.writeText(t);alert('Đã chép nội dung. Dán vào nhóm Zalo/Telegram.')}catch(e){prompt('Chép nội dung này:',t)}};
  $("#gx").onchange=e=>{x.type=e.target.value;x.log.push({t:new Date().toISOString(),x:"Chuyển loại hàng: "+x.type});tab=x.type;upd()};
- if($("#cfd"))$("#cfd").onclick=()=>{const m=$("#dmsg");if(!getPin()){m.textContent="Chưa đặt mã duyệt. Cấp trên vào tab Tra cứu BH để đặt mã.";return}if($("#dpin").value.trim()!==getPin()){m.textContent="Mã duyệt sai.";return}x.conf="Xác nhận sửa";x.s=6;x.hold=new Date().toISOString();x.log.push({t:new Date().toISOString(),x:"Cấp trên duyệt sửa — treo 5 ngày"});tab=typeOf(x);chime();upd()};
+ if($("#cfd"))$("#cfd").onclick=()=>{const m=$("#dmsg"),fee=+$("#dfee").value;if(!(fee>0)){m.textContent="Nhập phí sửa chữa trước khi duyệt.";return}x.conf="Xác nhận sửa";x.cost=fee;x.s=6;x.hold=new Date().toISOString();x.log.push({t:new Date().toISOString(),x:"Giám đốc duyệt sửa — phí "+money(x.cost)+" — treo 5 ngày"});tab=typeOf(x);chime();upd()};
  if($("#rt"))$("#rt").onclick=()=>{x.s=5;x.log.push({t:new Date().toISOString(),x:"Đã trả hàng cho khách"});toast("📦 Đã trả hàng: "+x.name+" — "+x.dev,"#475569");upd()};
  if($("#dn"))$("#dn").onclick=()=>{x.s=4;x.log.push({t:new Date().toISOString(),x:"Sửa xong"});done(x);upd()};
- $("#c").onchange=e=>{x.cost=+e.target.value||0;x.log.push({t:new Date().toISOString(),x:"Cập nhật chi phí: "+money(x.cost)});upd()};
+ if($("#c"))$("#c").onchange=e=>{x.cost=+e.target.value||0;x.log.push({t:new Date().toISOString(),x:"Cập nhật phí: "+money(x.cost)});upd()};
  document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{x.s=+b.dataset.s;x.log.push({t:new Date().toISOString(),x:"Chuyển trạng thái: "+ST[x.s][0]});if(x.s==4)done(x);upd()});
  $("#ad").onclick=()=>{const v=$("#nt").value.trim();if(!v)return;x.log.push({t:new Date().toISOString(),x:v});upd()};
- $("#rm").onclick=()=>{if(confirm("Xóa phiếu "+x.id+"?")){D=D.filter(t=>t!==x);save();$("#sheet").classList.remove("on");render()}};
+ if($("#rm"))$("#rm").onclick=()=>{if(confirm("Xóa phiếu "+x.id+"?")){D=D.filter(t=>t!==x);save();$("#sheet").classList.remove("on");render()}};
+ }
 }
+
 document.addEventListener("click",e=>{const n=e.target.closest("nav button"),f=e.target.closest("[data-f]"),t=e.target.closest(".t");
- if(n){view=n.dataset.v;render()}else if(e.target.closest("#ov")){ovf=!ovf;render()}else if(e.target.closest("[data-tab]")){tab=e.target.closest("[data-tab]").dataset.tab;ovf=false;render()}else if(f){flt=+f.dataset.f;render()}else if(t)open(t.dataset.id);
+ if(e.target.closest("[data-r]")){gotoRole(e.target.closest("[data-r]").dataset.r)}else if(n){view=n.dataset.v;render()}else if(e.target.closest("#ov")){ovf=!ovf;render()}else if(e.target.closest("[data-tab]")){tab=e.target.closest("[data-tab]").dataset.tab;ovf=false;render()}else if(f){flt=+f.dataset.f;render()}else if(t)open(t.dataset.id);
  else if(e.target.id=="sheet")$("#sheet").classList.remove("on")});
 sndLbl();$('#snd').onclick=()=>{mute=!mute;try{localStorage.setItem('bh_mute',mute?'1':'0')}catch(e){}sndLbl();chime()};
 const L=D.slice();
@@ -223,7 +267,7 @@ setSync('Đang kết nối dữ liệu dùng chung…');
   if(view=='new'||(ae&&(ae.id=='q'||ae.id=='nt'||ae.id=='c')))stats();else render();
  },()=>setSync('Mất kết nối dữ liệu chung'));
 })();
-render();setTimeout(pendCheck,1500);setTimeout(remindCheck,14000);setInterval(pendCheck,30*60*1000);setInterval(remindCheck,31*60*1000);
+role="Tiếp nhận";applyRole();setTimeout(pendCheck,1500);setTimeout(remindCheck,14000);setInterval(pendCheck,30*60*1000);setInterval(remindCheck,31*60*1000);
 </script>
 </body>
 </html>
