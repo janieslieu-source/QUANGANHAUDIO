@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phiếu bảo hành & sửa chữa</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceee8;--card:#fff;--ink:#16211f;--mut:#5d6b67;--line:#d5dbd4;--pri:#0f4c4a;--onpri:#fff;--warn:#b45309;--ok:#1d7a46;--bad:#b3261e;--chip:#e3e8e1;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111917;--card:#1a2522;--ink:#e8eeeb;--mut:#9aaaa5;--line:#2c3935;--pri:#5fc2b8;--onpri:#08201d;--warn:#f0a94a;--ok:#5fd08a;--bad:#ff8a80;--chip:#23302c}}
+:root[data-theme="dark"]{--bg:#111917;--card:#1a2522;--ink:#e8eeeb;--mut:#9aaaa5;--line:#2c3935;--pri:#5fc2b8;--onpri:#08201d;--warn:#f0a94a;--ok:#5fd08a;--bad:#ff8a80;--chip:#23302c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 "Be Vietnam Pro",system-ui,sans-serif;max-width:560px;margin-inline:auto;min-height:100vh;padding-bottom:84px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--pri);z-index:10}
+header{background:var(--pri);color:var(--onpri);padding:18px 16px 14px}
+h1{font-size:20px;font-weight:800;margin:0 0 12px}
+.stats{display:flex;gap:8px}
+.stat{flex:1;background:rgba(255,255,255,.14);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:22px;font-weight:800;line-height:1.1}
+.stat span{font-size:12px;opacity:.9}
+main{padding:12px 14px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;margin:0}
+textarea{resize:vertical;min-height:72px}
+label{display:block;font-size:13px;font-weight:700;margin:12px 0 4px}
+:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px}
+.chip{flex:none;border:0;background:var(--chip);color:var(--ink);font:500 13px inherit;font-family:inherit;padding:7px 12px;border-radius:99px}
+.chip[aria-pressed=true]{background:var(--pri);color:var(--onpri);font-weight:700}
+.t{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c,var(--mut));border-radius:10px;padding:11px 12px;margin-top:10px;color:inherit;font:inherit}
+.t .r{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.t b{font-weight:700}
+.t small,.mut{color:var(--mut);font-size:13px}
+.st{font-size:12px;font-weight:700;color:var(--c)}
+.empty{text-align:center;color:var(--mut);padding:36px 12px}
+nav{position:fixed;bottom:0;left:0;right:0;max-width:560px;margin:auto;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
+nav button{flex:1;border:0;background:none;color:var(--mut);font:500 12px inherit;font-family:inherit;padding:10px 0 9px}
+nav button svg{display:block;margin:0 auto 2px;width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2}
+nav button[aria-current=page]{color:var(--pri);font-weight:700}
+.btn{border:0;background:var(--pri);color:var(--onpri);font:700 15px inherit;font-family:inherit;padding:13px 16px;border-radius:10px;width:100%;margin-top:14px}
+.btn.sec{background:var(--chip);color:var(--ink)}.btn.del{background:none;color:var(--bad);border:1.5px solid var(--bad)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
+.res{border-radius:10px;padding:14px;margin-top:14px;font-weight:700;border:2px solid var(--c);color:var(--c)}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:none}
+.sheet.on{display:block}
+.sheet>div{position:absolute;bottom:0;left:0;right:0;max-width:560px;margin:auto;max-height:92%;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;padding:16px 14px calc(18px + env(safe-area-inset-bottom,0px))}
+.steps{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.log{border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:8px 0;font-size:14px}
+.x{float:right;border:0;background:var(--chip);color:var(--ink);border-radius:99px;width:34px;height:34px;font-size:18px}
+.snd{float:right;border:0;background:rgba(255,255,255,.18);color:var(--onpri);font:700 13px inherit;font-family:inherit;padding:7px 11px;border-radius:99px}
+.seg{display:flex;gap:8px}.seg label{flex:1;margin:0;position:relative}.seg input{position:absolute;opacity:0;width:1px;height:1px}.seg span{display:block;text-align:center;padding:13px 8px;border:1.5px solid var(--line);border-radius:10px;background:var(--card);font-weight:700}.seg input:checked+span{background:var(--pri);color:var(--onpri);border-color:var(--pri)}.seg input:focus-visible+span{outline:3px solid var(--warn);outline-offset:2px}
+.sync{font-size:12px;opacity:.9;margin-top:8px}
+.tabs{display:flex;border-bottom:2px solid var(--line);margin:0 0 10px}.tabs button{flex:1;border:0;background:none;color:var(--mut);font:600 14px inherit;font-family:inherit;padding:11px 4px;border-bottom:3px solid transparent;margin-bottom:-2px}.tabs button[aria-selected=true]{color:var(--pri);border-bottom-color:var(--pri);font-weight:800}.tabs i{font-style:normal;background:var(--chip);border-radius:99px;padding:1px 8px;font-size:12px;margin-left:4px}
+.toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;right:12px;max-width:536px;margin:auto;background:#1d7a46;color:#fff;padding:14px;border-radius:12px;font-weight:700;z-index:40;display:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+</style>
+</head>
+<body>
+<header><button id="snd" class="snd" type="button"></button><h1>Bảo hành &amp; sửa chữa</h1><div class="stats" id="stats"></div><div class="sync" id="sync" role="status"></div></header>
+<main id="app"></main>
+<nav>
+<button data-v="list" aria-current="page"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Phiếu</button>
+<button data-v="new"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Tạo phiếu</button>
+<button data-v="chk"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Tra cứu BH</button>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+<div class="sheet" id="sheet"><div id="sbody"></div></div>
+<script>
+const ST=[["Tiếp nhận","#6b7280"],["Đang kiểm tra","#0369a1"],["Chờ linh kiện","#b45309"],["Đang sửa","#7c3aed"],["Hoàn tất","#1d7a46"],["Đã giao","#475569"],["Đang treo","#b45309"]];
+let D=[],view="list",flt=-1,q="";
+const KEY="bh_tickets_v1";
+let GR=["Nhóm điện","Nhóm âm thanh","Nhóm điện lạnh","Nhóm khác"],gf="";
+try{const g=JSON.parse(localStorage.getItem("bh_groups")||"null");if(g&&g.length)GR=g}catch(e){}
+let tab="Hàng bảo hành";const typeOf=x=>x.type||(warr(x.buy,x.mo).ok?"Hàng bảo hành":"Hàng sửa chữa");
+const HOLD=5,DAY=864e5;let ovf=false,tT;
+const dueAt=x=>new Date(new Date(x.hold||x.at).getTime()+HOLD*DAY);
+const isOver=x=>x.conf!="Trả lại khách"&&x.s!=5&&dueAt(x)<new Date();
+const holdTxt=x=>{if(x.conf=="Trả lại khách"||x.s==5)return"";if(isOver(x))return" · ⚠ quá hạn";if(x.s==6)return" · còn "+Math.ceil((dueAt(x)-new Date())/DAY)+" ngày";return""};
+const toast=(t,bg)=>{const e=document.querySelector("#toast");e.textContent=t;e.style.background=bg||"#1d7a46";e.style.display="block";clearTimeout(tT);tT=setTimeout(()=>e.style.display="none",10000)};
+const done=x=>{say("Đã sửa xong "+x.name);toast("✅ Đã sửa xong: "+x.name+" — "+x.dev)};
+const overBanner=()=>{const o=D.filter(isOver);return o.length?`<button class="t" style="--c:#b45309;margin:0 0 10px" id="ov"><b>⏰ ${o.length} hàng quá ${HOLD} ngày chưa trả khách</b><br><small>${o.slice(0,3).map(x=>esc(x.name)).join(", ")}${o.length>3?"…":""} — chạm để ${ovf?"xem tất cả":"chỉ xem các phiếu này"}</small></button>`:""};
+const remindCheck=()=>{const o=D.filter(isOver);if(!o.length)return;const day=new Date().toISOString().slice(0,10)+":"+o.length;let l="";try{l=localStorage.getItem("bh_rem")||""}catch(e){}if(l==day)return;try{localStorage.setItem("bh_rem",day)}catch(e){}
+ toast("⏰ Nhắc nhở: "+o.length+" hàng quá "+HOLD+" ngày chưa trả khách","#b45309");say("Nhắc nhở: có "+o.length+" hàng chưa trả khách")};
+const saveGR=()=>{try{localStorage.setItem("bh_groups",JSON.stringify(GR))}catch(e){}};
+const grList=id=>`<datalist id="${id}">${GR.map(g=>`<option value="${esc(g)}">`).join("")}</datalist>`;
+try{D=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){D=[]}
+let DB=null,last={};
+const setSync=t=>{const s=document.querySelector('#sync');if(s)s.textContent=t};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}
+ if(!DB)return;const cur={};
+ D.forEach(x=>{cur[x.id]=JSON.stringify(x);if(last[x.id]!==cur[x.id])DB.collection('tickets').doc(x.id).set(x).catch(()=>setSync('Lưu thất bại — tài khoản cần quyền chỉnh sửa'))});
+ Object.keys(last).forEach(id=>{if(!cur[id])DB.collection('tickets').doc(id).delete().catch(()=>{})});last=cur};
+const $=s=>document.querySelector(s);
+let mute=false;try{mute=localStorage.getItem('bh_mute')=='1'}catch(e){}
+let AC=null;
+function chime(){if(mute)return;try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state=='suspended')AC.resume();
+ [[880,0],[1175,.28],[1568,.56],[1175,1.0],[1568,1.28]].forEach(([f,t])=>{[1,2.76].forEach((m,k)=>{const o=AC.createOscillator(),g=AC.createGain(),s=AC.currentTime+t;
+  o.type='sine';o.frequency.value=f*m;g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(k?.12:.4,s+.01);g.gain.exponentialRampToValueAtTime(.001,s+1.1);
+  o.connect(g);g.connect(AC.destination);o.start(s);o.stop(s+1.2)})});
+ if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){}}
+function say(t){if(mute)return;try{if(!window.speechSynthesis){chime();return}
+ const u=new SpeechSynthesisUtterance(t);u.lang='vi-VN';u.rate=.95;u.volume=1;
+ const v=speechSynthesis.getVoices().find(x=>/^vi/i.test(x.lang));if(v)u.voice=v;
+ speechSynthesis.cancel();speechSynthesis.speak(u);if(navigator.vibrate)navigator.vibrate([120,60,120])}catch(e){chime()}}
+function alertFor(c){if(c=='Trả lại khách')say('Trả lại khách');else chime()}
+addEventListener('pointerdown',()=>{try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}catch(e){}},{once:true});
+function sndLbl(){$('#snd').textContent=mute?'🔕 Chuông tắt':'🔔 Chuông bật';$('#snd').setAttribute('aria-pressed',!mute)}
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const money=n=>(+n||0).toLocaleString("vi-VN")+"đ";
+const fd=d=>d?new Date(d).toLocaleDateString("vi-VN"):"—";
+function warr(buy,mo){if(!buy)return{t:"Chưa có ngày mua",c:"var(--mut)"};const e=new Date(buy);e.setMonth(e.getMonth()+(+mo||12));const days=Math.ceil((e-new Date())/864e5);
+ return days>=0?{t:"Còn bảo hành đến "+fd(e)+" (còn "+days+" ngày)",c:"var(--ok)",ok:1}:{t:"Hết bảo hành từ "+fd(e)+" — tính phí sửa",c:"var(--bad)"}}
+function stats(){const o=D.filter(x=>x.s!=4&&x.s!=5).length,r=D.filter(x=>x.s==4).length;
+ $("#stats").innerHTML=`<div class="stat"><b>${D.length}</b><span>Tổng phiếu</span></div><div class="stat"><b>${o}</b><span>Đang xử lý</span></div><div class="stat"><b>${r}</b><span>Chờ giao</span></div>`}
+function render(){
+ document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.v==view?"page":"false"));
+ stats();
+ if(view=="list"){
+  const L=D.filter(x=>(flt<0||x.s==flt)&&(ovf?isOver(x):(tab==""||typeOf(x)==tab))&&(!q||(x.name+x.phone+x.dev+x.sn+x.id+(x.grp||"")).toLowerCase().includes(q.toLowerCase())));
+  $("#app").innerHTML=`${overBanner()}<div class="tabs" role="tablist">${["Hàng bảo hành","Hàng sửa chữa"].map(n=>`<button role="tab" aria-selected="${tab==n}" data-tab="${n}">${n}<i>${D.filter(x=>typeOf(x)==n).length}</i></button>`).join("")}</div><input id="q" type="search" placeholder="Tìm tên, SĐT, thiết bị, serial…" value="${esc(q)}" aria-label="Tìm phiếu">
+  <div class="chips"><button class="chip" aria-pressed="${flt<0}" data-f="-1">Tất cả</button>${ST.map((s,i)=>`<button class="chip" aria-pressed="${flt==i}" data-f="${i}">${s[0]}</button>`).join("")}</div>
+  
+  ${L.length?L.map(x=>`<button class="t" style="--c:${ST[x.s][1]}" data-id="${x.id}"><div class="r"><b>${esc(x.dev)}</b><span class="st">${ST[x.s][0]}${holdTxt(x)}</span></div><div>${esc(x.name)}${x.phone?" · "+esc(x.phone):""}</div><small><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · SL ${x.qty||1} · ${fd(x.at)} · ${esc(x.issue).slice(0,60)}</small></button>`).join(""):`<div class="empty">${D.length?"Không có phiếu phù hợp.":"Chưa có phiếu nào. Chạm “Tạo phiếu” để tiếp nhận máy đầu tiên."}</div>`}`;
+  const qi=$("#q");qi.oninput=e=>{q=e.target.value;const p=qi.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)};
+ }
+ if(view=="new"){
+  $("#app").innerHTML=`<label>Tên khách hàng *</label><input id="n"><label>Số điện thoại</label><input id="p" type="tel" inputmode="tel">
+  <label>Tên sản phẩm *</label><input id="d"><label>Số lượng</label><input id="qty" type="number" inputmode="numeric" min="1" value="1"><div class="row"><div><label>Ngày bán ra</label><input id="b" type="date"></div><div><label>Bảo hành (tháng)</label><input id="m" type="number" value="12" min="0"></div></div><div id="auto" class="res" role="status" style="display:none;font-size:14px"></div><label id="tl">Loại hàng * <span class="mut" style="font-weight:400">(tự chọn theo ngày bán)</span></label><div class="seg" role="radiogroup" aria-labelledby="tl"><label><input type="radio" name="tp" value="Hàng bảo hành" checked><span>Hàng bảo hành</span></label><label><input type="radio" name="tp" value="Hàng sửa chữa"><span>Hàng sửa chữa</span></label></div><label id="cl2">Xác nhận *</label><div class="seg" role="radiogroup" aria-labelledby="cl2"><label><input type="radio" name="cf" value="Xác nhận sửa" checked><span>Xác nhận sửa</span></label><label><input type="radio" name="cf" value="Trả lại khách"><span>Trả lại khách</span></label></div><div id="kw"><label id="kl">Mục đích *</label><div class="seg" role="radiogroup" aria-labelledby="kl"><label><input type="radio" name="k" value="Sửa chữa" checked><span>Sửa chữa</span></label><label><input type="radio" name="k" value="Thay mới"><span>Thay mới</span></label></div></div><label>Số serial</label><input id="sn">
+  
+  <label>Chẩn đoán bệnh</label><textarea id="i"></textarea><label>Phụ kiện đi kèm / ghi chú</label><input id="a">
+  <p id="err" class="mut" role="alert" style="color:var(--bad)"></p><button class="btn" id="sv">Lưu phiếu tiếp nhận</button>`;
+  const autoT=()=>{const a=$("#auto");if(!$("#b").value){a.style.display="none";return}
+  const w=warr($("#b").value,$("#m").value),t=w.ok?"Hàng bảo hành":"Hàng sửa chữa";
+  document.querySelector('input[name=tp][value="'+t+'"]').checked=true;a.style.display="block";a.style.setProperty("--c",w.c);a.textContent=w.t+" → "+t};
+  $("#b").oninput=autoT;$("#m").oninput=autoT;
+  document.querySelectorAll('input[name=cf]').forEach(r=>r.onchange=()=>{$("#kw").style.display=document.querySelector('input[name=cf]:checked').value=="Trả lại khách"?"none":"";alertFor(document.querySelector('input[name=cf]:checked').value)});$("#sv").onclick=()=>{const g=i=>$("#"+i).value.trim(),r={n:g("n"),p:g("p"),d:g("d"),i:g("i")};
+   if(!r.n||!r.d){$("#err").textContent="Nhập tên khách hàng và tên sản phẩm.";return}
+   const id="BH"+String(Date.now()).slice(-6);
+   D.unshift({id,name:r.n,phone:r.p,dev:r.d,type:document.querySelector('input[name=tp]:checked').value,conf:document.querySelector('input[name=cf]:checked').value,kind:document.querySelector('input[name=cf]:checked').value=="Trả lại khách"?"Trả lại khách":document.querySelector('input[name=k]:checked').value,sn:g("sn"),buy:g("b"),mo:g("m"),issue:r.i,acc:g("a"),qty:Math.max(1,+g("qty")||1),s:(document.querySelector('input[name=cf]:checked').value=="Xác nhận sửa")?6:0,cost:0,at:new Date().toISOString(),hold:new Date().toISOString(),log:[{t:new Date().toISOString(),x:"Tiếp nhận máy"}]});
+   save();alertFor(D[0].conf);tab=D[0].type;view="list";flt=-1;q="";render();open(id)};
+ }
+ if(view=="chk"){
+  $("#app").innerHTML=`<label>Ngày mua</label><input id="b" type="date"><label>Thời hạn bảo hành (tháng)</label><input id="m" type="number" value="12" min="0">
+  <div id="o"></div><label>Hoặc tìm theo serial đã tiếp nhận</label><input id="s" placeholder="Nhập serial"><div id="o2"></div>`;
+  const f=()=>{const w=warr($("#b").value,$("#m").value);$("#o").innerHTML=`<div class="res" style="--c:${w.c}">${w.t}</div>`};
+  $("#b").oninput=f;$("#m").oninput=f;
+  $("#s").oninput=e=>{const v=e.target.value.trim().toLowerCase();const m=v&&D.filter(x=>x.sn&&x.sn.toLowerCase()==v);
+   $("#o2").innerHTML=m&&m.length?m.map(x=>{const w=warr(x.buy,x.mo);return`<div class="res" style="--c:${w.c}">${esc(x.dev)} (${esc(x.id)})<br>${w.t}</div>`}).join(""):v?`<p class="mut">Không thấy serial này.</p>`:""};
+ }
+}
+function open(id){const x=D.find(t=>t.id==id);if(!x)return;const w=warr(x.buy,x.mo);
+ $("#sbody").innerHTML=`<button class="x" id="cl" aria-label="Đóng">×</button><h2 style="margin:0 0 4px;font-size:18px">${esc(x.dev)}</h2><div class="mut"><b>${esc(x.kind==x.conf?x.kind:(x.conf||"Xác nhận sửa")+" · "+(x.kind||"Sửa chữa"))}</b> · ${esc(x.id)} · Serial: ${esc(x.sn||"—")} · Nhận ${fd(x.at)}</div>
+ <div class="res" style="--c:${w.c};font-size:14px">${w.t}</div>
+ <div class="box"><b>${esc(x.name)}</b> · <a href="tel:${esc(x.phone)}" style="color:var(--pri);font-weight:700">${esc(x.phone)}</a><p style="margin:8px 0 0"><b>Chẩn đoán:</b> ${esc(x.issue||"—")}<br>Số lượng: ${x.qty||1}</p>${x.acc?`<p class="mut" style="margin:4px 0 0">Kèm: ${esc(x.acc)}</p>`:""}</div>
+ ${x.s!=4&&x.s!=5?`<button class="btn" id="dn" style="background:#1d7a46;color:#fff">✅ Sửa xong — báo khách</button>`:""}
+ <label>Trạng thái</label><div class="steps">${ST.map((s,i)=>`<button class="chip" aria-pressed="${x.s==i}" data-s="${i}">${s[0]}</button>`).join("")}</div>
+ <label>Loại hàng</label><select id="gx"><option${typeOf(x)=="Hàng bảo hành"?" selected":""}>Hàng bảo hành</option><option${typeOf(x)=="Hàng sửa chữa"?" selected":""}>Hàng sửa chữa</option></select><label>Chi phí linh kiện / công (đ)</label><input id="c" type="number" inputmode="numeric" value="${x.cost||""}" placeholder="${w.ok?"0 nếu trong bảo hành":"0"}">
+ <label>Ghi chú kỹ thuật</label><div class="row" style="align-items:stretch"><input id="nt" placeholder="VD: thay main, test OK"><button class="chip" id="ad" style="flex:none">Thêm</button></div>
+ ${x.log.slice().reverse().map(l=>`<div class="log">${esc(l.x)}<br><small>${new Date(l.t).toLocaleString("vi-VN")}</small></div>`).join("")}
+ <div class="box" style="font-weight:700">Tổng chi phí: ${money(x.cost)}</div><button class="btn" id="sh">📨 Gửi báo kỹ thuật (Zalo, Telegram…)</button><button class="btn del" id="rm">Xóa phiếu</button>`;
+ $("#sheet").classList.add("on");
+ const upd=()=>{save();render();open(id)};
+ $("#cl").onclick=()=>{$("#sheet").classList.remove("on")};
+ $("#sh").onclick=async()=>{const t=`🔔 PHIẾU MỚI — ${x.conf||'Xác nhận sửa'}\nMã: ${x.id}\nKhách: ${x.name}${x.phone?' · '+x.phone:''}\nSản phẩm: ${x.dev}${x.sn?' (SN '+x.sn+')':''}\nLoại: ${typeOf(x)}\nHướng xử lý: ${x.kind||'Sửa chữa'}\nSố lượng: ${x.qty||1}\nChẩn đoán: ${x.issue||'—'}\nBảo hành: ${w.t}`;
+  try{if(navigator.share){await navigator.share({text:t});return}}catch(e){if(e&&e.name=='AbortError')return}
+  try{await navigator.clipboard.writeText(t);alert('Đã chép nội dung. Dán vào nhóm Zalo/Telegram của kỹ thuật.')}catch(e){prompt('Chép nội dung này:',t)}};
+ $("#gx").onchange=e=>{x.type=e.target.value;x.log.push({t:new Date().toISOString(),x:"Chuyển loại hàng: "+x.type});tab=x.type;upd()};
+ if($("#dn"))$("#dn").onclick=()=>{x.s=4;x.log.push({t:new Date().toISOString(),x:"Sửa xong"});done(x);upd()};
+ $("#c").onchange=e=>{x.cost=+e.target.value||0;x.log.push({t:new Date().toISOString(),x:"Cập nhật chi phí: "+money(x.cost)});upd()};
+ document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{x.s=+b.dataset.s;x.log.push({t:new Date().toISOString(),x:"Chuyển trạng thái: "+ST[x.s][0]});if(x.s==4)done(x);upd()});
+ $("#ad").onclick=()=>{const v=$("#nt").value.trim();if(!v)return;x.log.push({t:new Date().toISOString(),x:v});upd()};
+ $("#rm").onclick=()=>{if(confirm("Xóa phiếu "+x.id+"?")){D=D.filter(t=>t!==x);save();$("#sheet").classList.remove("on");render()}};
+}
+document.addEventListener("click",e=>{const n=e.target.closest("nav button"),f=e.target.closest("[data-f]"),t=e.target.closest(".t");
+ if(n){view=n.dataset.v;render()}else if(e.target.closest("#ov")){ovf=!ovf;render()}else if(e.target.closest("[data-tab]")){tab=e.target.closest("[data-tab]").dataset.tab;ovf=false;render()}else if(f){flt=+f.dataset.f;render()}else if(t)open(t.dataset.id);
+ else if(e.target.id=="sheet")$("#sheet").classList.remove("on")});
+sndLbl();$('#snd').onclick=()=>{mute=!mute;try{localStorage.setItem('bh_mute',mute?'1':'0')}catch(e){}sndLbl();chime()};
+const L=D.slice();
+setSync('Đang kết nối dữ liệu dùng chung…');
+(async()=>{let u=null;try{u=window.claude?await claude.use('db'):null}catch(e){}
+ if(!u){setSync('Chỉ lưu trên máy này (chưa kết nối dữ liệu chung)');return}
+ DB=u;let ready=false;const seen=new Set();
+ const tm=setTimeout(()=>setSync('Chưa kết nối được máy chủ, đang hiển thị dữ liệu trên máy'),10000);
+ DB.collection('tickets').onSnapshot(snap=>{
+  const m=new Map(D.map(x=>[x.id,x]));
+  D=snap.docs.map(d=>d.data()).map(v=>{const o=m.get(v.id);return o?Object.assign(o,v):v}).sort((a,b)=>a.at<b.at?1:-1);
+  last={};D.forEach(x=>last[x.id]=JSON.stringify(x));
+  const fresh=D.filter(x=>!seen.has(x.id));const fc=fresh;
+  D.forEach(x=>seen.add(x.id));
+  if(ready&&!snap.metadata.hasPendingWrites&&fc.length){alertFor(fc[0].conf);setSync('🔔 Có phiếu mới: '+(fc[0].conf||'Xác nhận sửa')+' — '+fc[0].dev);setTimeout(()=>setSync('Dùng chung · cập nhật trực tiếp'),15000)}
+  else if(!snap.metadata.fromCache&&!ready)setSync('Dùng chung · cập nhật trực tiếp');
+  if(!snap.metadata.fromCache){clearTimeout(tm);
+   if(!ready){ready=true;try{if(!localStorage.getItem('bh_mig')){L.filter(x=>!seen.has(x.id)).forEach(x=>DB.collection('tickets').doc(x.id).set(x).catch(()=>{}));localStorage.setItem('bh_mig','1')}}catch(e){}}}
+  const ae=document.activeElement;
+  if(view=='new'||(ae&&(ae.id=='q'||ae.id=='nt'||ae.id=='c')))stats();else render();
+ },()=>setSync('Mất kết nối dữ liệu chung'));
+})();
+render();setTimeout(remindCheck,1500);setInterval(remindCheck,30*60*1000);
+</script>
+</body>
+</html>
