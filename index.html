@@ -4397,9 +4397,15 @@
           <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
         : `<div class="empty">Chưa có nhân viên.</div>`}
       <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Xuất Excel bảng chấm công</button><label class="btn" style="text-align:center">📥 Nhập lại Excel đã sửa<input type="file" id="ccXlsIn" accept=".xlsx,.xls" hidden></label><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
-      <div class="sub" id="ccLocTxt"></div>`;
+      <div class="sub" id="ccLocTxt"></div>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:14px;color:var(--muted)">📌 Hoặc dán tọa độ từ Google Maps</summary>
+        <div class="sub" style="margin:6px 0">Mở Google Maps → <b>nhấn giữ</b> đúng nóc / cửa công ty → chạm vào dãy số tọa độ để sao chép (VD: 10.83456, 106.66789) → dán vào ô dưới.</div>
+        <label style="margin-top:0">Địa chỉ công ty</label><input id="ccAddr" placeholder="VD: 525/9/55 Quang Trung, P10, Gò Vấp" autocomplete="off">
+        <label>Tọa độ</label><input id="ccLL" placeholder="10.83456, 106.66789" autocomplete="off" inputmode="decimal">
+        <div class="btns"><button type="button" class="btn pri" id="ccLLSave">💾 Lưu tọa độ công ty</button></div></details>`;
     const cfg = expenses.find(x => x.id === "cc_cfg");
-    $("#ccLocTxt").textContent = cfg?.lat ? `Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}). Phạm vi chấm công: ${ccRadius()} m – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.` : "Chưa đặt vị trí công ty.";
+    $("#ccLocTxt").innerHTML = cfg?.lat ? `📍 ${cfg.address ? `<b>${esc(cfg.address)}</b> – ` : ""}Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}${cfg.acc ? ` · sai số ±${cfg.acc} m` : ""}${cfg.setBy ? ` · ${esc(cfg.setBy)} ${fmtTime(cfg.updatedAt)}` : ""}). Phạm vi chấm công: <b>${ccRadius()} m</b> – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.`
+      : `<div class="reason" style="background:var(--badbg);color:var(--bad);margin-top:6px">⚠️ <b>Chưa đặt vị trí công ty</b> – nhân viên chưa chấm công được. Hãy <b>đứng tại công ty</b> rồi bấm “📍 Đặt vị trí công ty”.</div>`;
     $("#ccMonth").onchange = e => { ccYm = e.target.value || iso(new Date()).slice(0, 7); drawCC(); };
     const saveCodes = async (mut, nv, noteFor, dayFor) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
       mut(doc.codes); if (noteFor !== undefined && dayFor) { doc.notes = doc.notes || {}; doc.notes[nv] = doc.notes[nv] || {}; if (noteFor) doc.notes[nv][dayFor] = noteFor; else delete doc.notes[nv][dayFor]; }
@@ -4427,8 +4433,19 @@
     host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
       if (!confirm(`Chấm X (cả ngày) cho tất cả ngày thường còn trống của ${emps.find(x => x.id === nv)?.name || ""} trong tháng?`)) return;
       saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }, nv); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
+    $("#ccAddr").value = cfg?.address || ""; if (cfg?.lat) $("#ccLL").value = `${cfg.lat.toFixed(6)}, ${cfg.lng.toFixed(6)}`;
+    $("#ccLLSave").onclick = async () => { const m = $("#ccLL").value.replace(/[()]/g, "").match(/(-?\d{1,2}[.,]\d+)\s*[, ;]\s*(-?\d{1,3}[.,]\d+)/);
+      if (!m) { toast("Dán tọa độ dạng: 10.83456, 106.66789"); $("#ccLL").focus(); return; }
+      const lat = Number(m[1].replace(",", ".")), lng = Number(m[2].replace(",", "."));
+      if (!(lat > 8 && lat < 24 && lng > 102 && lng < 110)) { toast("Tọa độ không nằm ở Việt Nam – kiểm tra lại"); return; }
+      await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat, lng, acc: 0, address: $("#ccAddr").value.trim(), setBy: actor() + " (tọa độ Google Maps)", updatedAt: new Date().toISOString()}));
+      toast("Đã lưu tọa độ công ty"); drawCC(); };
     $("#ccLoc").onclick = () => { if (!navigator.geolocation) { toast("Máy không hỗ trợ định vị"); return; }
-      navigator.geolocation.getCurrentPosition(async p => { await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, updatedAt: new Date().toISOString()})); toast("Đã lưu vị trí công ty"); drawCC(); },
+      if (!confirm("Bạn đang ĐỨNG TẠI CÔNG TY? Vị trí hiện tại của máy này sẽ là tâm phạm vi chấm công " + ccRadius() + " m.")) return;
+      toast("📍 Đang lấy vị trí…");
+      navigator.geolocation.getCurrentPosition(async p => { const acc = Math.round(p.coords.accuracy);
+        await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, acc, address: $("#ccAddr").value.trim() || cfg?.address || "", setBy: actor(), updatedAt: new Date().toISOString()}));
+        toast(acc > 30 ? `Đã lưu vị trí công ty – sai số ±${acc} m hơi lớn, nên ra gần cửa / chỗ thoáng rồi bấm đặt lại` : `Đã lưu vị trí công ty (sai số ±${acc} m)`); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
     // nhập lại file Excel bảng chấm công đã sửa (đúng mẫu file xuất ra): chỉ ghi những ô khác với hiện tại
     $("#ccXlsIn").onchange = async ev => { const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
@@ -4475,12 +4492,12 @@
       const id = F.ccnv?.value || "", lg = id ? myLog(id) : null, ym = d.slice(0, 7), s = id ? ccSummary(ym, id) : null;
       st.innerHTML = !id ? "Chọn tên của bạn để chấm công." : lg ? `Hôm nay: vào ca <b>${tm(lg.in)}</b>${lg.out ? ` · tan ca <b>${tm(lg.out)}</b><br>Giờ làm hôm nay: <b>${hm(ccMin(lg))}</b> = <b>${hDec(ccMin(lg))} giờ</b>` : ` · <b>chưa tan ca</b> (đã làm ${hm(Math.max(0, Math.round((Date.now() - new Date(lg.in)) / 60000)))})`}` : "Hôm nay <b>chưa chấm công</b>.";
       if (s) st.innerHTML += `<br>Tháng ${ym.slice(5)}: <b>${s.work}</b> công · <b>${hDec(s.mins)}</b> giờ làm${s.leave ? ` · ${s.leave} ngày nghỉ có lương` : ""}${s.unpaid ? ` · ${s.unpaid} ngày không lương` : ""}`;
-      q(".ccIn").disabled = !id || !!lg; q(".ccOut").disabled = !id || !lg || !!lg.out; };
+      const noLoc = !ccCfg()?.lat; q(".ccIn").disabled = noLoc || !id || !!lg; q(".ccOut").disabled = noLoc || !id || !lg || !!lg.out; };
     F.innerHTML = `${sheet ? `<div class="grab"></div>` : ""}<h2 style="margin:0 0 4px">🕘 Chấm công</h2><div class="sub">${fmt(d)} · ${tm(new Date())} · giờ làm tính theo phút, 60 phút = 1 giờ</div>
       ${emps.length ? `<label>Bấm vào đúng tên của bạn</label><input type="hidden" name="ccnv" value="${esc(me)}">
         <div class="ccppl">${emps.map(e => `<button type="button" class="ccp ${e.id === me ? "sel" : ""}" data-ccp="${esc(e.id)}">${esc(ccShort(e.name))}${norm(e.name) !== norm(ccShort(e.name)) ? `<small>${esc(e.name)}</small>` : ""}${myLog(e.id)?.in ? `<span class="tk">✔</span>` : ""}</button>`).join("")}</div>
-        ${ccCfg()?.lat ? `<div class="sub" style="margin-top:10px">📍 Cần bật định vị – chỉ chấm được khi bạn ở trong phạm vi <b>${ccRadius()} m</b> quanh công ty.</div><input type="checkbox" name="ccgps" checked hidden>`
-          : `<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="ccgps" checked style="width:auto;margin:0"> Kèm vị trí (GPS)</label>`}
+        ${ccCfg()?.lat ? `<div class="sub" style="margin-top:10px">📍 Cần bật định vị – chỉ chấm được khi bạn ở trong phạm vi <b>${ccRadius()} m</b> quanh công ty.</div>`
+          : `<div class="reason" style="background:var(--badbg);color:var(--bad);margin-top:10px">⚠️ Công ty <b>chưa đặt vị trí chấm công</b> nên chưa chấm được. Báo Kế toán / Giám đốc đứng tại công ty bấm “📍 Đặt vị trí công ty”.</div>`}<input type="checkbox" name="ccgps" checked hidden>
         <div class="ccOkBox"></div><div class="found ccStat" style="margin-top:10px"></div>
         <div class="btns"><button type="button" class="btn okb ccIn">▶ Vào ca</button><button type="button" class="btn pri ccOut">⏹ Tan ca</button></div>`
       : `<div class="empty">Chưa có danh sách nhân viên.</div>`}
@@ -4496,6 +4513,7 @@
       const btn = q(kind === "in" ? ".ccIn" : ".ccOut"); btn.disabled = true; const t0 = btn.textContent; btn.textContent = "📍 Đang lấy vị trí…";
       const e = emps.find(x => x.id === id), sh = ccShort(e.name), loc = await getLoc(), now = new Date().toISOString(), old = myLog(id); btn.textContent = t0; draw();
       const cfg = ccCfg();
+      if (!cfg?.lat) { toast("Công ty chưa đặt vị trí chấm công – báo Kế toán / Giám đốc đặt vị trí trước"); return; }
       if (cfg?.lat) { const rad = ccRadius();
         if (!loc || loc.err) { toast("Không lấy được vị trí – bật định vị (GPS) và cho phép trình duyệt dùng vị trí rồi thử lại"); return; }
         const eff = loc.dist - Math.min(loc.acc || 0, CC_GPS_TOL); loc.ok = eff <= rad;
