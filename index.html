@@ -4381,7 +4381,7 @@
   // người chưa có trong danh mục nhân viên → tự thêm khi chấm công lần đầu (để Kế toán tính lương)
   async function ccEnsure(pp){ if (!pp || !pp.virtual || expenses.some(x => x.id === pp.id)) return;
     await put("ex", {id: pp.id, kind: "nhanvien", name: pp.name, title: "", base: 0, pc: 0, active: true, amount: 0, date: "", order: CC_NAMES.indexOf(pp.name), createdAt: new Date().toISOString()}); }
-  const CC_RADIUS = 10;            // phạm vi chấm công: 10 m quanh vị trí công ty
+  const CC_RADIUS = 50;            // phạm vi chấm công: 50 m quanh vị trí công ty
   const CC_GPS_TOL = 20;           // sai số GPS tối đa được trừ (điện thoại trong nhà thường sai 5–20 m)
   // vị trí công ty mặc định (Google Maps: Cty Âm Thanh – Ánh Sáng Quang Anh, 525/9/55 Quang Trung, P10, Gò Vấp); Kế toán đặt lại được
   const CC_HOME = {lat: 10.831625, lng: 106.665082, address: "525/9/55 Quang Trung, P10, Gò Vấp", setBy: "mặc định (Google Maps)"};
