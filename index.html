@@ -2899,7 +2899,7 @@
             <button type="button" class="btn sm pri auto" data-i="${i}">⚡ Chọn tự động ${l.qty}</button></div>
             <div class="chips snpick" data-i="${i}" style="flex-wrap:wrap;max-height:150px;overflow:auto">${av.slice(0, 200).map(x => `<button type="button" class="chip" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
             : `<div class="sub" style="margin:4px 0">${(() => { const n = qtyStock(l.product); return n != null ? `Tồn kho: <b style="color:${n >= l.qty ? "var(--ok)" : "var(--bad)"}">${n}</b> cái · ` : ""; })()}Gõ seri bên dưới (mỗi dòng 1 seri).</div>`; })()}
-          <textarea class="sn" data-i="${i}" rows="${Math.min(6, Math.max(2, l.qty))}" placeholder="${Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
+          <textarea class="sn" data-i="${i}" rows="${Math.min(8, Math.max(2, l.qty * snPerOf(l.product)))}" placeholder="${snPerOf(l.product) > 1 ? `Hàng bộ: mỗi sản phẩm ${snPerOf(l.product)} seri – gõ / quét đủ ${l.qty * snPerOf(l.product)} seri (mỗi dòng 1 seri)` : Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
           <button type="button" class="btn sm pri xkscan" data-i="${i}" style="margin-top:6px">📷 Quét seri bằng camera</button>
           <div class="sub snc" data-i="${i}"></div></div>
           <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
@@ -2922,11 +2922,17 @@
       sync();
     });
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
+    const setsOf = i => { const per = snPerOf(o.lines[i].product), seen = new Set(), out = [], free = [];
+      snList(i).forEach(sn => { const x = findStock(sn); if (x && x.subSerials?.length) { if (!seen.has(keySN(x.serial))) { seen.add(keySN(x.serial)); out.push([x.serial, ...x.subSerials]); } } else free.push(sn); });
+      for (let k = 0; k < free.length; k += per) out.push(free.slice(k, k + per));
+      return {sets: out, per, rem: free.length % per}; };
     const count = () => (o.lines||[]).forEach((l,i) => { const L = snList(i), n = L.length, bad = L.filter(x => !snOk(x)), el = F5.querySelector(`.snc[data-i="${i}"]`);
-      el.textContent = `Đã nhập ${n}/${l.qty} seri` + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
+      const so = setsOf(i), units = so.per > 1 ? so.sets.length : n;
+      el.textContent = (so.per > 1 ? `Hàng bộ ${so.per} seri/sản phẩm: đã nhập ${L.length} seri = ${so.rem ? so.sets.length - 1 : so.sets.length}/${l.qty} bộ${so.rem ? ` (bộ cuối mới có ${so.rem}/${so.per} seri)` : ""}` : `Đã nhập ${n}/${l.qty} seri`) + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
       const hits = modes[i] === "khong" ? [] : L.flatMap(sn => exHits(sn)); el.insertAdjacentHTML("beforeend", hitBox(hits));
       const anyHit = (o.lines || []).some((_, j) => modes[j] !== "khong" && snList(j).some(sn => exHits(sn).length)); $("#xkApproveW").classList.toggle("hide", !anyHit);
-      el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || (l.months && modes[i] === "nhap")) ? "var(--bad)" : ""; });
+      const full = so.per > 1 ? (!so.rem && units === l.qty) : n === l.qty, over = so.per > 1 ? units > l.qty : n > l.qty;
+      el.style.color = bad.length ? "var(--bad)" : full ? "var(--ok)" : (over || (l.months && modes[i] === "nhap")) ? "var(--bad)" : ""; });
     const setList = (i, L) => { F5.querySelector(`.sn[data-i="${i}"]`).value = L.join("\n"); sync(); };
     const sync = () => { count(); F5.querySelectorAll(".snpick").forEach(box => { const L = snList(box.dataset.i).map(keySN);
       box.querySelectorAll(".chip").forEach(c => c.classList.toggle("sel", L.includes(keySN(c.dataset.sn)))); }); };
@@ -2943,9 +2949,9 @@
     // quét camera: duyệt từng seri, thêm vào dòng hàng, quét tiếp tới khi đủ số lượng
     F5.querySelectorAll(".xkscan").forEach(b => b.onclick = () => { const i = Number(b.dataset.i), l = o.lines[i];
       const used = v => (o.lines || []).some((_, j) => snList(j).some(x => keySN(x) === keySN(v)));
-      const left = Math.max(1, l.qty - snList(i).length);
+      const per = snPerOf(l.product), left = Math.max(1, l.qty * per - snList(i).length);
       const mainOf = v => findStock(v)?.serial || v;
-      openScanner(sn => { const m = mainOf(sn); if (used(m)) return false; setList(i, snList(i).concat(m)); return true; },
+      openScanner(sn => { const st = findStock(sn), m = st?.subSerials?.length ? st.serial : sn; if (used(m)) return false; setList(i, snList(i).concat(m)); return true; },
         {multi: true, max: left, has: v => used(mainOf(v)) ? (mainOf(v) !== v ? `Bộ này đã quét (seri chính ${mainOf(v)})` : "Seri này đã có trong đơn") : false,
          info: v => { const st = findStock(v); return !st ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không có trong kho – vẫn xuất được (trừ kho theo số lượng)</div>`
            : st.status !== "in" ? `<div class="sub" style="color:var(--bad)">⛔ Seri đã xuất ở đơn ${esc(st.orderCode || "khác")}</div>`
@@ -2959,16 +2965,21 @@
     drawModes();
     actCtx = {run: async () => {
       // seri phụ của hàng bộ → đổi về seri chính của bộ (bỏ trùng)
-      const serials = (o.lines||[]).map((l,i) => modes[i] === "khong" ? [] : [...new Set(snList(i).map(sn => { const x = findStock(sn); return x && x.subSerials?.some(y => keySN(y) === keySN(sn)) ? x.serial : sn; }))]);
+      const setsAll = (o.lines||[]).map((l,i) => modes[i] === "khong" ? {sets: [], per: 1, rem: 0} : setsOf(i));
+      for (let i = 0; i < setsAll.length; i++) if (setsAll[i].rem) { toast(`${o.lines[i].product}: hàng bộ ${setsAll[i].per} seri – bộ cuối mới có ${setsAll[i].rem} seri, nhập thêm cho đủ`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
+      const subOf = new Map(); setsAll.forEach(x => x.sets.forEach(g => { if (g.length > 1) subOf.set(keySN(g[0]), g.slice(1)); }));
+      const rawAll = (o.lines||[]).flatMap((l,i) => modes[i] === "khong" ? [] : snList(i));
+      // mỗi bộ đại diện bằng seri chính (seri đầu) → số seri = số sản phẩm
+      const serials = setsAll.map(x => x.sets.map(g => g[0]));
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i], n = serials[i].length;
         if (modes[i] === "nhap" && ((l.months && n !== l.qty) || n > l.qty)) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n}) – hoặc chọn “📷 Ảnh seri”`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
         if (modes[i] === "anh" && !F5.querySelector(`.xkph[data-i="${i}"]`)._photos().length) { toast(`${l.product}: chụp ít nhất 1 ảnh seri để đối chiếu`); throw new Error("x"); }
         if (modes[i] === "anh" && n > l.qty) { toast(`${l.product}: chỉ cần ${l.qty} seri nhưng đang có ${n} – xóa bớt seri đọc thừa`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
       }
-      const badSn = serials.flat().filter(x => !snOk(x));
+      const badSn = rawAll.filter(x => !snOk(x));
       if (badSn.length) { toast(`Seri sai định dạng: ${badSn.join(", ")} – phải ${SN_HINT}`); throw new Error("x"); }
-      const all = serials.flat().map(keySN), dup = all.find((x, k) => all.indexOf(x) !== k);
+      const all = rawAll.map(keySN), dup = all.find((x, k) => all.indexOf(x) !== k);
       if (dup) { toast("Seri bị trùng: " + dup); throw new Error("x"); }
       const warnSn = serials.flat().filter(sn => exHits(sn).length);
       if (warnSn.length && !$("#xkApprove").checked) { toast(`⚠️ Seri ${warnSn.join(", ")} từng đổi cho khách – Kho tick “duyệt xuất” hoặc thay seri khác`); $("#xkApproveW").scrollIntoView({block: "center"}); throw new Error("x"); }
@@ -2981,7 +2992,7 @@
         const l = o.lines[i]; if (!l.months) continue;
         for (const sn of serials[i]) {
           const r = findReg(sn);
-          const sub = findStock(sn)?.subSerials;
+          const sub = findStock(sn)?.subSerials?.length ? findStock(sn).subSerials : subOf.get(keySN(sn));
           await put("reg", Object.assign({}, r || {id: uid(), createdAt: now}, {serial: sn, customer: o.customer, phone: o.phone, product: l.product, purchaseDate: o.saleDate, months: l.months, orderCode: o.code, updatedAt: now}, sub?.length ? {subSerials: sub} : {}));
         }
       }
@@ -2989,7 +3000,7 @@
       for (let i = 0; i < (o.lines || []).length; i++) {
         const l = o.lines[i], ph = modes[i] === "khong" ? [] : F5.querySelector(`.xkph[data-i="${i}"]`)._photos();
         const ids = ph.length ? await savePhotos(ph, {product: l.product, ref: "Xuất kho " + o.code}) : [];
-        lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
+        lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, setsAll[i].per > 1 ? {serialSets: setsAll[i].sets.map(g => g.join(","))} : {}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
       }
       const nAnh = modes.filter(m => m === "anh").length, nKhong = modes.filter(m => m === "khong").length;
       await advanceOrder(o, "cho_vc", `${warnSn.length ? `⚠️ Kho duyệt xuất seri cảnh báo ${warnSn.join(", ")}: ${$("#xkApproveNote").value.trim()} · ` : ""}Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
