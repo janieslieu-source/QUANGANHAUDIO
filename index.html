@@ -340,7 +340,7 @@
                 <select name="exMode"><option value="keep" id="exKeepOpt">Tiếp tục hạn cũ</option><option value="new">Bảo hành mới tính từ hôm nay</option></select>
                 <div id="exMonthsW" class="hide"><label>Số tháng bảo hành mới</label>
                   <select name="exMonths"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option><option value="18">18 tháng</option><option value="24">24 tháng</option><option value="36">36 tháng</option></select></div>
-                <div class="found" id="exPrev"></div>
+                <div class="found" id="exPrev"></div><div id="exPrevW"></div>
               </div>
             </div>
           </div>
@@ -432,7 +432,7 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
@@ -467,6 +467,11 @@
         <div class="two hide" id="rpTwo"><div><label style="margin-top:6px">Từ ngày</label><input type="date" id="rpFrom"></div><div><label style="margin-top:6px">Đến ngày</label><input type="date" id="rpTo"></div></div>
         <div id="rpBody" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
+      <div class="panel" data-w="doi"><h3>🔄 Hàng đổi cho khách <span class="sub" id="dxCnt"></span></h3>
+        <div class="sub" style="margin-bottom:8px">Máy đổi mới bảo hành: <b>seri cũ</b> (máy thu hồi) → <b>seri mới</b> (máy giao khách). Nhập trùng các seri này ở bất kỳ đâu, hệ thống sẽ cảnh báo và chuyển Kho duyệt.</div>
+        <input id="dxQ" type="search" placeholder="Tìm seri cũ / mới, khách hàng, sản phẩm, mã phiếu…" autocomplete="off">
+        <div id="dxBody" style="margin-top:10px"></div>
+        <div class="btns"><button class="btn" id="dxFile" type="button">📊 Excel hàng đổi</button></div></div>
       <div class="panel" data-w="ngoai"><h3>🧩 Danh mục linh kiện ngoài</h3>
         <div class="sub" style="margin-bottom:8px">Linh kiện <b>không có tên trong kho chính</b> (mua ngoài). Kỹ thuật dùng loại nào thì tự trừ vào danh mục này, không ảnh hưởng tồn kho chính.</div>
         <div class="two"><div><label style="margin-top:0">Tên linh kiện</label><input id="lknN" list="lknList" autocomplete="off" placeholder="VD: Tụ 2200uF 50V"></div>
@@ -577,6 +582,7 @@
     tra_lai:  {label:"GĐ không duyệt – chờ vận chuyển trả",cls:"b-bad",  to:"vc"},
     kt_tra:   {label:"Kỹ thuật không sửa được – chờ vận chuyển trả", cls:"b-bad", to:"vc"},
     cho_lk:   {label:"Chờ linh kiện về",                   cls:"b-warn", to:null},
+    kho_tra:  {label:"Kho không duyệt – chờ vận chuyển trả khách", cls:"b-bad", to:"vc"},
     huy:      {label:"Đã hủy phiếu",                       cls:"b-bad",  to:null},
     da_giao:  {label:"Đã gửi trả khách",                   cls:"b-ok",   to:null},
     cho_tt:   {label:"Đã gửi trả – chờ kế toán",           cls:"b-info", to:"ac"},
@@ -605,7 +611,7 @@
     list.forEach(t => partsOf(t).forEach(p => { const k = norm(p.name); (acc[k] = acc[k] || {name: p.name, qty: 0, n: 0}); acc[k].qty += p.qty; acc[k].n++; }));
     return Object.values(acc).sort((a,b) => b.qty - a.qty);
   }
-  const WAIT_VC = ["xong","tra_lai","kt_tra"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt","huy"];   // CLOSED = đã trả hàng cho khách
+  const WAIT_VC = ["xong","tra_lai","kt_tra","kho_tra"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt","huy"];   // CLOSED = đã trả hàng cho khách
   const PAY = {cong_no:"Công nợ", da_tt:"Đã thanh toán"};
   const OSTAGES = {
     cho_xk:  {label:"Chờ xuất kho",                 cls:"b-warn", to:"wh"},
@@ -1131,7 +1137,7 @@
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
-      ${lkLine(t)}
+      ${lkLine(t)}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(t)}${exLine(t.code)}
@@ -1188,6 +1194,9 @@
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
     $("#foundBox").innerHTML = r ? `<div class="found">✔ Seri đã có trong hệ thống: ${esc(r.product)} – ${esc(r.customer)}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
+    const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
+    $("#foundBox").innerHTML += own.length ? `<div class="found">🔄 Máy này đã đổi cho chính khách ${esc(own[0].customer)} ngày ${fmt(own[0].date)} (SN ${esc(own[0].oldSn)} → ${esc(own[0].newSn)})</div>` : "";
+    $("#foundBox").innerHTML += hitBox(exHitsFor(sn, F.customer.value), "Vẫn lưu được – phiếu sẽ chuyển <b>Kho duyệt</b> trước khi xử lý.");
     document.querySelectorAll("#recvForm .opt[data-type]").forEach(o => o.classList.toggle("sel", o.dataset.type === recvType));
     document.querySelectorAll("#recvForm .opt[data-bm]").forEach(o => o.classList.toggle("sel", o.dataset.bm === bhMode));
     $("#bhWrap").classList.toggle("hide", recvType !== "bh");
@@ -1216,6 +1225,7 @@
           $("#exPrev").textContent = `🛡️ Máy mới (SN ${nsn || "…"}) bảo hành đến ${fmt(iso(until))}`;
           if (!F.exProduct.value.trim() && !F.exProduct.dataset.touched) F.exProduct.value = F.product.value.trim();
           const np = F.exProduct.value.trim(), inSt = nsn && findStock(nsn);
+          const nh = nsn ? exHits(nsn) : []; $("#exPrevW").innerHTML = hitBox(nh, nh.length ? "Seri mới này đã từng dùng khi đổi hàng – Kho sẽ phải <b>duyệt</b> trước khi giao máy." : "");
           if (nsn && snOk(nsn)) $("#exPrev").textContent += inSt ? (inSt.status === "in" ? " · 📦 seri có trong kho – kho tự trừ" : " · ⚠️ seri này kho ghi đã xuất") : ` · 📦 kho trừ 1 “${np}” (tồn ${stockOf(np)})`;
           if (!np) canSend = false;
           if (nsn && !snOk(nsn)) $("#exPrev").textContent = `⚠️ Seri mới sai định dạng – phải ${SN_HINT}`;
@@ -1239,6 +1249,7 @@
     $("#itemHead").textContent = b && b.items.length ? `Hàng thứ ${b.items.length + 1} – Tên sản phẩm *` : "Tên sản phẩm *";
     if ($("#batchEnd")) $("#batchEnd").onclick = () => { recvBatch = null; F.reset(); recvType = null; bhMode = "sua"; refreshRecv(); };
   }
+  F.customer.addEventListener("input", () => { if (F.serial.value.trim()) refreshRecv(); });
   F.serial.addEventListener("input", () => {
     const r = findReg(F.serial.value);
     if (r) { if (!F.customer.value) F.customer.value = r.customer || ""; if (!F.product.value) F.product.value = r.product || ""; if (!F.phone.value) F.phone.value = r.phone || ""; }
@@ -1270,13 +1281,16 @@
       const until = iso(mode === "new" ? addMonths(today(), months) : expiry(pd, mo));
       t0.action = "doimoi";
       const newProduct = F.exProduct.value.trim() || base.product;
-      t0.exchange = {oldSerial: base.serial, newSerial, newProduct, mode, months: mode === "new" ? months : null, until};
+      t0.exchange = {oldSerial: base.serial, newSerial, newProduct, mode, months: mode === "new" ? months : null, until, at: new Date().toISOString()};
       regRec.replacedBy = newSerial;
       const now = new Date().toISOString(), nr = findReg(newSerial);
       newRec = Object.assign({}, nr || {id: uid(), createdAt: now}, {customer: base.customer, phone: base.phone, product: t0.exchange.newProduct, serial: newSerial, replacedFrom: base.serial, updatedAt: now},
         mode === "new" ? {purchaseDate: iso(today()), months} : {purchaseDate: pd, months: Number(mo)});
     }
     const stage = recvType === "bh" ? "cho_kho" : "cho_gd";   // bảo hành (sửa hoặc đổi mới) → Kho; sửa chữa → Giám đốc
+    // cảnh báo seri trùng với lịch sử đổi hàng -> Kho phải duyệt
+    const warn = [...exHitsFor(base.serial, base.customer), ...(t0.exchange ? exHits(t0.exchange.newSerial) : [])].map(hitText);
+    if (warn.length) t0.snWarn = [...new Set(warn)];
     const t = push(t0, stage, isEx ? `Đổi mới tại quầy: SN ${t0.exchange.oldSerial} → SN ${t0.exchange.newSerial}, bảo hành đến ${fmt(t0.exchange.until)}`
       : recvType === "bh" ? `Còn bảo hành (${t0.warrantyText})` : "Khách yêu cầu sửa chữa");
     try {
@@ -1880,7 +1894,9 @@
   function renderVC(){
     const wait = tickets.filter(t => WAIT_VC.includes(t.stage)).sort((a,b) => (a.updatedAt||"").localeCompare(b.updatedAt||""));
     $("#vcCnt").textContent = wait.length ? `(${wait.length})` : "";
-    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "kt_tra"
+    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "kho_tra"
+        ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Kho không duyệt (seri trùng) – trả nguyên trạng cho khách${t.snReject?.reason ? ". Lý do: " + esc(t.snReject.reason) : ""}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
+        : t.stage === "kt_tra"
         ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Kỹ thuật không sửa được – trả lại khách${t.ktFail?.reason ? ". Lý do: " + esc(t.ktFail.reason) : ""}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
         : t.stage === "tra_lai"
         ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Giám đốc không duyệt sửa – trả nguyên trạng cho khách${(() => { const h = (t.history||[]).filter(h => h.stage === "tra_lai").pop(); return h && h.note ? ". Lý do: " + esc(h.note) : ""; })()}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
@@ -2255,6 +2271,37 @@
   }
   $("#saQ").addEventListener("input", drawSaList);
 
+  /* ================= HÀNG ĐỔI CHO KHÁCH & CẢNH BÁO SERI TRÙNG ================= */
+  const exDate = t => t.exchange?.at || t.createdAt;
+  const exchanges = () => tickets.filter(t => t.exchange && t.stage !== "huy").sort((a,b) => (exDate(b) || "").localeCompare(exDate(a) || ""));
+  // seri này từng là seri cũ (máy đã thu hồi) hoặc seri mới (máy đã giao khách) trong một lần đổi?
+  function exHits(sn, skipId){
+    const k = keySN(sn); if (!k) return [];
+    return exchanges().filter(t => t.id !== skipId && (keySN(t.exchange.oldSerial) === k || keySN(t.exchange.newSerial) === k))
+      .map(t => ({t, side: keySN(t.exchange.newSerial) === k ? "new" : "old", customer: t.customer, date: exDate(t), oldSn: t.exchange.oldSerial, newSn: t.exchange.newSerial, product: t.exchange.newProduct || t.product}));
+  }
+  // bỏ qua: chính khách đó mang máy đã đổi (seri mới) đi bảo hành lại – bình thường
+  const exHitsFor = (sn, customer, skipId) => exHits(sn, skipId).filter(h => !(h.side === "new" && customer && norm(h.customer) === norm(customer)));
+  const hitText = h => `Seri ${h.side === "new" ? h.newSn : h.oldSn} ${h.side === "new" ? "đã ĐỔI GIAO cho khách" : "là máy CŨ đã thu hồi khi đổi cho khách"} ${h.customer} ngày ${fmt(h.date)} (SN ${h.oldSn} → ${h.newSn}, phiếu ${h.t.code})`;
+  const hitBox = (hits, extra) => hits.length ? `<div class="found" style="background:var(--badbg);color:var(--bad);margin-top:6px">⚠️ <b>CẢNH BÁO SERI TRÙNG</b><br>${hits.map(h => "• " + esc(hitText(h))).join("<br>")}${extra ? "<br>" + extra : ""}</div>` : "";
+  let dxQ = "";
+  function drawExchanges(){
+    const q = norm(dxQ), all = exchanges(), L = q ? all.filter(t => norm([t.exchange.oldSerial, t.exchange.newSerial, t.customer, t.phone, t.product, t.exchange.newProduct, t.code].join(" ")).includes(q)) : all;
+    $("#dxCnt").textContent = all.length ? `(${all.length})` : "";
+    $("#dxBody").innerHTML = L.length ? L.slice(0, 100).map(t => `<div class="item" data-id="${esc(t.id)}"><div class="row"><div><div class="pname">${esc(t.exchange.newProduct || t.product)}</div>
+        <div class="sub">👤 <b>${esc(t.customer)}</b>${t.phone ? " · " + esc(t.phone) : ""} · đổi ngày <b>${fmt(exDate(t))}</b></div>
+        <div style="margin-top:4px">SN cũ <b>${esc(t.exchange.oldSerial)}</b> → SN mới <b style="color:var(--ok)">${esc(t.exchange.newSerial)}</b></div>
+        <div class="sub">🛡️ BH đến ${fmt(t.exchange.until)} · ${esc(t.code)}${t.snWarn?.length ? ` · <b style="color:var(--bad)">⚠️ có cảnh báo seri${t.snOk ? " – Kho đã duyệt" : ""}</b>` : ""}</div></div>
+        <span class="badge ${STAGES[t.stage]?.cls || ""}">${esc(STAGES[t.stage]?.label || "")}</span></div></div>`).join("") + (L.length > 100 ? `<div class="sub">+${L.length - 100} lần đổi khác – gõ để tìm.</div>` : "")
+      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng đổi cho khách."}</div>`;
+    bindCards($("#dxBody"));
+  }
+  $("#dxQ").addEventListener("input", e => { dxQ = e.target.value; drawExchanges(); });
+  $("#dxFile").onclick = () => { const L = exchanges();
+    exportReportPdf({file: "Hang-doi-cho-khach_" + iso(new Date()), title: "Hàng đổi cho khách", period: "Tính đến " + fmt(iso(new Date())), summary: [["Số lần đổi", L.length]],
+      head: [{t: "Ngày đổi"}, {t: "Mã phiếu"}, {t: "Khách hàng"}, {t: "SĐT"}, {t: "Sản phẩm"}, {t: "Seri cũ (thu hồi)"}, {t: "Seri mới (giao khách)"}, {t: "Bảo hành đến"}, {t: "Cảnh báo seri"}, {t: "Giai đoạn"}],
+      rows: L.map(t => [fmt(exDate(t)), t.code, t.customer, t.phone || "", t.exchange.newProduct || t.product, t.exchange.oldSerial, t.exchange.newSerial, fmt(t.exchange.until), t.snWarn?.length ? (t.snOk ? "Kho đã duyệt" : "Chờ Kho duyệt") : "", STAGES[t.stage]?.label || ""])}); };
+
   /* ================= KHO ================= */
   let whDay = null;
   const dayOf = s => s ? iso(new Date(s)) : "";
@@ -2264,7 +2311,7 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt();
+    drawThao(); drawExt(); drawExchanges();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
@@ -2272,7 +2319,9 @@
     const wait = orders.filter(o => o.stage === "cho_xk").sort((a,b) => (isUrgent(b) - isUrgent(a)) || (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#whCnt").textContent = wait.length + cx.length + tk.length ? `(${wait.length + cx.length + tk.length})` : "";
     $("#whList").innerHTML = tk.map(t => tkCard(t, `<div class="sub" style="margin:6px 0">🧰 ${t.exchange ? `Đổi mới: nhận máy cũ SN ${esc(t.serial)}, giao máy mới ${esc(t.exchange.newProduct || t.product)} SN <b>${esc(t.exchange.newSerial)}</b>` : `${TYPE[t.type]}: nhận máy vào kho, chuẩn bị linh kiện rồi chuyển Kỹ thuật`}</div>
-        <div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
+        ${t.snWarn?.length && !t.snOk ? `<div class="found" style="background:var(--badbg);color:var(--bad)">⚠️ <b>CẢNH BÁO SERI TRÙNG – cần Kho duyệt</b><br>${t.snWarn.map(w => "• " + esc(w)).join("<br>")}</div>
+        <div class="cardbtns"><button class="btn danger" data-snno="${esc(t.id)}">✖ Không duyệt – trả lại khách</button><button class="btn okb" data-snok="${esc(t.id)}">✔ Đã kiểm tra – duyệt</button></div>`
+        : `${t.snWarn?.length ? `<div class="sub" style="color:var(--ok)">✔ Kho đã duyệt cảnh báo seri</div>` : ""}<div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`}`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
         <div class="cardbtns"><button class="btn pri" data-cxok="${esc(o.id)}">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" data-cxno="${esc(o.id)}">✖ Không duyệt</button></div>`)).join("")
       + (wait.length ? wait.map(o => odCard(o, `<div class="cardbtns"><button class="btn pri" data-xk="${esc(o.id)}">📦 Xuất kho</button></div>`)).join("")
       : cx.length ? "" : `<div class="empty">Không có đơn chờ xuất.</div>`);
@@ -2282,6 +2331,13 @@
         if (t.exchange || t.action) { await advance(t, "xong", t.exchange ? "Kho đã giao máy mới cho Vận chuyển" : "Kho đã bàn giao cho Vận chuyển"); toast("Đã chuyển Vận chuyển"); }
         else { await advance(t, "cho_kt", "Kho đã nhận hàng – chuyển Kỹ thuật"); toast("Đã chuyển Kỹ thuật"); }
       } catch(err){ b.disabled = false; } });
+    $("#whList").querySelectorAll("[data-snok]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.snok); if (!t) return;
+      openAct({title: "✔ Kho duyệt cảnh báo seri", t, noteLabel: "Kết quả kiểm tra (VD: đúng máy khách, seri đã thu hồi hợp lệ…)", required: true, okText: "✔ Duyệt", okCls: "okb",
+        run: async note => { await advance(t, t.stage, `✔ Kho duyệt cảnh báo seri: ${note}`, {snOk: {at: new Date().toISOString(), by: actor(), note}}); toast("Đã duyệt – tiếp tục xử lý"); }}); });
+    $("#whList").querySelectorAll("[data-snno]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.snno); if (!t) return;
+      openAct({title: "✖ Kho không duyệt – trả lại khách", t, noteLabel: "Lý do không duyệt", required: true, okText: "✖ Không duyệt → Vận chuyển trả khách", okCls: "danger",
+        run: async note => { const extra = {snReject: {at: new Date().toISOString(), by: actor(), reason: note}}; await revertTkStock(t, extra);
+          await advance(t, "kho_tra", `✖ Kho không duyệt (seri trùng): ${note}${t.exchange && t.stockOut ? " · đã hoàn máy mới về kho" : ""}`, extra); toast("Đã chuyển Vận chuyển trả lại khách"); }}); });
     $("#whList").querySelectorAll("[data-cxok]").forEach(b => b.onclick = async () => { const o = orders.find(x => x.id === b.dataset.cxok); if (!o) return; b.disabled = true;
       try { await cancelOrder(o, o.cancelReq?.reason || ""); } catch(e){ b.disabled = false; toast("Lưu thất bại, thử lại"); } });
     $("#whList").querySelectorAll("[data-cxno]").forEach(b => b.onclick = async () => { const o = orders.find(x => x.id === b.dataset.cxno); if (!o) return; b.disabled = true;
@@ -2374,6 +2430,9 @@
           <textarea class="sn" data-i="${i}" rows="${Math.min(6, Math.max(2, l.qty))}" placeholder="${Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
           <div class="sub snc" data-i="${i}"></div></div>
           <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
+      <div id="xkApproveW" class="hide" style="margin-top:10px;padding:10px;border:2px solid var(--bad);border-radius:10px">
+        <label style="display:flex;gap:8px;align-items:flex-start;color:var(--bad);font-size:14px;margin:0"><input type="checkbox" id="xkApprove" style="width:auto;margin:3px 0 0"> <span><b>Kho duyệt xuất các seri bị cảnh báo</b> (đã kiểm tra, không phải máy đổi cho khách khác)</span></label>
+        <input id="xkApproveNote" placeholder="Ghi chú kiểm tra (bắt buộc khi duyệt)" style="margin-top:8px"></div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">✅ Xác nhận xuất kho</button></div>`;
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
     // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
@@ -2392,6 +2451,8 @@
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
     const count = () => (o.lines||[]).forEach((l,i) => { const L = snList(i), n = L.length, bad = L.filter(x => !snOk(x)), el = F5.querySelector(`.snc[data-i="${i}"]`);
       el.textContent = `Đã nhập ${n}/${l.qty} seri` + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
+      const hits = modes[i] === "khong" ? [] : L.flatMap(sn => exHits(sn)); el.insertAdjacentHTML("beforeend", hitBox(hits));
+      const anyHit = (o.lines || []).some((_, j) => modes[j] !== "khong" && snList(j).some(sn => exHits(sn).length)); $("#xkApproveW").classList.toggle("hide", !anyHit);
       el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || (l.months && modes[i] === "nhap")) ? "var(--bad)" : ""; });
     const setList = (i, L) => { F5.querySelector(`.sn[data-i="${i}"]`).value = L.join("\n"); sync(); };
     const sync = () => { count(); F5.querySelectorAll(".snpick").forEach(box => { const L = snList(box.dataset.i).map(keySN);
@@ -2425,6 +2486,9 @@
       if (badSn.length) { toast(`Seri sai định dạng: ${badSn.join(", ")} – phải ${SN_HINT}`); throw new Error("x"); }
       const all = serials.flat().map(keySN), dup = all.find((x, k) => all.indexOf(x) !== k);
       if (dup) { toast("Seri bị trùng: " + dup); throw new Error("x"); }
+      const warnSn = serials.flat().filter(sn => exHits(sn).length);
+      if (warnSn.length && !$("#xkApprove").checked) { toast(`⚠️ Seri ${warnSn.join(", ")} từng đổi cho khách – Kho tick “duyệt xuất” hoặc thay seri khác`); $("#xkApproveW").scrollIntoView({block: "center"}); throw new Error("x"); }
+      if (warnSn.length && !$("#xkApproveNote").value.trim()) { toast("Ghi chú kết quả kiểm tra seri cảnh báo"); $("#xkApproveNote").focus(); throw new Error("x"); }
       const gone = serials.flat().map(findStock).filter(x => x && x.status !== "in");
       if (gone.length) { toast(`Seri ${gone[0].serial} đã xuất ở đơn ${gone[0].orderCode || "khác"}`); throw new Error("x"); }
       const now = new Date().toISOString();
@@ -2443,7 +2507,7 @@
         lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
       }
       const nAnh = modes.filter(m => m === "anh").length, nKhong = modes.filter(m => m === "khong").length;
-      await advanceOrder(o, "cho_vc", `Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
+      await advanceOrder(o, "cho_vc", `${warnSn.length ? `⚠️ Kho duyệt xuất seri cảnh báo ${warnSn.join(", ")}: ${$("#xkApproveNote").value.trim()} · ` : ""}Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
       // phần không lấy từ kho seri (hàng không seri, đối chiếu bằng ảnh, seri gõ tay lúc xuất) -> trừ theo số lượng
       // (tính TRƯỚC khi đánh dấu seri đã xuất, để không trừ kho 2 lần)
       const mvOut = (o.lines || []).map((l, i) => { const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
