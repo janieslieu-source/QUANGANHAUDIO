@@ -429,7 +429,8 @@
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
         <input type="date" id="whDay" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="whSum" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button></div></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button><button class="btn okb" id="xlsWh">📊 Excel xuất kho trong ngày</button></div>
+        <div class="sub" style="margin-top:6px">File Excel: mỗi số seri 1 dòng – ngày giờ xuất, mã đơn, khách hàng, SĐT, sản phẩm, số seri, số tháng bảo hành, <b>hạn bảo hành đến ngày</b>, cách gửi hàng.</div></div>
       <div class="panel" data-w="ton" id="nhapBox"><h3>➕ Nhập hàng mới</h3>
         <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri – app tự đọc số seri</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
         <div id="nhRows"></div>
@@ -2290,6 +2291,42 @@
     if ($("#whBack")) bindOd($("#whBack"));
   }
   $("#whDay").addEventListener("change", e => { whDay = e.target.value || iso(new Date()); renderWH(); });
+  // File Excel hàng xuất kho trong ngày: mỗi seri 1 dòng, có hạn bảo hành
+  $("#xlsWh").onclick = async () => {
+    const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned).sort((a,b) => (a.exportedAt||"").localeCompare(b.exportedAt||""));
+    if (!done.length) { toast("Ngày này chưa có đơn xuất kho"); return; }
+    const b = $("#xlsWh"); b.disabled = true;
+    try {
+      toast("Đang tạo file Excel…");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const X = window.XLSX;
+      const head = ["STT", "Ngày xuất", "Giờ xuất", "Mã đơn", "Khách hàng", "Số điện thoại", "Địa chỉ", "Sản phẩm", "Loại", "Số lượng", "Số seri", "Bảo hành (tháng)", "Ngày bắt đầu BH", "Hạn bảo hành đến", "Gửi hàng", "Ghi chú"];
+      const rows = []; let n = 0;
+      done.forEach(o => (o.lines || []).forEach((l, i) => {
+        const sns = snOf(o, i), m = l.gift ? 0 : Number(l.months) || 0, start = o.saleDate || dayOf(o.exportedAt);
+        const until = m && start ? fmt(iso(expiry(start, m))) : "";
+        const ship = `${OSHIP[o.ship?.method] || ""} ${o.ship?.carrier || ""}`.trim().replace(/^🚨\s*/, "");
+        const snNote = !sns.length ? (l.snMode === "anh" ? "Đối chiếu seri bằng ảnh" : l.snMode === "khong" ? "Hàng không seri" : "") : "";
+        const base = [fmt(dayOf(o.exportedAt)), fmtTime(o.exportedAt).slice(0, 5), o.code, o.customer, o.phone || "", o.address || "", l.product, l.gift ? "Hàng tặng" : "Hàng bán"];
+        const tail = [l.gift ? "Tặng" : (m || "Không BH"), m ? fmt(start) : "", until || (l.gift ? "" : "Không bảo hành"), ship];
+        if (sns.length) sns.forEach(sn => rows.push([++n, ...base, 1, sn, ...tail, ""]));
+        else rows.push([++n, ...base, Number(l.qty) || 0, "", ...tail, snNote]);
+      }));
+      const [y, mo, d] = whDay.split("-");
+      const ws = X.utils.aoa_to_sheet([[`${COMPANY} – HÀNG XUẤT KHO NGÀY ${d}/${mo}/${y}`], [`In lúc ${fmtTime(new Date().toISOString())} · ${done.length} đơn · ${rows.reduce((a,r) => a + (Number(r[9]) || 0), 0)} sản phẩm`], [], head, ...rows]);
+      ws["!cols"] = [5, 11, 8, 15, 22, 13, 24, 32, 10, 9, 12, 10, 13, 15, 20, 22].map(w => ({wch: w}));
+      ws["!merges"] = [{s: {r: 0, c: 0}, e: {r: 0, c: head.length - 1}}, {s: {r: 1, c: 0}, e: {r: 1, c: head.length - 1}}];
+      ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: 3, c: 0}, e: {r: 3 + rows.length, c: head.length - 1}})};
+      // trang 2: tổng hợp theo sản phẩm
+      const sum = {}; done.forEach(o => (o.lines || []).forEach(l => { const k = l.product + (l.gift ? " (tặng)" : ""); sum[k] = (sum[k] || 0) + (Number(l.qty) || 0); }));
+      const ws2 = X.utils.aoa_to_sheet([["Sản phẩm", "Tổng số lượng"], ...Object.entries(sum).sort((a,b) => b[1] - a[1]), ["TỔNG", Object.values(sum).reduce((a,v) => a + v, 0)]]);
+      ws2["!cols"] = [{wch: 40}, {wch: 14}];
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Xuất kho"); X.utils.book_append_sheet(wb, ws2, "Tổng hợp");
+      const out = X.write(wb, {bookType: "xlsx", type: "array"});
+      await saveBlob(`Xuat-kho_${whDay}.xlsx`, new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+    finally { b.disabled = false; }
+  };
   $("#fileWh").onclick = async () => {
     const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned);
     const rows = [];
