@@ -366,6 +366,7 @@
 
           <div id="issueWrap" class="hide">
             <label>Mô tả lỗi / tình trạng *</label><textarea name="issue"></textarea>
+            <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="ttest" style="width:auto;margin:0"> 🧪 Đơn test (thử nghiệm) – cuối đợt test xóa hàng loạt ở tab Giám đốc</label>
             <div class="btns"><button class="btn pri" type="submit" id="recvBtn">Gửi</button></div>
             <div class="btns"><button class="btn" type="submit" id="recvMore">➕ Lưu & thêm hàng mới (cùng khách)</button></div>
           </div>
@@ -402,6 +403,7 @@
         <div id="gwBody"></div>
         <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
+      <div class="panel" id="testBox"></div>
       <div class="panel" id="bkBox"><h3>💾 Sao lưu & khôi phục dữ liệu</h3>
         <div class="sub" id="bkLast" style="margin-bottom:8px"></div>
         <div class="sub" style="margin-bottom:8px">Tải về <b>1 file</b> chứa toàn bộ dữ liệu (sổ bảo hành, phiếu BH/SC, đơn bán, tồn kho, sản phẩm, lịch sử nhập xuất, chi phí). Nên sao lưu <b>mỗi tuần</b> và cất lên Google Drive / USB.</div>
@@ -457,6 +459,7 @@
         <div id="oPost" class="hide"><label>Bưu cục / đơn vị</label><input name="post" placeholder="VD: Bưu điện VN, Viettel Post…"></div>
         <div id="oGap" class="hide reason" style="background:var(--badbg);color:var(--bad);margin-top:10px">🚨 Đơn GẤP: Kho và Vận chuyển sẽ bị báo động đỏ liên tục cho đến khi đơn được gửi đi.</div>
         <label>Ghi chú</label><textarea name="onote"></textarea>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="otest" style="width:auto;margin:0"> 🧪 Đơn test (thử nghiệm) – cuối đợt test xóa hàng loạt ở tab Giám đốc</label>
         <div class="btns"><button type="submit" class="btn pri" id="saleOk">✅ Xác nhận đơn</button></div>
       </form>
       <div class="panel"><h3>📋 Đơn hàng gần đây</h3>
@@ -1193,7 +1196,7 @@
   function tkCard(t, btns){
     const st = STAGES[t.stage] || {label:t.stage, cls:""};
     return `<div class="item ${isLate(t) ? "lateitem" : ""}" data-id="${esc(t.id)}">
-      <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${esc(t.product)}</div>
+      <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
@@ -1331,7 +1334,13 @@
     actCtx = {run: async () => {
       if (norm(F.cf.value.trim()) !== "xoa") { toast("Gõ XOA để xác nhận"); F.cf.focus(); throw new Error("cf"); }
       const btn = F.querySelector("[type=submit]"); btn.disabled = true; const prog = t => { $("#pgProg").textContent = t; };
-      try { const now = new Date().toISOString();
+      try { await doPurge(P, prog);
+      } catch(err){ btn.disabled = false; prog("Có lỗi khi xóa – bấm lại để xóa tiếp"); throw err; }
+    }, after: () => { toast(`Đã xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${P.code}`); renderAll(); }};
+    open("actBg");
+  }
+  async function doPurge(P, prog = () => {}){
+    const x = P.x, kind = P.kind; { const now = new Date().toISOString();
         prog("Đang hoàn lại kho…");
         for (const z of P.stBack) { const c = Object.assign({}, z, {status: "in", returnedAt: now, returnNote: `Xóa ${P.code} (phiếu test)`}); delete c.orderCode; delete c.outAt; delete c.customer; await put("st", c); }
         for (const m of P.mv) await delDoc("mv", m.id);
@@ -1341,9 +1350,44 @@
         for (const ph of P.ph) { try { await delDoc("ph", ph); } catch(err){} }
         for (const ex of P.ex) await delDoc("ex", ex.id);
         await delDoc(kind, x.id);
-      } catch(err){ btn.disabled = false; prog("Có lỗi khi xóa – bấm lại để xóa tiếp"); throw err; }
-    }, after: () => { toast(`Đã xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${P.code}`); renderAll(); }};
-    open("actBg");
+    }
+  }
+  // 🧪 Dọn đơn test: chọn các đơn / phiếu test (tick sẵn đơn đánh dấu TEST) → xóa vĩnh viễn hàng loạt
+  let testDays = 7, testSel = null;
+  function drawTestBox(){
+    const host = $("#testBox"); if (!host) return; host.classList.toggle("hide", !boss); if (!boss) return;
+    const since = Date.now() - testDays * 864e5;
+    const L = [...orders.map(o => ({k: "od", x: o})), ...tickets.map(t => ({k: "tk", x: t}))].filter(({x}) => x.test || new Date(x.createdAt || 0).getTime() >= since)
+      .sort((a, b) => (b.x.test ? 1 : 0) - (a.x.test ? 1 : 0) || String(b.x.createdAt).localeCompare(String(a.x.createdAt)));
+    if (!testSel) testSel = new Set(L.filter(({x}) => x.test).map(({x}) => x.id));
+    [...testSel].forEach(id => { if (!L.some(({x}) => x.id === id)) testSel.delete(id); });
+    const nTest = L.filter(({x}) => x.test).length;
+    host.innerHTML = `<details ${drawTestBox.open ? "open" : ""}><summary style="cursor:pointer;font-weight:700;font-size:16px">🧪 Dọn đơn test ${nTest ? `<span class="badge" style="background:#ede9fe;color:#6d28d9">${nTest} đơn TEST</span>` : ""}</summary>
+      <div class="sub" style="margin:6px 0">Chọn các đơn / phiếu tạo ra để thử nghiệm → <b>xóa vĩnh viễn</b> (hoàn lại kho, xóa công nợ, sổ bảo hành, ảnh, chi phí kèm theo). Đơn tick “🧪 Đơn test” lúc tạo được chọn sẵn.</div>
+      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px"><span class="sub">Hiện đơn tạo trong</span><select id="testDays" style="width:auto;padding:6px 8px">${[3, 7, 14, 30].map(d => `<option value="${d}" ${d === testDays ? "selected" : ""}>${d} ngày</option>`).join("")}</select>
+        <button type="button" class="link" id="testAll" style="padding:0">Chọn hết</button><button type="button" class="link" id="testNone" style="padding:0">Bỏ chọn</button></div>
+      <div style="max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px">${L.length ? L.map(({k, x}) => `<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-bottom:1px solid var(--line);color:var(--ink);font-size:14px;margin:0">
+        <input type="checkbox" class="tsel" data-id="${esc(x.id)}" ${testSel.has(x.id) ? "checked" : ""} style="width:auto;margin:3px 0 0">
+        <span>${x.test ? `<b style="color:#6d28d9">🧪 TEST</b> · ` : ""}<b>${esc(x.code)}</b> · ${esc(x.customer || "")} <span class="sub">${esc(k === "od" ? orderSummary(x) : x.product)} · ${esc((k === "od" ? OSTAGES : STAGES)[x.stage]?.label || x.stage)} · tạo ${fmtTime(x.createdAt)}${x.pay && !hidePrice() ? ` · ${money(x.pay.amount)}` : ""}</span></span></label>`).join("") : `<div class="empty">Không có đơn nào trong ${testDays} ngày.</div>`}</div>
+      <div class="btns"><button type="button" class="btn" id="testGo" style="color:var(--bad);border-color:var(--bad)" ${testSel.size ? "" : "disabled"}>🗑 Xóa vĩnh viễn ${testSel.size} đơn đã chọn</button></div></details>`;
+    const det = host.querySelector("details"); det.addEventListener("toggle", () => { drawTestBox.open = det.open; });
+    $("#testDays").onchange = e => { testDays = Number(e.target.value) || 7; drawTestBox(); };
+    host.querySelectorAll(".tsel").forEach(c => c.onchange = () => { c.checked ? testSel.add(c.dataset.id) : testSel.delete(c.dataset.id); drawTestBox(); });
+    $("#testAll").onclick = () => { L.forEach(({x}) => testSel.add(x.id)); drawTestBox(); };
+    $("#testNone").onclick = () => { testSel.clear(); drawTestBox(); };
+    $("#testGo").onclick = () => { const pick = L.filter(({x}) => testSel.has(x.id)); if (!pick.length) return; const F = $("#actForm");
+      F.innerHTML = `<div class="grab"></div><h2 style="color:var(--bad)">🗑 Xóa vĩnh viễn ${pick.length} đơn test</h2>
+        <div class="sub" style="max-height:220px;overflow:auto">${pick.map(({k, x}) => `• <b>${esc(x.code)}</b> · ${esc(x.customer || "")} – ${esc(k === "od" ? orderSummary(x) : x.product)}`).join("<br>")}</div>
+        <div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">Các đơn này biến mất hoàn toàn (kho được hoàn lại, công nợ / sổ bảo hành / ảnh / chi phí kèm theo bị xóa). <b>Không khôi phục được</b> – trừ khi có file sao lưu.</div>
+        <label>Gõ <b>XOA</b> để xác nhận</label><input name="cf" autocomplete="off" autocapitalize="characters" placeholder="XOA">
+        <div class="sub" id="pgProg"></div>
+        <div class="btns"><button type="button" class="btn" data-close="actBg">Không xóa</button><button type="submit" class="btn" style="background:var(--bad);color:#fff;border-color:var(--bad)">🗑 Xóa ${pick.length} đơn</button></div>`;
+      actCtx = {run: async () => { if (norm(F.cf.value.trim()) !== "xoa") { toast("Gõ XOA để xác nhận"); F.cf.focus(); throw new Error("cf"); }
+        const btn = F.querySelector("[type=submit]"); btn.disabled = true; let n = 0;
+        try { for (const {k, x} of pick) { const P = purgePlan(k, x.id); if (!P) continue; $("#pgProg").textContent = `Đang xóa ${++n}/${pick.length}: ${x.code}…`; await doPurge(P); testSel.delete(x.id); } }
+        catch(err){ btn.disabled = false; $("#pgProg").textContent = `Có lỗi ở đơn thứ ${n} – bấm lại để xóa tiếp`; throw err; }
+      }, after: () => { toast(`Đã xóa vĩnh viễn ${pick.length} đơn test`); renderAll(); }};
+      open("actBg"); };
   }
 
   /* ================= BẢO HÀNH ================= */
@@ -1445,7 +1489,7 @@
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
     const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
-    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, {history: []}, base);
+    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, F.ttest.checked ? {test: true} : {}, {history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
     let newRec = null;
@@ -1924,7 +1968,7 @@
   });
 
   function renderGD(){
-    drawGdLk(); drawGdWeek(); drawBackup(); drawRiBatches();
+    drawGdLk(); drawGdWeek(); drawBackup(); drawRiBatches(); drawTestBox();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
@@ -2600,7 +2644,7 @@
     const now = new Date().toISOString();
     const o = {id: uid(), code: SF.ocode.value || oCode(), saleDate: SF.saleDate.value || iso(new Date()), createdAt: now,
       customer: SF.customer.value.trim(), phone: SF.phone.value.trim(), address: SF.address.value.trim(), lines,
-      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(),
+      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.checked ? {test: true} : {}),
       stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: orderSummary({lines})}]};
     try { await put("od", o); } catch(err){ return; }
     lastOrderId = o.id;
@@ -2613,7 +2657,7 @@
     const urg = isUrgent(o);
     return `<div class="item oditem ${urg ? "urgentod" : (o.id === lastOrderId && o.stage === "cho_xk" ? "newitem" : "")}" data-od="${esc(o.id)}">
       ${urg ? `<div class="gapflag">🚨 ĐƠN GẤP – GRAB GẤP 🚨</div>` : ""}
-      <div class="row"><div><div class="pname"><span class="tag od">🛒 Đơn bán</span>${esc(o.code)} · ${esc(o.customer)}</div>
+      <div class="row"><div><div class="pname"><span class="tag od">🛒 Đơn bán</span>${o.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(o.code)} · ${esc(o.customer)}</div>
         <div class="sub">Ngày bán ${fmt(o.saleDate)} · tạo lúc ${fmtTime(o.createdAt)}</div>
         ${o.phone ? `<div class="sub">📞 ${esc(o.phone)}</div>` : ""}
         ${o.address ? `<div class="sub">📍 ${esc(o.address)}</div>` : ""}</div>
