@@ -368,11 +368,12 @@
         <div class="row" style="align-items:center;margin-top:12px;gap:8px"><b style="font-size:14px">📊 Công nợ trong tuần</b><input type="date" id="gdWkDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="sub" style="margin-top:4px">Chọn 1 ngày bất kỳ trong tuần (Thứ 2 → Chủ nhật): nợ mới, đã thu, còn nợ cuối tuần theo từng khách.</div>
         <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📊 Lưu file Excel công nợ tuần</button></div></div>
-      <div class="panel" id="gdWeekBox"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Báo cáo tuần</h3><input type="date" id="gwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
+      <div class="panel" id="gdWeekBox"><div class="row" style="align-items:center"><h3 style="margin:0" id="gwTitle">📊 Báo cáo tuần</h3><input type="date" id="gwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
+        <div class="seg" id="gwMode" style="margin:8px 0 4px"><button data-m="week">📅 Theo tuần</button><button data-m="month">🗓️ Theo tháng</button></div>
         <div class="sub" id="gwLabel" style="margin:4px 0 8px"></div>
         <div class="seg" id="gwSeg" style="flex-wrap:wrap"><button data-k="debt">📒 Công nợ</button><button data-k="sale">🛒 Bán hàng</button><button data-k="top">🏆 Hàng xuất nhiều</button><button data-k="cus">👥 Khách mua nhiều</button><button data-k="old">⏰ Khách nợ lâu</button></div>
         <div id="gwBody"></div>
-        <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo tuần (đủ 5 báo cáo)</button></div></div>
+        <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ 5 báo cáo)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
       <div id="gdStats"></div>
     </section>
@@ -3214,19 +3215,25 @@
   }
   // ---- Thống kê công nợ theo tuần (Thứ 2 → Chủ nhật) ----
   /* ---------- BÁO CÁO TUẦN CHO GIÁM ĐỐC: công nợ, bán hàng, hàng xuất nhiều, khách mua nhiều, khách nợ lâu ---------- */
-  let gwTab = "debt";
+  let gwTab = "debt", gwMode = "week";
+  function gwRange(){
+    const day = $("#gwDate").value || iso(new Date());
+    if (gwMode === "month") { const d = new Date(day + "T00:00:00"), s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`, key: iso(s).slice(0, 7)}; }
+    const r = weekRange(day); return Object.assign(r, {key: iso(r.s)});
+  }
   function gdWeekData(){
-    const day = $("#gwDate").value || iso(new Date()), {s, e, label} = weekRange(day);
+    const range = gwRange(), {s, e, label} = range, day = $("#gwDate").value || iso(new Date());
     const inW = v => { if (!v) return false; const t = new Date(String(v).length <= 10 ? v + "T12:00:00" : v); return t >= s && t < e; };
     const all = [...tickets, ...orders];
     // 1. công nợ
-    const debt = weekDebt(all, day);
+    const debt = weekDebt(all, day, range);
     // 2. bán hàng (theo ngày bán, bỏ đơn đã hủy)
     const sold = orders.filter(o => o.stage !== "huy" && inW(o.saleDate));
     const qty = (o, gift) => (o.lines || []).filter(l => !!l.gift === gift).reduce((a,l) => a + (Number(l.qty) || 0), 0);
     const val = o => o.pay ? Number(o.pay.amount) || 0 : 0;
-    const days = []; for (let i = 0; i < 7; i++) { const d = new Date(s); d.setDate(s.getDate() + i); const k = iso(d), L = sold.filter(o => o.saleDate === k);
-      days.push([["T2","T3","T4","T5","T6","T7","CN"][i] + " " + fmt(k).slice(0, 5), L.length, L.reduce((a,o) => a + qty(o, false), 0), L.reduce((a,o) => a + qty(o, true), 0), L.reduce((a,o) => a + val(o), 0)]); }
+    const days = []; for (let d = new Date(s); d < e; d.setDate(d.getDate() + 1)) { const k = iso(d), L = sold.filter(o => o.saleDate === k);
+      days.push([["CN","T2","T3","T4","T5","T6","T7"][d.getDay()] + " " + fmt(k).slice(0, 5), L.length, L.reduce((a,o) => a + qty(o, false), 0), L.reduce((a,o) => a + qty(o, true), 0), L.reduce((a,o) => a + val(o), 0)]); }
     const sale = {orders: sold.length, qty: sold.reduce((a,o) => a + qty(o, false), 0), gift: sold.reduce((a,o) => a + qty(o, true), 0), value: sold.reduce((a,o) => a + val(o), 0), noPay: sold.filter(o => !o.pay).length, days};
     // 3. hàng xuất nhiều nhất (theo ngày xuất kho, bỏ hàng đã trả lại kho)
     const out = orders.filter(o => o.exportedAt && inW(o.exportedAt) && !o.cancel?.returned), pm = {};
@@ -3242,24 +3249,26 @@
     debtNow().forEach(x => { const k = norm(x.customer); om[k] = om[k] || {name: x.customer, phone: x.phone || "", n: 0, amt: 0, oldest: 0, since: "", codes: []}; const r = om[k];
       r.n++; r.amt += Number(x.pay?.amount) || 0; r.codes.push(x.code); const a = debtAge(x); if (a >= r.oldest) { r.oldest = a; r.since = debtStart(x); } if (!r.phone && x.phone) r.phone = x.phone; });
     const old = Object.values(om).sort((a,b) => b.oldest - a.oldest || b.amt - a.amt);
-    return {label, debt, sale, top, cus, old};
+    return {label, debt, sale, top, cus, old, key: range.key};
   }
-  const miniTable = (head, rows, numFrom = 1) => rows.length ? `<table class="ptable"><tr>${head.map((h, j) => `<th style="${j ? "" : "text-align:left;width:auto"}">${esc(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map((v, j) => `<td>${j === 0 ? v : `<b>${typeof v === "number" ? v.toLocaleString("vi-VN") : esc(v)}</b>`}</td>`).join("")}</tr>`).join("")}</table>` : `<div class="empty">Không có dữ liệu trong tuần.</div>`;
+  const miniTable = (head, rows, numFrom = 1) => rows.length ? `<table class="ptable"><tr>${head.map((h, j) => `<th style="${j ? "" : "text-align:left;width:auto"}">${esc(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map((v, j) => `<td>${j === 0 ? v : `<b>${typeof v === "number" ? v.toLocaleString("vi-VN") : esc(v)}</b>`}</td>`).join("")}</tr>`).join("")}</table>` : `<div class="empty">Không có dữ liệu trong kỳ.</div>`;
   function drawGdWeek(){
     if (!$("#gwDate").value) $("#gwDate").value = iso(new Date());
-    const D = gdWeekData();
-    $("#gwLabel").innerHTML = `<b>${D.label}</b> (Thứ 2 → Chủ nhật)`;
+    const D = gdWeekData(), M = gwMode === "month", P = M ? "tháng" : "tuần";
+    $("#gwTitle").textContent = M ? "📊 Báo cáo tháng" : "📊 Báo cáo tuần";
+    $("#gwMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === gwMode));
+    $("#gwLabel").innerHTML = `<b>${D.label}</b> ${M ? "(chọn 1 ngày bất kỳ trong tháng)" : "(Thứ 2 → Chủ nhật)"}`;
     $("#gwSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === gwTab));
     let h = "";
     if (gwTab === "debt") { const {arose, collected, openEnd, sum, byCus} = D.debt;
       h = `<div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">
-        <div class="stat c-warn"><b style="font-size:15px">${money(sum(arose))}</b><span>Nợ mới trong tuần (${arose.length})</span></div>
-        <div class="stat c-ok"><b style="font-size:15px">${money(sum(collected))}</b><span>Đã thu nợ trong tuần (${collected.length})</span></div>
-        <div class="stat c-bad"><b style="font-size:15px">${money(sum(openEnd))}</b><span>Còn nợ cuối tuần (${openEnd.length})</span></div></div>
-        <h4 style="margin:8px 0 6px;font-size:14px">Còn nợ cuối tuần theo khách</h4>` + miniTable(["Khách hàng", "Số phiếu", "Còn nợ (đ)"], Object.entries(byCus).sort((a,b) => b[1].amt - a[1].amt).slice(0, 10).map(([k,v]) => [esc(k), v.n, v.amt]));
+        <div class="stat c-warn"><b style="font-size:15px">${money(sum(arose))}</b><span>Nợ mới trong ${P} (${arose.length})</span></div>
+        <div class="stat c-ok"><b style="font-size:15px">${money(sum(collected))}</b><span>Đã thu nợ trong ${P} (${collected.length})</span></div>
+        <div class="stat c-bad"><b style="font-size:15px">${money(sum(openEnd))}</b><span>Còn nợ cuối ${P} (${openEnd.length})</span></div></div>
+        <h4 style="margin:8px 0 6px;font-size:14px">Còn nợ cuối ${P} theo khách</h4>` + miniTable(["Khách hàng", "Số phiếu", "Còn nợ (đ)"], Object.entries(byCus).sort((a,b) => b[1].amt - a[1].amt).slice(0, 10).map(([k,v]) => [esc(k), v.n, v.amt]));
     } else if (gwTab === "sale") { const S = D.sale;
       h = `<div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px">
-        <div class="stat c-info oditem"><b>${S.orders}</b><span>Đơn bán trong tuần</span></div>
+        <div class="stat c-info oditem"><b>${S.orders}</b><span>Đơn bán trong ${P}</span></div>
         <div class="stat c-ok oditem"><b>${S.qty.toLocaleString("vi-VN")}</b><span>Số lượng hàng bán</span></div>
         <div class="stat oditem"><b>${S.gift.toLocaleString("vi-VN")}</b><span>🎁 Hàng tặng</span></div>
         <div class="stat c-ok oditem"><b style="font-size:15px">${money(S.value)}</b><span>Giá trị đã ghi nhận (Kế toán)${S.noPay ? ` · ${S.noPay} đơn chưa ghi` : ""}</span></div></div>
@@ -3267,7 +3276,7 @@
     } else if (gwTab === "top") {
       h = `<div class="sub" style="margin-bottom:6px">Theo ngày xuất kho · không tính hàng khách trả lại</div>` + miniTable(["#  Sản phẩm", "SL bán", "Tặng", "Số đơn"], D.top.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}`, r.qty, r.gift, r.orders]));
     } else if (gwTab === "cus") {
-      h = `<div class="sub" style="margin-bottom:6px">Theo đơn bán trong tuần (ngày bán)</div>` + miniTable(["#  Khách hàng", "Số đơn", "SL mua", "Giá trị (đ)"], D.cus.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}`, r.orders, r.qty, r.value]));
+      h = `<div class="sub" style="margin-bottom:6px">Theo đơn bán trong ${P} (ngày bán)</div>` + miniTable(["#  Khách hàng", "Số đơn", "SL mua", "Giá trị (đ)"], D.cus.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}`, r.orders, r.qty, r.value]));
     } else {
       h = `<div class="sub" style="margin-bottom:6px">Công nợ đang còn, tính đến hôm nay · xếp theo số ngày nợ lâu nhất</div>` + miniTable(["Khách hàng", "Nợ lâu nhất", "Số phiếu", "Còn nợ (đ)"], D.old.slice(0, 15).map(r => [`${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}<div class="sub">${esc(r.codes.join(", "))}</div>`, `${r.oldest} ngày${r.oldest >= DEBT_DAYS ? " ⏰" : ""}`, r.n, r.amt]));
     }
@@ -3275,6 +3284,7 @@
   }
   $("#gwDate").addEventListener("change", drawGdWeek);
   $("#gwSeg").querySelectorAll("button").forEach(b => b.onclick = () => { gwTab = b.dataset.k; drawGdWeek(); });
+  $("#gwMode").querySelectorAll("button").forEach(b => b.onclick = () => { gwMode = b.dataset.m; drawGdWeek(); });
   // file Excel nhiều trang
   async function exportSheets(file, title, period, sheets){
     if (pdfBusy) return; pdfBusy = true;
@@ -3295,10 +3305,10 @@
     finally { pdfBusy = false; }
   }
   $("#gwFile").onclick = () => {
-    const D = gdWeekData(), {arose, collected, openEnd, sum, byCus} = D.debt, S = D.sale, ws = weekRange($("#gwDate").value || iso(new Date())).s;
+    const D = gdWeekData(), {arose, collected, openEnd, sum, byCus} = D.debt, S = D.sale, M = gwMode === "month", P = M ? "tháng" : "tuần";
     const drow = (x, kind) => [kind, x.lines ? "Đơn bán" : TYPE[x.type], x.code, x.customer, x.phone || "", x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), kind === "Đã thu" ? fmt(x.pay?.paidDate) : "", kind === "Đã thu" ? "" : debtAge(x), Number(x.pay?.amount) || 0];
-    exportSheets(`Bao-cao-tuan_${iso(ws)}`, "Báo cáo tuần", D.label, [
-      {name: "Công nợ", pre: [["Nợ mới trong tuần (đ)", sum(arose)], ["Đã thu nợ trong tuần (đ)", sum(collected)], ["Còn nợ cuối tuần (đ)", sum(openEnd)], ["Khách còn nợ", Object.keys(byCus).length]],
+    exportSheets(`Bao-cao-${M ? "thang" : "tuan"}_${D.key}`, M ? "Báo cáo tháng" : "Báo cáo tuần", D.label, [
+      {name: "Công nợ", pre: [[`Nợ mới trong ${P} (đ)`, sum(arose)], [`Đã thu nợ trong ${P} (đ)`, sum(collected)], [`Còn nợ cuối ${P} (đ)`, sum(openEnd)], ["Khách còn nợ", Object.keys(byCus).length]],
         head: ["Loại", "Nhóm", "Mã", "Khách hàng", "SĐT", "Hàng", "Ngày ghi nợ", "Ngày thu", "Số ngày nợ", "Số tiền (đ)"],
         rows: arose.map(x => drow(x, "Nợ mới")).concat(collected.map(x => drow(x, "Đã thu"))).concat(openEnd.map(x => drow(x, "Còn nợ")))},
       {name: "Bán hàng", pre: [["Số đơn bán", S.orders], ["Số lượng hàng bán", S.qty], ["Hàng tặng", S.gift], ["Giá trị đã ghi nhận (đ)", S.value], ["Đơn chưa ghi thanh toán", S.noPay]],
@@ -3314,8 +3324,8 @@
     const last = new Date(e); last.setDate(e.getDate() - 1);
     return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(last))}`};
   }
-  function weekDebt(list, day){
-    const {s, e, label} = weekRange(day), L = list || acPick();
+  function weekDebt(list, day, range){
+    const {s, e, label} = range || weekRange(day), L = list || acPick();
     const inW = v => { if (!v) return false; const t = new Date(String(v).length <= 10 ? v + "T12:00:00" : v); return t >= s && t < e; };
     const arose = L.filter(x => debtStart(x) && inW(debtStart(x)));
     const collected = L.filter(x => x.stage === "da_tt" && x.pay?.debtSince && inW(x.pay.paidDate));
