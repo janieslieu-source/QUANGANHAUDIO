@@ -433,6 +433,8 @@
         <div id="lkBody" style="margin-top:10px"></div></div>
       <form class="panel" id="saleForm" autocomplete="off">
         <h3>🛒 Đơn hàng</h3>
+        <div class="seg" id="oKind" style="margin:4px 0 8px"><button type="button" data-ok="" class="on">🆕 Đơn mới</button><button type="button" data-ok="1">🧪 Đơn test</button></div>
+        <div class="sub hide" id="oKindHint" style="margin:-4px 0 8px;color:#6d28d9">🧪 Đơn test: chạy đủ quy trình như đơn mới (Kho → Vận chuyển → Kế toán). Xong quy trình bấm <b>🗑 Hủy đơn test</b> trên đơn để xóa sạch.</div>
         <label style="margin-top:0">Tên khách hàng *</label><input name="customer" required>
         <h4 class="sechd">🛒 Hàng bán *</h4>
         <div id="olines"></div>
@@ -459,7 +461,7 @@
         <div id="oPost" class="hide"><label>Bưu cục / đơn vị</label><input name="post" placeholder="VD: Bưu điện VN, Viettel Post…"></div>
         <div id="oGap" class="hide reason" style="background:var(--badbg);color:var(--bad);margin-top:10px">🚨 Đơn GẤP: Kho và Vận chuyển sẽ bị báo động đỏ liên tục cho đến khi đơn được gửi đi.</div>
         <label>Ghi chú</label><textarea name="onote"></textarea>
-        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="otest" style="width:auto;margin:0"> 🧪 Đơn test (thử nghiệm) – cuối đợt test xóa hàng loạt ở tab Giám đốc</label>
+<input type="hidden" name="otest" value="">
         <div class="btns"><button type="submit" class="btn pri" id="saleOk">✅ Xác nhận đơn</button></div>
       </form>
       <div class="panel"><h3>📋 Đơn hàng gần đây</h3>
@@ -1207,7 +1209,7 @@
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "cong_no" && t.pay.total && t.pay.advance ? ` <span class="sub">(tổng ${money(t.pay.total)}${t.pay.advance ? ` – tạm ứng ${money(t.pay.advance)}` : ""})</span>` : ""}${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(t)}${exLine(t.code)}
       <div class="sub" style="margin-top:4px">${esc(t.code)} · nhận ${fmt(t.createdAt)} ${isLate(t) ? `<b style="color:var(--bad)">(🚨 tồn ${daysSince(t.createdAt)} ngày)</b>` : `(${daysSince(t.createdAt)} ngày)`}</div>
-      ${btns || ""}
+      ${btns || ""}${testDelBtn(t)}
     </div>`;
   }
   function bindCards(root){
@@ -1313,10 +1315,10 @@
     return P;
   }
   function openPurge(kind, id){
-    if (!boss) { toast("Chỉ Giám đốc được xóa vĩnh viễn"); return; }
-    const P = purgePlan(kind, id); if (!P) return; const x = P.x, F = $("#actForm");
+    const P = purgePlan(kind, id); if (!P) return; const x = P.x, F = $("#actForm"), isTest = !!x.test;
+    if (!boss && !(isTest && canTestDel())) { toast("Chỉ Giám đốc được xóa vĩnh viễn"); return; }
     const li = (n, t) => n ? `<li>${t}</li>` : "";
-    F.innerHTML = `<div class="grab"></div><h2 style="color:var(--bad)">🗑 Xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${esc(x.code)}</h2>
+    F.innerHTML = `<div class="grab"></div><h2 style="color:var(--bad)">🗑 ${isTest ? "Hủy đơn test" : `Xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"}`} ${esc(x.code)}</h2>
       <div class="sub">${esc(x.customer || "")}${x.product ? " · " + esc(x.product) : ""}${x.serial ? " · SN " + esc(x.serial) : ""} · tạo ${fmtTime(x.createdAt)}</div>
       <div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">Dùng cho <b>phiếu test / nhập nhầm</b>. Phiếu sẽ biến mất hoàn toàn khỏi app (không còn trong lịch sử, báo cáo, công nợ). <b>Không khôi phục được</b> – trừ khi có file sao lưu.</div>
       <div style="margin-top:10px"><b>Hệ thống sẽ xóa / hoàn lại:</b><ul style="margin:6px 0 0 18px;padding:0;font-size:14px;line-height:1.6">
@@ -1328,15 +1330,15 @@
         ${li(P.ph.length, `${P.ph.length} ảnh đính kèm`)}
         ${li(P.ex.length, `${P.ex.length} khoản chi phí gắn với mã này (${P.ex.map(e => esc(exTitle(e))).slice(0, 3).join(", ")})`)}
       </ul></div>
-      <label>Gõ <b>XOA</b> để xác nhận</label><input name="cf" autocomplete="off" autocapitalize="characters" placeholder="XOA">
+      ${isTest ? `<input type="hidden" name="cf" value="XOA">` : `<label>Gõ <b>XOA</b> để xác nhận</label><input name="cf" autocomplete="off" autocapitalize="characters" placeholder="XOA">`}
       <div class="sub" id="pgProg"></div>
-      <div class="btns"><button type="button" class="btn" data-close="actBg">Không xóa</button><button type="submit" class="btn danger" style="background:var(--bad);color:#fff;border-color:var(--bad)">🗑 Xóa vĩnh viễn</button></div>`;
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Không xóa</button><button type="submit" class="btn danger" style="background:var(--bad);color:#fff;border-color:var(--bad)">🗑 ${isTest ? "Hủy đơn test" : "Xóa vĩnh viễn"}</button></div>`;
     actCtx = {run: async () => {
       if (norm(F.cf.value.trim()) !== "xoa") { toast("Gõ XOA để xác nhận"); F.cf.focus(); throw new Error("cf"); }
       const btn = F.querySelector("[type=submit]"); btn.disabled = true; const prog = t => { $("#pgProg").textContent = t; };
       try { await doPurge(P, prog);
       } catch(err){ btn.disabled = false; prog("Có lỗi khi xóa – bấm lại để xóa tiếp"); throw err; }
-    }, after: () => { toast(`Đã xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${P.code}`); renderAll(); }};
+    }, after: () => { toast(isTest ? `Đã hủy đơn test ${P.code}` : `Đã xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${P.code}`); renderAll(); }};
     open("actBg");
   }
   async function doPurge(P, prog = () => {}){
@@ -2605,8 +2607,10 @@
     if (n == null) { box.innerHTML = `<b style="color:var(--warn)">Chưa có trong kho</b>` + (linkOf(name) ? " · " + linkA(name, "🔗 Xem") + " " + copyBtn(name, "📋 Copy") : ""); return; }
     box.innerHTML = (n >= q ? `<b style="color:var(--ok)">Tồn kho: ${n}</b>` : `<b style="color:var(--bad)">Tồn kho: ${n} – thiếu ${q - n}${allLineEls().filter(x => norm(x.querySelector(".lp").value) === norm(name)).length > 1 ? " (tính cả bán + tặng)" : ""}</b>`) + (linkOf(name) ? " · " + linkA(name, "🔗 Xem") + " " + copyBtn(name, "📋 Copy") : "");
   }
+  function setOKind(v){ SF.otest.value = v ? "1" : ""; document.querySelectorAll("#oKind button").forEach(b => b.classList.toggle("on", b.dataset.ok === (v ? "1" : ""))); $("#oKindHint").classList.toggle("hide", !v); }
+  document.querySelectorAll("#oKind button").forEach(b => b.onclick = () => setOKind(b.dataset.ok));
   function resetSale(){
-    SF.reset(); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; addLine(); saleShip = null; syncSale();
+    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; addLine(); saleShip = null; syncSale();
     SF.saleDate.value = iso(new Date()); SF.ocode.value = oCode();
   }
   function syncSale(){
@@ -2644,7 +2648,7 @@
     const now = new Date().toISOString();
     const o = {id: uid(), code: SF.ocode.value || oCode(), saleDate: SF.saleDate.value || iso(new Date()), createdAt: now,
       customer: SF.customer.value.trim(), phone: SF.phone.value.trim(), address: SF.address.value.trim(), lines,
-      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.checked ? {test: true} : {}),
+      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.value ? {test: true} : {}),
       stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: orderSummary({lines})}]};
     try { await put("od", o); } catch(err){ return; }
     lastOrderId = o.id;
@@ -2667,9 +2671,15 @@
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
       ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "cong_no" && o.pay.total && o.pay.advance ? ` <span class="sub">(tổng ${money(o.pay.total)}${o.pay.advance ? ` – tạm ứng ${money(o.pay.advance)}` : ""})</span>` : ""}${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(o)}${exLine(o.code)}
-      ${btns || ""}</div>`;
+      ${btns || ""}${testDelBtn(o)}</div>`;
   }
   const card = (x, btns) => x.lines ? odCard(x, btns) : tkCard(x, btns);
+  // đơn test đã xong quy trình (Kế toán đã ghi / đã trả khách) → hủy (xóa sạch) ngay trên thẻ
+  const testDone = x => !!x?.test && (x.lines ? ["cong_no", "da_tt", "huy"].includes(x.stage) : CLOSED.includes(x.stage));
+  const canTestDel = () => boss || ["sa", "ac", "bh", "wh"].includes(role);
+  const testDelBtn = x => testDone(x) && canTestDel() ? `<div class="cardbtns"><button type="button" class="btn" data-testdel="${esc(x.id)}" style="color:#6d28d9;border-color:#6d28d9">🗑 Hủy đơn test</button></div>` : "";
+  document.addEventListener("click", e => { const b = e.target.closest("[data-testdel]"); if (!b) return; e.preventDefault(); e.stopPropagation();
+    const x = findAny(b.dataset.testdel); if (x) openPurge(x.lines ? "od" : "tk", x.id); }, true);
   const bindAny = root => { bindCards(root); bindOd(root); };
   const findAny = id => tickets.find(x => x.id === id) || orders.find(x => x.id === id);
   async function advanceOrder(o, stage, note, extra){
