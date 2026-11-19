@@ -413,7 +413,7 @@
         <div id="whSum" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button></div></div>
       <div class="panel" data-w="ton" id="nhapBox"><h3>➕ Nhập hàng mới</h3>
-        <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> (nhập số lượng + tối đa 3 ảnh seri, hoặc thêm từng dòng seri – số lượng tự đếm) hoặc <b>🆕 Sản phẩm mới</b> (tên, số lượng, có/không seri, 1–2 ảnh). Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
+        <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri là đủ</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
         <div id="nhRows"></div>
         <button type="button" class="btn sm" id="nhAdd" style="margin-top:8px">+ Thêm dòng</button>
         <label>Nhà cung cấp / ghi chú</label><input id="nhNote" placeholder="VD: Nhập từ NCC A, phiếu số 12">
@@ -2044,16 +2044,29 @@
       <div class="sub">${esc(o.customer)}${o.phone ? " · " + esc(o.phone) : ""} · bán ${fmt(o.saleDate)} · 🚚 ${OSHIP[o.ship?.method]||""} ${esc(o.ship?.carrier||"")}</div>
       ${(o.lines||[]).map((l,i) => `<div class="oline" style="grid-template-columns:1fr">
         <div>${l.gift ? '<span class="tag gift">🎁 Hàng tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "tặng kèm" : l.months ? l.months + " tháng BH" : "không BH"})</span></div>
-        <div><label style="margin-top:4px">Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty} seri (${SN_HINT})</label>
+        <div class="seg xkmode" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-x="nhap" style="font-size:13px;padding:8px 4px">🔢 Nhập seri</button><button type="button" data-x="anh" style="font-size:13px;padding:8px 4px">📷 Ảnh seri</button><button type="button" data-x="khong" style="font-size:13px;padding:8px 4px">➖ Không seri</button></div>
+        <div class="sub xkhint" data-i="${i}"></div>
+        <div class="xksn" data-i="${i}"><label style="margin-top:4px">Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty} seri (${SN_HINT})</label>
           ${(() => { const av = inStock(l.product); return av.length ? `<div class="row" style="align-items:center;margin:6px 0 4px"><span class="sub">Kho còn <b>${av.length}</b> seri – bấm để chọn:</span>
             <button type="button" class="btn sm pri auto" data-i="${i}">⚡ Chọn tự động ${l.qty}</button></div>
             <div class="chips snpick" data-i="${i}" style="flex-wrap:wrap;max-height:150px;overflow:auto">${av.slice(0, 200).map(x => `<button type="button" class="chip" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
             : `<div class="sub" style="margin:4px 0">${(() => { const n = qtyStock(l.product); return n != null ? `Tồn kho: <b style="color:${n >= l.qty ? "var(--ok)" : "var(--bad)"}">${n}</b> cái · ` : ""; })()}Gõ seri bên dưới (mỗi dòng 1 seri).</div>`; })()}
           <textarea class="sn" data-i="${i}" rows="${Math.min(6, Math.max(2, l.qty))}" placeholder="${Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
-          <div class="sub snc" data-i="${i}"></div>
-          <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div></div>`).join("")}
+          <div class="sub snc" data-i="${i}"></div></div>
+          <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">✅ Xác nhận xuất kho</button></div>`;
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+    // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
+    const modes = (o.lines||[]).map((l,i) => snOf(o,i).length || inStock(l.product).length ? "nhap" : (noSerial(l.product) || !l.months) ? "khong" : "anh");
+    const XKHINT = {nhap: "", anh: "📷 Chụp ảnh tem / số seri để đối chiếu – không cần gõ seri (cần ít nhất 1 ảnh).", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
+    const drawModes = () => (o.lines||[]).forEach((l,i) => {
+      const m = modes[i];
+      F5.querySelectorAll(`.xkmode[data-i="${i}"] button`).forEach(b => b.classList.toggle("on", b.dataset.x === m));
+      F5.querySelector(`.xksn[data-i="${i}"]`).classList.toggle("hide", m !== "nhap");
+      F5.querySelector(`.xkph[data-i="${i}"]`).classList.toggle("hide", m === "khong");
+      F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = XKHINT[m] + (m !== "nhap" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
+    });
+    F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
     const count = () => (o.lines||[]).forEach((l,i) => { const L = snList(i), n = L.length, bad = L.filter(x => !snOk(x)), el = F5.querySelector(`.snc[data-i="${i}"]`);
       el.textContent = `Đã nhập ${n}/${l.qty} seri` + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
       el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || l.months) ? "var(--bad)" : ""; });
@@ -2071,11 +2084,13 @@
     });
     F5.querySelectorAll(".sn").forEach(t => t.addEventListener("input", sync)); sync();
     F5.querySelectorAll(".xkph").forEach(photoPicker);
+    drawModes();
     actCtx = {run: async () => {
-      const serials = (o.lines||[]).map((l,i) => snList(i));
+      const serials = (o.lines||[]).map((l,i) => modes[i] === "nhap" ? snList(i) : []);
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i], n = serials[i].length;
-        if ((l.months && n !== l.qty) || n > l.qty) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n})`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
+        if (modes[i] === "nhap" && ((l.months && n !== l.qty) || n > l.qty)) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n}) – hoặc chọn “📷 Ảnh seri”`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
+        if (modes[i] === "anh" && !F5.querySelector(`.xkph[data-i="${i}"]`)._photos().length) { toast(`${l.product}: chụp ít nhất 1 ảnh seri để đối chiếu`); throw new Error("x"); }
       }
       const badSn = serials.flat().filter(x => !snOk(x));
       if (badSn.length) { toast(`Seri sai định dạng: ${badSn.join(", ")} – phải ${SN_HINT}`); throw new Error("x"); }
@@ -2094,18 +2109,19 @@
       }
       const lines = [];
       for (let i = 0; i < (o.lines || []).length; i++) {
-        const l = o.lines[i], ph = F5.querySelector(`.xkph[data-i="${i}"]`)._photos();
+        const l = o.lines[i], ph = modes[i] === "khong" ? [] : F5.querySelector(`.xkph[data-i="${i}"]`)._photos();
         const ids = ph.length ? await savePhotos(ph, {product: l.product, ref: "Xuất kho " + o.code}) : [];
-        lines.push(Object.assign({}, l, {serials: serials[i]}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
+        lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
       }
-      await advanceOrder(o, "cho_vc", `Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}`, {lines, serials: null, exportedAt: now});
+      const nAnh = modes.filter(m => m === "anh").length, nKhong = modes.filter(m => m === "khong").length;
+      await advanceOrder(o, "cho_vc", `Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
+      // phần không lấy từ kho seri (hàng không seri, đối chiếu bằng ảnh, seri gõ tay lúc xuất) -> trừ theo số lượng
+      // (tính TRƯỚC khi đánh dấu seri đã xuất, để không trừ kho 2 lần)
+      const mvOut = (o.lines || []).map((l, i) => { const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
+        return rest > 0 ? {id: "mv_" + uid(), product: l.product, qty: -rest, at: now, kind: "xuat", ref: o.code} : null; }).filter(Boolean);
       // trừ tồn kho: đánh dấu seri đã xuất
       const outs = serials.flat().map(findStock).filter(Boolean).map(x => Object.assign({}, x, {status: "out", orderCode: o.code, customer: o.customer, outAt: now}));
       if (outs.length) await putMany("st", outs);
-      // dòng hàng không seri: trừ tồn theo số lượng
-      // phần không lấy từ kho seri (hàng nhập theo số lượng, seri gõ tay lúc xuất) -> trừ theo số lượng
-      const mvOut = (o.lines || []).map((l, i) => { const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
-        return rest > 0 ? {id: "mv_" + uid(), product: l.product, qty: -rest, at: now, kind: "xuat", ref: o.code} : null; }).filter(Boolean);
       if (mvOut.length) await putMany("mv", mvOut);
       toast("Đã xuất kho – chuyển Vận chuyển");
     }, after: () => goTo("vc", `Kho đã xuất đơn ${o.code} (${o.customer}). Vận chuyển nhập mật mã để gửi hàng.`)};
@@ -2118,6 +2134,8 @@
   const findStock = sn => stock.find(x => keySN(x.serial) === keySN(sn));
   const inStock = name => stock.filter(x => x.status === "in" && norm(x.product) === norm(name)).sort((a,b) => (a.importedAt||"").localeCompare(b.importedAt||"") || String(a.serial).localeCompare(String(b.serial)));
   const findProduct = name => products.find(p => norm(p.name) === norm(name));
+  // mặt hàng nhỏ được đánh dấu "không cần seri" (Kho bật trong thông tin sản phẩm)
+  const noSerial = name => !!findProduct(name)?.noSerial;
   /* ---------- Gộp tên sản phẩm trùng ---------- */
   const MERGES = [["Loa smartk mini", "Loa mini SmartK"]];   // gộp sẵn theo yêu cầu (chạy tự động 1 lần khi Kho/GĐ mở app)
   let merging = false;
@@ -2209,15 +2227,25 @@
       <label>🔗 Link tham khảo (trang sản phẩm, thông số, hướng dẫn…)</label>
       <div style="display:flex;gap:8px"><input id="pLink" type="url" inputmode="url" value="${esc(cur)}" placeholder="https://…" style="flex:1"><button class="btn sm pri" id="pLinkSave" type="button">Lưu</button></div>
       ${cur ? `<div style="margin-top:8px;display:flex;gap:8px"><a href="${esc(cur)}" target="_blank" rel="noopener" class="btn sm" style="display:inline-block;text-decoration:none">🔗 Mở link</a><button type="button" class="btn sm" data-copy="${esc(cur)}">📋 Copy link</button></div>` : ""}
+      <label style="display:flex;gap:8px;align-items:center;margin-top:14px;color:var(--ink);font-size:14px;cursor:pointer"><input type="checkbox" id="pNoSn" style="width:auto;margin:0" ${noSerial(name) ? "checked" : ""}> 🔹 Hàng nhỏ – không cần số seri</label>
+      <div class="sub">Bật: khi nhập / xuất kho mặt hàng này mặc định “Không seri”, chỉ tính theo số lượng.</div>
       <h4 style="margin:12px 0 6px;font-size:14px">Seri còn trong kho</h4>
       <div class="chips" style="flex-wrap:wrap">${list.map(x => `<span class="chip">${esc(x.serial)}</span>`).join("") || `<span class="sub">Hết hàng</span>`}</div>
       ${out.length ? `<h4 style="margin:12px 0 6px;font-size:14px">Đã xuất gần đây</h4>${out.slice(0, 30).map(x => `<div class="sub">${esc(x.serial)} → đơn ${esc(x.orderCode||"")} · ${fmtTime(x.outAt)}</div>`).join("")}` : ""}
       <div class="btns"><button class="btn" data-close="detailBg">Đóng</button></div>`;
+    const savePr = async patch => {
+      const old = findProduct(name), now = new Date().toISOString(), any = stock.find(x => norm(x.product) === norm(name));
+      await put("pr", Object.assign({}, old || {id: prId(name), name, months: any?.months ?? 12, code: any?.code || "", createdAt: now}, patch, {updatedAt: now}));
+    };
     $("#pLinkSave").onclick = async () => {
-      const u = fixUrl($("#pLink").value), old = findProduct(name), now = new Date().toISOString();
-      const any = stock.find(x => norm(x.product) === norm(name));
-      try { await put("pr", Object.assign({}, old || {id: prId(name), name, months: any?.months ?? 12, code: any?.code || "", createdAt: now}, {link: u, updatedAt: now})); } catch(e){ return; }
+      const u = fixUrl($("#pLink").value);
+      try { await savePr({link: u}); } catch(e){ return; }
       toast(u ? "Đã lưu link" : "Đã xóa link"); setTimeout(() => showStockOf(name), 400);
+    };
+    $("#pNoSn").onchange = async e => {
+      const v = e.target.checked;
+      try { await savePr({noSerial: v}); } catch(err){ e.target.checked = !v; return; }
+      toast(v ? "Đã đánh dấu: hàng nhỏ, không cần seri" : "Đã bỏ đánh dấu – mặt hàng này dùng seri");
     };
     open("detailBg");
   }
@@ -2427,17 +2455,22 @@
       <div class="full"><label style="margin-top:0;display:flex;justify-content:space-between;gap:8px"><span class="nhlbl">Chọn sản phẩm · Số lượng</span><span class="lstk nhstk"></span></label></div>
       <div style="position:relative"><input class="nhn" placeholder="Bấm chọn sản phẩm trong kho" autocomplete="off"><div class="sugg hide"></div></div>
       <div><input class="nhq" type="number" min="1" inputmode="numeric" value="1"></div>
-      <div class="full nhsnopt hide"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">Không có seri</button><button type="button" data-s="1">Có seri</button></div></div>
+      <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
+        <div class="sub nhsnhint"></div></div>
       <div class="full nhsnbox"><div class="nhsns"></div><button type="button" class="btn sm nhsnadd" style="margin-top:6px">+ Thêm dòng seri</button></div>
       <div class="full nhph"></div></div>`);
     const el = $("#nhRows").lastElementChild, $e = q => el.querySelector(q);
     photoPicker($e(".nhph"), 3);
     el._hasSn = false;
     const sns = () => [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean);
+    const setSnBtns = () => el.querySelectorAll(".nhsnopt button").forEach(x => x.classList.toggle("on", (x.dataset.s === "1") === el._hasSn));
     const upd = () => {
-      const moi = el.dataset.m === "moi", n = $e(".nhn").value.trim(), list = sns(), useSn = moi ? el._hasSn : true;
-      $e(".nhsnopt").classList.toggle("hide", !moi);
+      const moi = el.dataset.m === "moi", n = $e(".nhn").value.trim();
+      // hàng có sẵn: tự chọn Có/Không seri theo sản phẩm (đánh dấu hàng nhỏ, hoặc đã từng nhập theo seri) – trừ khi người dùng đã tự chọn
+      if (!moi && !el._snTouched && n !== el._snFor) { el._snFor = n; el._hasSn = !!n && !noSerial(n) && stock.some(x => norm(x.product) === norm(n)); setSnBtns(); }
+      const list = sns(), useSn = el._hasSn;
       $e(".nhsnbox").classList.toggle("hide", !useSn);
+      $e(".nhsnhint").textContent = useSn ? "📷 Đã chụp ảnh tem seri thì không cần gõ seri – ảnh dùng để đối chiếu. Gõ seri thì số lượng tự đếm." : "Hàng nhỏ / không có seri – chỉ cộng tồn theo số lượng (ảnh không bắt buộc).";
       if (useSn && list.length) { $e(".nhq").value = list.length; $e(".nhq").readOnly = true; } else $e(".nhq").readOnly = false;
       const q = parseInt($e(".nhq").value) || 0, exists = n && (findProduct(n) || productNames().some(p => norm(p) === norm(n)));
       let h = "";
@@ -2458,7 +2491,7 @@
       $e(".nhn").placeholder = moi ? "Gõ tên sản phẩm mới" : "Bấm chọn sản phẩm trong kho";
       $e(".nhlbl").textContent = moi ? "Tên sản phẩm mới · Số lượng" : "Chọn sản phẩm · Số lượng";
       $e(".nhph")._setMax(moi ? 2 : 3); upd(); });
-    el.querySelectorAll(".nhsnopt button").forEach(b => b.onclick = () => { el._hasSn = b.dataset.s === "1"; el.querySelectorAll(".nhsnopt button").forEach(x => x.classList.toggle("on", x === b)); upd(); if (el._hasSn && !sns().length && !el.querySelector(".nhsn")) addSn(); });
+    el.querySelectorAll(".nhsnopt button").forEach(b => b.onclick = () => { el._hasSn = b.dataset.s === "1"; el._snTouched = true; setSnBtns(); upd(); });
     attachPicker($e(".nhn"), $e(".sugg"), upd);
     $e(".nhn").addEventListener("input", upd);
     $e(".nhq").addEventListener("input", upd);
@@ -2467,7 +2500,7 @@
   }
   $("#nhAdd").onclick = () => { nhAddRow(); $("#nhRows").lastElementChild.querySelector(".nhn").focus(); };
   $("#nhGo").onclick = async () => {
-    const rows = [...$("#nhRows").children].map(el => { const moi = el.dataset.m === "moi", useSn = moi ? el._hasSn : true;
+    const rows = [...$("#nhRows").children].map(el => { const moi = el.dataset.m === "moi", useSn = !!el._hasSn;
       return {el, moi, name: el.querySelector(".nhn").value.trim(), qty: parseInt(el.querySelector(".nhq").value) || 0, ph: el.querySelector(".nhph")._photos(),
         sns: useSn ? [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean) : []}; }).filter(r => r.name);
     if (!rows.length) { toast("Hãy chọn sản phẩm cần nhập"); return; }
@@ -2476,7 +2509,7 @@
       if (!r.moi && !exists) { toast(`“${r.name}” chưa có trong kho – chọn “Sản phẩm mới”`); return; }
       if (r.moi && exists) { toast(`“${r.name}” đã có trong kho – chọn “Có sẵn trong kho”`); return; }
       if (r.qty <= 0) { toast("Số lượng nhập phải lớn hơn 0"); return; }
-      if (r.moi && r.el._hasSn && !r.sns.length) { toast(`Nhập seri cho “${r.name}” hoặc chọn “Không có seri”`); return; }
+      if (r.el._hasSn && !r.sns.length && !r.ph.length) { toast(`“${r.name}”: gõ seri hoặc chụp ảnh tem seri (có ảnh thì không cần gõ) – hoặc chọn “Không có seri”`); return; }
       const bad = r.sns.find(v => !snOk(v)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
       const dup = r.sns.find((v, i) => r.sns.findIndex(y => keySN(y) === keySN(v)) !== i); if (dup) { toast(`Seri ${dup} bị nhập trùng`); return; }
       const inSt = r.sns.find(v => { const x = findStock(v); return x && x.status === "in"; }); if (inSt) { toast(`Seri ${inSt} đã có trong kho`); return; }
@@ -2487,7 +2520,7 @@
     rows.forEach(r => { const ex = productNames().find(p => norm(p) === norm(r.name)); if (ex) { r.name = ex; return; }
       if (newPr.some(p => norm(p.name) === norm(r.name))) return;
       let id = prId(r.name), k = 2; while (usedIds.has(id)) id = prId(r.name) + "-" + (k++); usedIds.add(id);
-      newPr.push({id, name: r.name, months: 12, createdAt: now, updatedAt: now}); });
+      newPr.push({id, name: r.name, months: 12, noSerial: !r.el._hasSn, createdAt: now, updatedAt: now}); });
     const b = $("#nhGo"); b.disabled = true;
     try {
       if (newPr.length) await putMany("pr", newPr);
@@ -2496,7 +2529,7 @@
       const stList = rows.flatMap(r => r.sns.map(sn => { const old = findStock(sn), p = findProduct(r.name);
         return Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: r.name, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor(), photos: r.photos}); }));
       if (stList.length) await putMany("st", stList);
-      const mv = rows.filter(r => !r.sns.length).map(r => ({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}));
+      const mv = rows.filter(r => !r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.el._hasSn ? {snByPhoto: true} : {}));
       // dòng có seri: ghi 1 mục lịch sử (qty 0) để hiện trong “Lần nhập gần đây”
       const log = rows.filter(r => r.sns.length).map(r => ({id: "mv_" + uid(), product: r.name, qty: 0, snQty: r.sns.length, serials: r.sns, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}));
       if (mv.length + log.length) await putMany("mv", mv.concat(log));
