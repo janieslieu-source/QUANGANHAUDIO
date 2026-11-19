@@ -1189,7 +1189,8 @@
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
-      ${lkLine(t)}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
+      ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
+        return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(t)}${exLine(t.code)}
@@ -1236,16 +1237,90 @@
     if (canKtFail(t)) $("#dKtFail").onclick = () => { close("detailBg"); detailId = null; openKtFail(t.id); };
     if (canCancelTk(t)) $("#dCancelTk").onclick = () => { close("detailBg"); detailId = null; openCancelTk(t.id); };
     if (canReportPaid(t)) $("#dPaidReq").onclick = () => { close("detailBg"); detailId = null; openPaidReq(t.id); };
+    if (boss) $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="dPurge" style="color:var(--bad);border-color:var(--bad)">🗑 Xóa vĩnh viễn phiếu (phiếu test / nhập nhầm)</button></div>`);
+    if (boss) $("#dPurge").onclick = () => { close("detailBg"); detailId = null; openPurge("tk", t.id); };
     open("detailBg");
   }
 
+  /* ================= XÓA VĨNH VIỄN PHIẾU / ĐƠN (Giám đốc) =================
+     Xóa phiếu/đơn và mọi dữ liệu nó tạo ra: lịch sử kho (trừ/cộng kho tự hoàn lại), seri đã xuất → trả về trong kho,
+     sổ bảo hành tạo từ phiếu/đơn, ảnh, chi phí ship gắn với mã. */
+  function purgePlan(kind, id){
+    const x = (kind === "tk" ? tickets : orders).find(y => y.id === id); if (!x) return null;
+    const code = x.code, P = {x, kind, code, mv: [], stBack: [], regDel: [], regFix: [], ph: [], ex: []};
+    P.mv = moves.filter(m => m.ref === code);
+    P.stBack = stock.filter(z => z.orderCode === code && z.status === "out");
+    if (kind === "od") P.regDel = reg.filter(r => r.orderCode === code);
+    else {
+      const t0 = new Date(x.createdAt).getTime(), near = r => Math.abs(new Date(r.createdAt || 0).getTime() - t0) < 15 * 60000;
+      const others = tickets.filter(t => t.id !== x.id);
+      // sổ bảo hành chỉ xóa khi do chính phiếu này tạo ra (tạo cùng lúc, không gắn đơn bán, không phiếu nào khác dùng)
+      reg.forEach(r => { const sn = keySN(r.serial);
+        const mine = sn === keySN(x.serial) || (x.exchange && sn === keySN(x.exchange.newSerial));
+        if (!mine) return;
+        if (!r.orderCode && near(r) && !others.some(t => keySN(t.serial) === sn || (t.exchange && keySN(t.exchange.newSerial) === sn))) P.regDel.push(r);
+        else if (x.exchange && sn === keySN(x.exchange.oldSerial) && r.replacedBy === x.exchange.newSerial) P.regFix.push(r); });
+    }
+    const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
+    P.ph = [...phIds];
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap"].includes(e.kind));
+    return P;
+  }
+  function openPurge(kind, id){
+    if (!boss) { toast("Chỉ Giám đốc được xóa vĩnh viễn"); return; }
+    const P = purgePlan(kind, id); if (!P) return; const x = P.x, F = $("#actForm");
+    const li = (n, t) => n ? `<li>${t}</li>` : "";
+    F.innerHTML = `<div class="grab"></div><h2 style="color:var(--bad)">🗑 Xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${esc(x.code)}</h2>
+      <div class="sub">${esc(x.customer || "")}${x.product ? " · " + esc(x.product) : ""}${x.serial ? " · SN " + esc(x.serial) : ""} · tạo ${fmtTime(x.createdAt)}</div>
+      <div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">Dùng cho <b>phiếu test / nhập nhầm</b>. Phiếu sẽ biến mất hoàn toàn khỏi app (không còn trong lịch sử, báo cáo, công nợ). <b>Không khôi phục được</b> – trừ khi có file sao lưu.</div>
+      <div style="margin-top:10px"><b>Hệ thống sẽ xóa / hoàn lại:</b><ul style="margin:6px 0 0 18px;padding:0;font-size:14px;line-height:1.6">
+        <li>${kind === "tk" ? "Phiếu" : "Đơn"} ${esc(x.code)}${x.pay ? ` (kèm thanh toán / công nợ ${hidePrice() ? "" : money(x.pay.amount)})` : ""}</li>
+        ${li(P.mv.length, `${P.mv.length} dòng lịch sử kho (${P.mv.map(m => `${esc(m.product)} ${m.qty > 0 ? "+" : ""}${m.qty || m.snQty || 0}`).slice(0, 4).join(", ")}${P.mv.length > 4 ? "…" : ""}) – số tồn kho tự hoàn lại`)}
+        ${li(P.stBack.length, `${P.stBack.length} seri đã xuất → trả về <b>trong kho</b> (${P.stBack.slice(0, 4).map(z => esc(z.serial)).join(", ")}${P.stBack.length > 4 ? "…" : ""})`)}
+        ${li(P.regDel.length, `${P.regDel.length} dòng sổ bảo hành tạo từ ${kind === "tk" ? "phiếu" : "đơn"} này (${P.regDel.slice(0, 4).map(r => esc(r.serial)).join(", ")})`)}
+        ${li(P.regFix.length, `Bỏ ghi chú "đã đổi sang seri mới" ở ${P.regFix.length} seri cũ`)}
+        ${li(P.ph.length, `${P.ph.length} ảnh đính kèm`)}
+        ${li(P.ex.length, `${P.ex.length} khoản chi phí gắn với mã này (${P.ex.map(e => esc(exTitle(e))).slice(0, 3).join(", ")})`)}
+      </ul></div>
+      <label>Gõ <b>XOA</b> để xác nhận</label><input name="cf" autocomplete="off" autocapitalize="characters" placeholder="XOA">
+      <div class="sub" id="pgProg"></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Không xóa</button><button type="submit" class="btn danger" style="background:var(--bad);color:#fff;border-color:var(--bad)">🗑 Xóa vĩnh viễn</button></div>`;
+    actCtx = {run: async () => {
+      if (norm(F.cf.value.trim()) !== "xoa") { toast("Gõ XOA để xác nhận"); F.cf.focus(); throw new Error("cf"); }
+      const btn = F.querySelector("[type=submit]"); btn.disabled = true; const prog = t => { $("#pgProg").textContent = t; };
+      try { const now = new Date().toISOString();
+        prog("Đang hoàn lại kho…");
+        for (const z of P.stBack) { const c = Object.assign({}, z, {status: "in", returnedAt: now, returnNote: `Xóa ${P.code} (phiếu test)`}); delete c.orderCode; delete c.outAt; delete c.customer; await put("st", c); }
+        for (const m of P.mv) await delDoc("mv", m.id);
+        prog("Đang xóa sổ bảo hành, ảnh, chi phí…");
+        for (const r of P.regDel) await delDoc("reg", r.id);
+        for (const r of P.regFix) { const c = Object.assign({}, r, {updatedAt: now}); delete c.replacedBy; await put("reg", c); }
+        for (const ph of P.ph) { try { await delDoc("ph", ph); } catch(err){} }
+        for (const ex of P.ex) await delDoc("ex", ex.id);
+        await delDoc(kind, x.id);
+      } catch(err){ btn.disabled = false; prog("Có lỗi khi xóa – bấm lại để xóa tiếp"); throw err; }
+    }, after: () => { toast(`Đã xóa vĩnh viễn ${kind === "tk" ? "phiếu" : "đơn"} ${P.code}`); renderAll(); }};
+    open("actBg");
+  }
+
   /* ================= BẢO HÀNH ================= */
+  // phiếu trùng seri: các phiếu đã nhận trước đó cho cùng số seri (mới nhất trước)
+  const dupTickets = sn => { const k = keySN(sn); if (!k || k.length < 4) return [];
+    return tickets.filter(t => keySN(t.serial) === k || (t.exchange && keySN(t.exchange.newSerial) === k)).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))); };
+  function dupBox(sn){
+    const L = dupTickets(sn); if (!L.length) return "";
+    const td = iso(new Date()), open = L.filter(t => !CLOSED.includes(t.stage)), sameDay = L.filter(t => String(t.createdAt || "").slice(0, 10) === td || iso(new Date(t.createdAt)) === td);
+    const row = t => `<div style="margin-top:4px">• <b>${esc(t.code)}</b> – nhận ngày <b>${fmtTime(t.createdAt)}</b> · ${esc(t.customer)} · ${esc(TYPE[t.type] || "")} · <b>${esc(STAGES[t.stage]?.label || t.stage)}</b></div>`;
+    const bad = sameDay.length || open.length;
+    return `<div class="reason" style="margin-top:8px;${bad ? "background:var(--badbg);color:var(--bad)" : ""}"><b>${sameDay.length ? `⛔ HÔM NAY đã nhập ${sameDay.length} phiếu cho seri này – rất có thể trùng phiếu!` : open.length ? "⚠️ Seri này ĐANG có phiếu chưa xong – kiểm tra kẻo tạo trùng" : "ℹ️ Seri này từng nhận bảo hành / sửa chữa"}</b>${L.slice(0, 5).map(row).join("")}${L.length > 5 ? `<div class="sub">… và ${L.length - 5} phiếu cũ hơn</div>` : ""}</div>`;
+  }
   const F = $("#recvForm");
   function refreshRecv(){
     const sn = F.serial.value.trim(), r = findReg(sn);
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
     $("#foundBox").innerHTML = r ? `<div class="found">${r.fromFile ? "📄 Có trong sổ bảo hành (file thống kê)" : "✔ Seri đã có trong hệ thống"}: ${esc(r.product)} – ${esc(r.customer)}${r.fromFile ? `${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.fileNote ? " · " + esc(r.fileNote) : ""}${r.purchaseDate ? "" : " · <b>file không ghi ngày</b>"}${r.fileHist ? `<br><span style="font-size:12px">Lịch sử: ${esc(r.fileHist)}</span>` : ""}<br>` : ""}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
+    $("#foundBox").innerHTML += dupBox(sn);
     const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
     $("#foundBox").innerHTML += own.length ? `<div class="found">🔄 Máy này đã đổi cho chính khách ${esc(own[0].customer)} ngày ${fmt(own[0].date)} (SN ${esc(own[0].oldSn)} → ${esc(own[0].newSn)})</div>` : "";
     $("#foundBox").innerHTML += hitBox(exHitsFor(sn, F.customer.value), "Vẫn lưu được – phiếu sẽ chuyển <b>Kho duyệt</b> trước khi xử lý.");
@@ -1317,6 +1392,9 @@
     if (!recvType) return;
     const more = e.submitter && e.submitter.id === "recvMore";
     const issue = F.issue.value.trim(); if (!issue) { toast("Hãy nhập mô tả lỗi"); F.issue.focus(); return; }
+    { const L = dupTickets(F.serial.value), td = iso(new Date()), same = L.filter(t => iso(new Date(t.createdAt)) === td), op = L.filter(t => !CLOSED.includes(t.stage));
+      const show = same.length ? same : op;
+      if (show.length && !confirm(`${same.length ? "⛔ HÔM NAY đã nhập phiếu cho seri này" : "⚠️ Seri này đang có phiếu chưa xong"}:\n${show.slice(0, 3).map(t => `• ${t.code} – nhận ${fmtTime(t.createdAt)} – ${t.customer} – ${STAGES[t.stage]?.label || t.stage}`).join("\n")}\n\nVẫn tạo thêm phiếu mới? (Bấm Hủy nếu là phiếu trùng)`)) return; }
     const r = findReg(F.serial.value);
     const base = {customer:F.customer.value.trim(), phone:F.phone.value.trim(), product:F.product.value.trim(), serial:F.serial.value.trim()};
     let pd = "", mo = "";
@@ -2533,6 +2611,8 @@
         try { if (o.exportedAt && !isWh()) await requestCancel(o, why); else await cancelOrder(o, why); close("detailBg"); } catch(e){ $("#cxOk").disabled = false; toast("Lưu thất bại, thử lại"); }
       };
     }
+    if (boss) { $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="oPurge" style="color:var(--bad);border-color:var(--bad)">🗑 Xóa vĩnh viễn đơn (đơn test / nhập nhầm)</button></div>`);
+      $("#oPurge").onclick = () => { close("detailBg"); openPurge("od", o.id); }; }
     open("detailBg");
   }
   // ---- Bảng tra tồn kho (đầu tab Bán hàng): Tên sản phẩm · Tồn kho · Link ----
