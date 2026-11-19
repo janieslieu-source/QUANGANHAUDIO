@@ -1191,7 +1191,7 @@
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
-      ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
+      ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "cong_no" && t.pay.total ? ` <span class="sub">(tổng ${money(t.pay.total)}${t.pay.advance ? ` – tạm ứng ${money(t.pay.advance)}` : ""})</span>` : ""}${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(t)}${exLine(t.code)}
       <div class="sub" style="margin-top:4px">${esc(t.code)} · nhận ${fmt(t.createdAt)} ${isLate(t) ? `<b style="color:var(--bad)">(🚨 tồn ${daysSince(t.createdAt)} ngày)</b>` : `(${daysSince(t.createdAt)} ngày)`}</div>
       ${btns || ""}
@@ -2529,7 +2529,7 @@
       <div style="margin-top:6px;font-size:14px">${(o.lines||[]).map((l,i) => `• ${l.gift ? '<span class="tag gift">🎁 Tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "hàng tặng" : l.months ? l.months + " tháng BH" : "không BH"})</span>${snOf(o,i).length || (l.photos || []).length ? `<div class="sub" style="margin-left:12px">${snOf(o,i).length ? "SN: " + snOf(o,i).map(esc).join(", ") : ""} ${photoBtn(l.photos, "Seri – " + l.product)}</div>` : ""}`).join("<br>")}</div>
       <div class="sub" style="margin-top:4px">🚚 ${OSHIP[o.ship?.method] || ""}${o.ship?.carrier ? " " + esc(o.ship.carrier) : ""}${o.ship?.tracking ? " · MVĐ " + esc(o.ship.tracking) : ""}${o.ship?.date ? " · <b>gửi " + fmt(o.ship.date) + "</b>" : ""}${o.exportedAt ? " · xuất kho " + fmtTime(o.exportedAt) : ""}</div>
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
-      ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
+      ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "cong_no" && o.pay.total ? ` <span class="sub">(tổng ${money(o.pay.total)}${o.pay.advance ? ` – tạm ứng ${money(o.pay.advance)}` : ""})</span>` : ""}${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(o)}${exLine(o.code)}
       ${btns || ""}</div>`;
   }
@@ -4467,6 +4467,10 @@
         <button type="button" class="opt" data-ps="da_tt"><span class="ic">✅</span>Đã thanh toán</button>
       </div>
       <div id="payWrap" class="hide">
+        <div id="debtCalc" class="hide"><div class="two">
+          <div><label>Tổng công nợ (đ)</label><input name="ptotal" inputmode="numeric" value="${p.total != null ? Number(p.total).toLocaleString("vi-VN") : ""}" placeholder="Tổng tiền đơn"></div>
+          <div><label>Khách tạm ứng (đ)</label><input name="padv" inputmode="numeric" value="${p.advance ? Number(p.advance).toLocaleString("vi-VN") : ""}" placeholder="0"></div></div>
+          <div class="sub" id="advInfo" style="margin-top:4px">Gõ tổng tiền và số tiền khách đã tạm ứng – app tự tính số còn nợ.</div></div>
         <label id="amtLbl">Số tiền thanh toán (đ) *</label>
         <input name="amount" inputmode="numeric" value="${p.amount != null ? Number(p.amount).toLocaleString("vi-VN") : ""}" placeholder="VD: 350.000">
         <div class="sub" id="amtWords"></div>
@@ -4480,10 +4484,18 @@
       </div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="payOk" disabled>Lưu</button></div>`;
     const amt = () => Number(String(F4.amount.value).replace(/[^\d]/g, "")) || 0;
+    const numOf = el => Number(String(el.value).replace(/[^\d]/g, "")) || 0;
+    // tổng công nợ – tạm ứng = còn nợ (tự điền vào ô số tiền còn nợ)
+    const calcDebt = () => { if (payStatus !== "cong_no") return; const tot = numOf(F4.ptotal), adv = numOf(F4.padv);
+      if (!F4.ptotal.value.trim()) { $("#advInfo").innerHTML = "Gõ tổng tiền và số tiền khách đã tạm ứng – app tự tính số còn nợ."; return; }
+      const left = Math.max(0, tot - adv); F4.amount.value = left.toLocaleString("vi-VN");
+      $("#advInfo").innerHTML = `Tổng <b>${money(tot)}</b> – tạm ứng <b>${money(adv)}</b> = còn nợ <b style="color:var(--bad)">${money(left)}</b>` + (adv > tot ? ` <b style="color:var(--bad)">· tạm ứng nhiều hơn tổng tiền</b>` : adv && adv >= tot ? ` · <b style="color:var(--ok)">khách đã trả đủ – nên chọn “Đã thanh toán”</b>` : ""); };
+    [F4.ptotal, F4.padv].forEach(el => el.addEventListener("input", () => { el.value = el.value.trim() === "" ? "" : numOf(el).toLocaleString("vi-VN"); calcDebt(); sync(); }));
     const sync = () => {
       F4.querySelectorAll(".opt").forEach(o => o.classList.toggle("sel", o.dataset.ps === payStatus));
       $("#payWrap").classList.toggle("hide", !payStatus);
       $("#paidF").classList.toggle("hide", payStatus !== "da_tt");
+      $("#debtCalc").classList.toggle("hide", payStatus !== "cong_no");
       $("#amtLbl").textContent = payStatus === "cong_no" ? "Số tiền khách còn nợ (đ) *" : "Số tiền thanh toán (đ) *";
       $("#amtWords").textContent = F4.amount.value ? "= " + money(amt()) : "";
       $("#payOk").disabled = !payStatus;
@@ -4493,15 +4505,18 @@
       const n = amt(); const pos = F4.amount.value.length;
       F4.amount.value = F4.amount.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); sync();
     });
-    F4.querySelectorAll(".opt").forEach(o => o.onclick = () => { payStatus = o.dataset.ps; sync(); setTimeout(() => F4.amount.focus(), 50); });
+    F4.querySelectorAll(".opt").forEach(o => o.onclick = () => { payStatus = o.dataset.ps; calcDebt(); sync(); setTimeout(() => (payStatus === "cong_no" && !F4.ptotal.value ? F4.ptotal : F4.amount).focus(), 50); });
+    calcDebt();
     sync();
     actCtx = {run: async () => {
       if (F4.amount.value.trim() === "") { toast("Hãy nhập số tiền (nhập 0 nếu miễn phí)"); F4.amount.focus(); throw new Error("x"); }
       const pay = {status: payStatus, amount: amt(), note: F4.pnote.value.trim(), at: new Date().toISOString(),
         paidDate: payStatus === "da_tt" ? F4.paidDate.value : "", method: payStatus === "da_tt" ? F4.method.value : ""};
+      if (payStatus === "cong_no" && F4.ptotal.value.trim()) { pay.total = numOf(F4.ptotal); pay.advance = numOf(F4.padv);
+        if (pay.advance > pay.total) { toast("Số tiền tạm ứng lớn hơn tổng công nợ – kiểm tra lại"); F4.padv.focus(); throw new Error("x"); } }
       if (t.pay && t.pay.status === "cong_no") pay.debtSince = t.pay.debtSince || t.pay.at;
       else if (t.pay && t.pay.debtSince) pay.debtSince = t.pay.debtSince;   // sửa phiếu đã thu: giữ ngày bắt đầu nợ cũ
-      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
+      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}${pay.total ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
       if (edit) {
         if (payStatus === p.status && pay.amount === Number(p.amount) && pay.paidDate === (p.paidDate || "") && pay.method === (p.method || "") && pay.note === (p.note || "")) { toast("Chưa thay đổi gì"); throw new Error("x"); }
         note = `✏️ Sửa chi phí: ${PAY[p.status] || ""} ${money(p.amount)} → ${PAY[payStatus]} ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
