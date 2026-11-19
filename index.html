@@ -363,10 +363,10 @@
         <div class="list" id="gdPayList"></div></div>
       <div class="panel" id="gdDebtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ còn sót</h3><b id="gdDebtSum" style="color:var(--bad)"></b></div>
         <div id="gdDebtBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📄 PDF công nợ còn sót</button></div>
+        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📊 Excel công nợ còn sót</button></div>
         <div class="row" style="align-items:center;margin-top:12px;gap:8px"><b style="font-size:14px">📊 Công nợ trong tuần</b><input type="date" id="gdWkDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="sub" style="margin-top:4px">Chọn 1 ngày bất kỳ trong tuần (Thứ 2 → Chủ nhật): nợ mới, đã thu, còn nợ cuối tuần theo từng khách.</div>
-        <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📄 Lưu file PDF công nợ tuần</button></div></div>
+        <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📊 Lưu file Excel công nợ tuần</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
       <div id="gdStats"></div>
     </section>
@@ -429,7 +429,7 @@
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
         <input type="date" id="whDay" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="whSum" style="margin-top:10px"></div>
-        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button><button class="btn okb" id="xlsWh">📊 Excel xuất kho trong ngày</button></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn okb" id="xlsWh">📊 Excel xuất kho trong ngày</button></div>
         <div class="sub" style="margin-top:6px">File Excel: mỗi số seri 1 dòng – ngày giờ xuất, mã đơn, khách hàng, SĐT, sản phẩm, số seri, số tháng bảo hành, <b>hạn bảo hành đến ngày</b>, cách gửi hàng.</div></div>
       <div class="panel" data-w="ton" id="nhapBox"><h3>➕ Nhập hàng mới</h3>
         <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri – app tự đọc số seri</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
@@ -457,7 +457,7 @@
         <div class="two" id="rpOne"><div><label style="margin-top:0">Chọn ngày</label><input type="date" id="rpDate"></div><div><label style="margin-top:0">Tìm sản phẩm</label><input id="rpQ" type="search" placeholder="Tên / mã hàng…"></div></div>
         <div class="two hide" id="rpTwo"><div><label style="margin-top:6px">Từ ngày</label><input type="date" id="rpFrom"></div><div><label style="margin-top:6px">Đến ngày</label><input type="date" id="rpTo"></div></div>
         <div id="rpBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="rpFile">📄 Tải báo cáo PDF</button></div></div>
+        <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
       <div class="panel" data-w="ngoai"><h3>🧩 Danh mục linh kiện ngoài</h3>
         <div class="sub" style="margin-bottom:8px">Linh kiện <b>không có tên trong kho chính</b> (mua ngoài). Kỹ thuật dùng loại nào thì tự trừ vào danh mục này, không ảnh hưởng tồn kho chính.</div>
         <div class="two"><div><label style="margin-top:0">Tên linh kiện</label><input id="lknN" list="lknList" autocomplete="off" placeholder="VD: Tụ 2200uF 50V"></div>
@@ -472,7 +472,7 @@
         <div class="seg" id="thSeg"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button><button data-m="all">Tất cả</button></div>
         <div class="two"><div><label style="margin-top:0">Chọn ngày</label><input type="date" id="thDate"></div><div><label style="margin-top:0">Tìm</label><input id="thQ" type="search" placeholder="Linh kiện, máy, seri…"></div></div>
         <div id="thBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="thFile">📄 Tải file PDF</button></div></div>
+        <div class="btns"><button class="btn" id="thFile">📊 Tải file Excel</button></div></div>
     </section>
 
     <!-- ===== KẾ TOÁN ===== -->
@@ -484,16 +484,16 @@
       <div class="panel" id="debtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ</h3><b id="debtSum" style="color:var(--bad)"></b></div>
         <div style="margin:10px 0"><input id="acQ" type="search" placeholder="Tìm khách, SĐT, seri, mã phiếu…" autocomplete="off"></div>
         <div class="list" id="debtList"></div>
-        <div class="btns"><button class="btn" id="fileDebt">📄 PDF công nợ</button></div></div>
+        <div class="btns"><button class="btn" id="fileDebt">📊 Excel công nợ</button></div></div>
       <div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">✅ Đã thanh toán</h3>
         <input type="month" id="acMonth" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="stats" style="grid-template-columns:repeat(2,1fr);margin:10px 0"><div class="stat c-ok"><b id="paidSum">0</b><span>Đã thu trong tháng</span></div><div class="stat"><b id="paidCnt">0</b><span>Số phiếu</span></div></div>
         <div class="list" id="paidList"></div>
-        <div class="btns"><button class="btn" id="filePaid">📄 PDF thanh toán tháng</button></div></div>
+        <div class="btns"><button class="btn" id="filePaid">📊 Excel thanh toán tháng</button></div></div>
       <div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Công nợ theo tuần</h3>
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
-        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📄 PDF tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📄 PDF tuần – tất cả</button></div></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
     </section>
 
     <!-- ===== KỸ THUẬT ===== -->
@@ -1152,7 +1152,7 @@
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
       ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canWaitLk(t) ? `<button class="btn" id="dLkWait">⏳ Chờ linh kiện</button>` : ""}${t.stage === "cho_lk" && canKtFail(t) ? `<button class="btn okb" id="dLkOk">✅ Linh kiện đã về</button>` : ""}${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
       ${t.stage === "huy" && t.cancel ? `<div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">❌ Đã hủy phiếu – ${esc(t.cancel.by)} · ${fmtTime(t.cancel.at)}<br>Lý do: ${esc(t.cancel.reason)}</div>` : ""}
-      <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📊 Xuất Excel</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
     if (canEditPay(t)) $("#dPayEdit").onclick = () => { close("detailBg"); detailId = null; openPay(t.id, null, true); };
     if (canWaitLk(t)) $("#dLkWait").onclick = () => { close("detailBg"); detailId = null; openWaitLk(t.id); };
@@ -1460,7 +1460,7 @@
       <div class="panel"><h3>Hàng theo giai đoạn</h3>${hbars(Object.keys(STAGES).map(k => [STAGES[k].label, c(k)]))}</div>
       ${Object.keys(prod).length ? `<div class="panel"><h3>Sản phẩm nhận nhiều nhất</h3>${hbars(Object.entries(prod).sort((a,b) => b[1]-a[1]).slice(0,5))}</div>` : ""}
       ${Object.keys(parts).length ? `<div class="panel"><h3>Linh kiện thay nhiều nhất</h3>${hbars(Object.entries(parts).sort((a,b) => b[1]-a[1]).slice(0,5))}</div>` : ""}
-      <div class="panel"><div class="row"><h3>Tất cả phiếu gần đây</h3><span><button class="link" id="gdPdf">📄 PDF</button> <button class="link" id="copyCsv">Sao chép CSV</button></span></div>
+      <div class="panel"><div class="row"><h3>Tất cả phiếu gần đây</h3><span><button class="link" id="gdPdf">📊 Excel</button> <button class="link" id="copyCsv">Sao chép CSV</button></span></div>
         <div class="list" id="gdAll">${all.length ? all.map(t => tkCard(t)).join("") : `<div class="empty">Chưa có phiếu.</div>`}</div></div>`;
     bindCards($("#gdAll"));
     $("#gdMonth").onchange = e => { gdMonth = e.target.value || iso(new Date()).slice(0,7); renderGD(); };
@@ -1514,10 +1514,10 @@
         <table class="ptable"><tr><th>Sản phẩm</th><th style="text-align:left;width:auto">Seri cũ → mới</th><th>BH đến</th></tr>${ex.map(t => `<tr><td>${esc(t.product)}</td><td style="text-align:left">${esc(t.exchange.oldSerial)} → <b>${esc(t.exchange.newSerial)}</b></td><td>${fmt(t.exchange.until)}</td></tr>`).join("")}</table>` : ""; })()}
       ${partsTable(sc, "Sửa chữa", "sc")}
       <div class="btns" style="flex-wrap:wrap">
-        <button class="btn okb" id="fileBH">📄 PDF linh kiện BẢO HÀNH</button>
-        <button class="btn pri" id="fileSC">📄 PDF hàng SỬA CHỮA</button>
+        <button class="btn okb" id="fileBH">📊 Excel linh kiện BẢO HÀNH</button>
+        <button class="btn pri" id="fileSC">📊 Excel hàng SỬA CHỮA</button>
       </div>
-      <div class="sub" style="margin-top:6px">File PDF theo mẫu báo cáo, mỗi dòng 1 linh kiện, cuối có bảng tổng hợp – dùng để đối chiếu, đòi bảo hành với nhà cung cấp.</div>
+      <div class="sub" style="margin-top:6px">File Excel theo mẫu báo cáo, mỗi dòng 1 linh kiện, trang 2 là bảng tổng hợp – dùng để đối chiếu, đòi bảo hành với nhà cung cấp.</div>
     </div>`;
   }
   async function exportParts(type){
@@ -1887,7 +1887,7 @@
     if (q) rows = rows.filter(t => norm([t.code,t.serial,t.customer,t.phone,t.product,t.lines ? orderSummary(t) : "",t.ship?.carrier,t.ship?.tracking].join(" ")).includes(q));
     rows.sort((a,b) => (b.ship?.date||"").localeCompare(a.ship?.date||"") || (b.updatedAt||"").localeCompare(a.updatedAt||""));
     rows = rows.slice(0, 50);
-    $("#vcDone").innerHTML = rows.length ? rows.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pdf="${esc(t.id)}">📄 Xuất PDF</button></div>`)).join("")
+    $("#vcDone").innerHTML = rows.length ? rows.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pdf="${esc(t.id)}">📊 Xuất Excel</button></div>`)).join("")
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng đã gửi."}</div>`;
     bindAny($("#vcDone"));
     $("#vcDone").querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => exportPdf(findAny(b.dataset.pdf)));
@@ -1933,7 +1933,7 @@
         <label>${isOd ? "Ngày gửi hàng *" : "Ngày trả lại khách *"}</label><input name="date" type="date" value="${iso(new Date())}">
         <label>Ghi chú</label><textarea name="snote"></textarea>
       </div>
-      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="shipOk" disabled>Lưu & xuất PDF</button></div>`;
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="shipOk" disabled>Lưu & xuất Excel</button></div>`;
     const sync = () => {
       F3.querySelectorAll(".opt").forEach(o => o.classList.toggle("sel", o.dataset.m === shipMethod));
       $("#shipWrap").classList.toggle("hide", !shipMethod);
@@ -1956,7 +1956,7 @@
       let c;
       if (isOd) c = await advanceOrder(t, "cho_tt", note, {ship});
       else { c = push(t, "cho_tt", note, {ship}); await put("tk", c); sendPush(c); }
-      toast("Đã lưu – đang tạo PDF…");
+      toast("Đã lưu – đang tạo file Excel…");
       setTimeout(() => exportPdf(c), 300);
     }, after: () => setTimeout(() => { acGroup = isOd ? "od" : "tk"; goTo("ac", isOd ? `Vận chuyển đã gửi đơn ${t.code} (${t.customer}). Kế toán nhập mật mã để ghi nhận thanh toán.` : `Vận chuyển đã gửi: ${t.product} (SN ${t.serial}). Kế toán nhập mật mã để ghi nhận thanh toán.`); }, 600)};
     open("actBg");
@@ -2177,7 +2177,7 @@
         <div class="btns"><button class="btn danger" id="cxOk">✔ ${o.exportedAt ? (isWh() ? "Kho đồng ý – hàng đã về kho" : "Gửi Kho duyệt") : "Xác nhận hủy đơn"}</button></div></div>` : ""}
       ${o.stage === "cho_huy" ? `<div style="margin-top:12px;padding:10px;border:1px solid var(--bad);border-radius:10px"><b>↩️ Chờ Kho duyệt trả lại kho</b><div class="sub">${esc(o.cancelReq?.by || "")} · ${fmtTime(o.cancelReq?.at)} – ${esc(o.cancelReq?.reason || "")}</div>
         ${isWh() ? `<div class="btns"><button class="btn pri" id="cxApprove">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" id="cxReject">✖ Không duyệt</button></div>` : `<div class="sub">Kho bấm “Đồng ý” thì tồn kho tự cộng lại.</div>`}</div>` : ""}
-      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📄 Phiếu giao hàng PDF</button>` : ""}${canReportPaid(o) ? `<button class="btn okb" id="oPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(o) ? `<button class="btn" id="oPayEdit">✏️ Sửa chi phí</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📊 Phiếu giao hàng Excel</button>` : ""}${canReportPaid(o) ? `<button class="btn okb" id="oPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(o) ? `<button class="btn" id="oPayEdit">✏️ Sửa chi phí</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (o.ship?.date && o.stage !== "huy") $("#oPdf").onclick = () => exportPdf(o);
     if (canEditPay(o)) $("#oPayEdit").onclick = () => { close("detailBg"); openPay(o.id, null, true); };
     if (canReportPaid(o)) $("#oPaidReq").onclick = () => { close("detailBg"); openPaidReq(o.id); };
@@ -2327,7 +2327,7 @@
     } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
     finally { b.disabled = false; }
   };
-  $("#fileWh").onclick = async () => {
+  if ($("#fileWh")) $("#fileWh").onclick = async () => {
     const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned);
     const rows = [];
     done.forEach(o => (o.lines||[]).forEach((l,i) => rows.push([o.code, fmtTime(o.exportedAt).slice(0, 5), o.customer, (l.gift ? "🎁 " : "") + l.product, l.qty, l.gift ? "Tặng" : (l.months ? l.months + " th" : "Không"), snOf(o,i).join(", "), `${OSHIP[o.ship?.method]||""} ${o.ship?.carrier||""}`.trim()])));
@@ -3237,7 +3237,7 @@
         ${rows.map(([k,v]) => `<tr><td>${esc(k)}${v.oldest >= DEBT_DAYS ? ` <span class="sub" style="color:var(--bad)">⏰ ${v.oldest} ngày</span>` : ""}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : `<div class="sub" style="margin-top:8px">Không có công nợ trong tuần này.</div>`}`;
   }
   $("#dwDate").addEventListener("change", drawWeekDebt);
-  // File PDF công nợ trong tuần (mẫu báo cáo chung): list = phiếu/đơn cần tính, day = 1 ngày bất kỳ trong tuần
+  // File Excel công nợ trong tuần (mẫu báo cáo chung): list = phiếu/đơn cần tính, day = 1 ngày bất kỳ trong tuần
   function weekDebtPdf(list, day, groupLabel, tag){
     const {label, arose, collected, openEnd, sum, byCus} = weekDebt(list, day), {s: ws} = weekRange(day);
     const gdTxt = x => x.pay?.gd === "ok" ? "Đã duyệt" : x.pay?.gd === "cho" ? "Chờ duyệt" : x.pay?.gd === "tra" ? "Xem lại" : "";
@@ -3269,124 +3269,105 @@
       rows, foot: ["TỔNG CỘNG", "", "", "", "", "", "", vnd(total)]});
   }
 
-  /* ---------- MẪU BÁO CÁO PDF dùng chung cho mọi file trích xuất ---------- */
+  /* ---------- MẪU BÁO CÁO EXCEL dùng chung cho mọi file trích xuất ---------- */
   const COMPANY = "QUANG ANH AUDIO";
-  // o = {file, title, period, head:[{t, r:canh-phải, w:độ-rộng}], rows:[[...]], foot:[...], summary:[[nhãn, giá trị]], extra: html, sign:[...], landscape}
+  const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  // "1.234.567" / "-12" -> số (chỉ dùng cho cột số tiền / số lượng)
+  const toNum = v => { if (typeof v === "number") return v; const t = String(v ?? "").trim(); return /^-?\d{1,3}(\.\d{3})+$|^-?\d+$/.test(t) ? Number(t.replace(/\./g, "")) : v; };
+  const sheetName = t => String(t || "Báo cáo").replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 31);
+  const colWidths = aoa => { const w = []; aoa.forEach((r, i) => i > 4 || r.length > 2 ? r.forEach((v, j) => { const n = String(v ?? "").length; w[j] = Math.min(50, Math.max(w[j] || 6, n + 2)); }) : 0); return w.map(x => ({wch: x || 8})); };
+  let pdfBusy = false;   // (tên cũ) – đang tạo file
+  // o = {file, title, period, head:[{t, r:cột-số}], rows:[[...]], foot:[...], summary:[[nhãn, giá trị]], extra:{title, head, rows}, sign:[...]}
   async function exportReportPdf(o){
     if (pdfBusy) return; pdfBusy = true;
-    const stage = $("#pdfStage"), keep = stage.getAttribute("style") || "";
     try {
-      toast("Đang tạo PDF…");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-      const L = !!o.landscape, W = L ? 1123 : 794, H = L ? 794 : 1123, LIM = H - 70;
-      stage.setAttribute("style", `width:${W}px;padding:34px 40px;font-size:${L ? 11 : 12}px;line-height:1.4`);
-      const printed = fmtTime(new Date().toISOString());
-      const head1 = `<div class="rph"><div><div class="rpco">${COMPANY}</div><div class="sub2">Phần mềm quản lý bảo hành</div></div><div class="rpr">Ngày in: ${printed}<br>Người in: ${esc(role ? actor() : "")}</div></div>
-        <div class="rpt1">${esc(o.title)}</div>${o.period ? `<div class="rpp">${esc(o.period)}</div>` : ""}
-        ${o.summary && o.summary.length ? `<div class="rpsum">${o.summary.map(([k,v]) => `<div><b>${v}</b><span>${esc(k)}</span></div>`).join("")}</div>` : ""}`;
-      const headN = `<div class="rph rph2"><div class="rpco">${COMPANY}</div><div class="rpr">${esc(o.title)}${o.period ? " · " + esc(o.period) : ""}</div></div>`;
-      const thead = `<thead><tr><th style="width:28px">#</th>${o.head.map(h => `<th style="${h.w ? "width:" + h.w + "px;" : ""}${h.r ? "text-align:right" : ""}">${esc(h.t)}</th>`).join("")}</tr></thead>`;
-      const rowH = (r, i) => `<tr><td class="c">${i + 1}</td>${r.map((v, j) => `<td style="${o.head[j]?.r ? "text-align:right;white-space:nowrap" : ""}">${v == null ? "" : esc(String(v))}</td>`).join("")}</tr>`;
-      const footH = o.foot ? `<tfoot><tr><td></td>${o.foot.map((v, j) => `<td style="${o.head[j]?.r ? "text-align:right;white-space:nowrap" : ""}"><b>${v == null ? "" : esc(String(v))}</b></td>`).join("")}</tr></tfoot>` : "";
-      const signs = o.sign || ["Người lập biểu", "Kế toán", "Giám đốc"];
-      const tail = `${o.extra || ""}<div class="rpsign">${signs.map(x => `<div><b>${esc(x)}</b><i>(Ký, ghi rõ họ tên)</i></div>`).join("")}</div>`;
-      // chia trang theo chiều cao thực tế
-      const pages = []; let i = 0;
-      do {
-        stage.innerHTML = `${pages.length ? headN : head1}<table class="rptab">${thead}<tbody></tbody></table>`;
-        const tb = stage.querySelector("tbody"); let added = 0;
-        while (i < o.rows.length) { tb.insertAdjacentHTML("beforeend", rowH(o.rows[i], i)); if (stage.scrollHeight > LIM && added) { tb.lastElementChild.remove(); break; } i++; added++; }
-        if (!o.rows.length) tb.innerHTML = `<tr><td colspan="${o.head.length + 1}" class="c">Không có dữ liệu trong kỳ</td></tr>`;
-        if (i >= o.rows.length) {
-          stage.querySelector("table").insertAdjacentHTML("beforeend", footH);
-          stage.insertAdjacentHTML("beforeend", tail);
-          if (stage.scrollHeight > LIM && added) {   // phần tổng + ký tên sang trang mới
-            stage.querySelector("tfoot")?.remove(); stage.querySelectorAll(".rpsign, .rpextra").forEach(x => x.remove());
-            pages.push(stage.innerHTML);
-            stage.innerHTML = `${headN}${o.foot ? `<table class="rptab">${thead}${footH}</table>` : ""}${tail}`;
-          }
-        }
-        pages.push(stage.innerHTML);
-      } while (i < o.rows.length);
-      const pdf = new window.jspdf.jsPDF({orientation: L ? "l" : "p", unit: "mm", format: "a4"});
-      const PW = L ? 297 : 210, PH = L ? 210 : 297;
-      for (let k = 0; k < pages.length; k++) {
-        stage.style.height = H + "px"; stage.style.position = "fixed"; stage.style.left = "-10000px"; stage.style.background = "#fff"; stage.style.color = "#111";
-        stage.innerHTML = pages[k] + `<div class="rpfoot">${COMPANY} · ${esc(o.title)} · Trang ${k + 1}/${pages.length}</div>`;
-        const canvas = await window.html2canvas(stage, {scale: 2, backgroundColor: "#ffffff", width: W, height: H});
-        if (k) pdf.addPage();
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, PW, PH);
+      toast("Đang tạo file Excel…");
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, N = o.head.length + 1;
+      const isNum = j => !!o.head[j]?.r;
+      const aoa = [[COMPANY + " – " + String(o.title || "").toUpperCase()], [o.period || ""], [`Ngày in: ${fmtTime(new Date().toISOString())} · Người in: ${role ? actor() : ""}`]];
+      (o.summary || []).forEach(([k, v]) => aoa.push([k, toNum(String(v).replace(/\s*đ$/, ""))]));
+      aoa.push([]);
+      const headRow = aoa.length;
+      aoa.push(["STT", ...o.head.map(h => h.t)]);
+      if (!o.rows.length) aoa.push(["", "Không có dữ liệu trong kỳ"]);
+      o.rows.forEach((r, i) => aoa.push([i + 1, ...r.map((v, j) => isNum(j) ? toNum(v) : (v ?? ""))]));
+      const lastData = aoa.length - 1;
+      if (o.foot) aoa.push(["", ...o.foot.map((v, j) => isNum(j) ? toNum(v) : (v ?? ""))]);
+      const ws = X.utils.aoa_to_sheet(aoa);
+      // định dạng số có dấu chấm nghìn
+      for (let r = headRow + 1; r < aoa.length; r++) for (let c = 1; c < N; c++) { const cell = ws[X.utils.encode_cell({r, c})]; if (cell && typeof cell.v === "number" && isNum(c - 1)) cell.z = "#,##0"; }
+      for (let r = 3; r < headRow; r++) { const cell = ws[X.utils.encode_cell({r, c: 1})]; if (cell && typeof cell.v === "number") cell.z = "#,##0"; }
+      ws["!cols"] = colWidths(aoa);
+      ws["!merges"] = [0, 1, 2].map(r => ({s: {r, c: 0}, e: {r, c: Math.max(1, N - 1)}}));
+      if (o.rows.length) ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: headRow, c: 0}, e: {r: lastData, c: N - 1}})};
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, sheetName(o.title));
+      const ex = o.extra && o.extra.rows && o.extra.rows.length ? o.extra : null;
+      if (ex) {
+        const a2 = [[ex.title], [], ex.head, ...ex.rows.map(r => r.map((v, j) => j ? toNum(v) : v))];
+        const w2 = X.utils.aoa_to_sheet(a2); w2["!cols"] = colWidths(a2);
+        for (let r = 3; r < a2.length; r++) for (let c = 1; c < ex.head.length; c++) { const cell = w2[X.utils.encode_cell({r, c})]; if (cell && typeof cell.v === "number") cell.z = "#,##0"; }
+        X.utils.book_append_sheet(wb, w2, sheetName(ex.title));
       }
-      stage.innerHTML = "";
-      await saveBlob(o.file + ".pdf", pdf.output("blob"), "Đã lưu file PDF");
-    } catch(e){ toast("Không tạo được PDF, kiểm tra mạng và thử lại"); }
-    finally { stage.setAttribute("style", keep); stage.innerHTML = ""; pdfBusy = false; }
+      const out = X.write(wb, {bookType: "xlsx", type: "array"});
+      await saveBlob(o.file + ".xlsx", new Blob([out], {type: XLSX_MIME}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+    finally { pdfBusy = false; }
   }
   const vnd = n => (Number(n) || 0).toLocaleString("vi-VN");
-  const extraTable = (title, head, rows) => rows.length ? `<div class="rpextra"><h4>${esc(title)}</h4><table class="rptab"><thead><tr>${head.map((h, j) => `<th${j ? ' style="text-align:right"' : ""}>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((v, j) => `<td${j ? ' style="text-align:right"' : ""}>${esc(String(v))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : "";
+  // bảng phụ (trang thứ 2 trong file Excel)
+  const extraTable = (title, head, rows) => rows.length ? {title, head, rows} : null;
 
-  /* ---------- Xuất PDF ---------- */
+  /* ---------- Tải thư viện ---------- */
   const libs = {};
   function loadScript(src){
     return libs[src] || (libs[src] = new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => { delete libs[src]; no(new Error("load")); }; document.head.appendChild(s); }));
   }
-  function pdfHtml(t){
-    const rows = (pairs) => `<table>${pairs.filter(p => p[1]).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</table>`;
-    const s = t.ship || {};
-    return `<h1>PHIẾU GIAO TRẢ HÀNG ${t.type === "bh" ? "BẢO HÀNH" : "SỬA CHỮA"}</h1>
-      <p class="c">Mã phiếu: <b>${esc(t.code)}</b> · Ngày in: ${fmtTime(new Date().toISOString())}</p>
-      <h2>Khách hàng & sản phẩm</h2>
-      ${rows([["Khách hàng", esc(t.customer)],["Số điện thoại", esc(t.phone)],["Sản phẩm", esc(t.product)],["Số seri", esc(t.serial)],
-        ["Loại", TYPE[t.type]],["Thời hạn bảo hành", t.type === "bh" && t.purchaseDate ? `Mua ${fmt(t.purchaseDate)}, ${t.months} tháng (lúc nhận: ${esc(t.warrantyText)})` : ""],
-        ["Ngày tiếp nhận", fmt(t.createdAt)],["Lỗi khách báo", esc(t.issue)]])}
-      <h2>Kết quả xử lý</h2>
-      ${rows([["Tình trạng", t.ktFail ? "Kỹ thuật không sửa được – trả lại khách" : t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"],["Lý do không sửa được", t.ktFail ? esc(t.ktFail.reason) : ""],["Phương án", t.action ? ACTION[t.action] : ""],
-        ["Số seri cũ", t.exchange ? esc(t.exchange.oldSerial) : ""],["Số seri mới đổi", t.exchange ? `<b>${esc(t.exchange.newSerial)}</b>` : ""],
-        ["Bảo hành tiếp đến", t.exchange ? `<b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(bảo hành mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}` : ""],
-        ["Linh kiện thay", esc(t.parts)],["Kỹ thuật viên", esc(t.tech)],["Ghi chú kỹ thuật", esc(t.techNote)]])}
-      <h2>Vận chuyển trả khách</h2>
-      ${rows([["Hình thức", SHIP[s.method] || ""],[s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", esc(s.carrier)],[isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", esc(s.carrierPhone)],
-        [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", esc(s.tracking)],["Ngày trả lại khách", `<b>${fmt(s.date)}</b>`],["Ghi chú", esc(s.note)]])}
-      ${t.pay && !hidePrice() ? `<h2>Thanh toán</h2>${rows([["Tình trạng", `<b>${PAY[t.pay.status]}</b>`],["Số tiền", `<b>${money(t.pay.amount)}</b>`],["Hình thức", esc(t.pay.method)],["Ngày thanh toán", t.pay.paidDate ? fmt(t.pay.paidDate) : ""],["Ghi chú", esc(t.pay.note)]])}` : ""}
-      <h2>Quá trình xử lý</h2>
-      ${rows((t.history||[]).map(h => [fmtTime(h.at), `<b>${esc(STAGES[h.stage]?.label || h.stage)}</b> – ${esc(h.by)}${h.note ? "<br>" + esc(noteView(h.note)) : ""}`]))}
-      <div class="sig"><div><b>Bộ phận bảo hành</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Bên vận chuyển</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Khách hàng</b><i>(Ký, ghi rõ họ tên)</i></div></div>`;
+  /* ---------- Phiếu giao trả / phiếu giao hàng: file Excel ---------- */
+  function slipRows(t){
+    const R = [], sec = (title, pairs) => { const L = pairs.filter(p => p[1] !== "" && p[1] != null); if (L.length) { R.push([]); R.push([title]); L.forEach(p => R.push(p)); } };
+    const s = t.ship || {}, sv = (k) => [s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", s.carrier || ""];
+    const shipPairs = ok => [["Hình thức", (SHIP[s.method] || "").replace(/^🚨\s*/, "")], sv(), [isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", s.carrierPhone || ""], [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", s.tracking || ""], [ok, s.date ? fmt(s.date) : ""], ["Ghi chú", s.note || ""]];
+    const payPairs = p => p && !hidePrice() ? [["Tình trạng", PAY[p.status] || ""], ["Số tiền (đ)", Number(p.amount) || 0], ["Hình thức", p.method || ""], ["Ngày thanh toán", p.paidDate ? fmt(p.paidDate) : ""], ["Ghi chú", p.note || ""]] : [];
+    if (t.lines) {
+      R.push([COMPANY + " – PHIẾU GIAO HÀNG"], [`Mã đơn: ${t.code} · Ngày bán: ${fmt(t.saleDate)} · Ngày in: ${fmtTime(new Date().toISOString())}`]);
+      sec("KHÁCH HÀNG", [["Khách hàng", t.customer], ["Số điện thoại", t.phone || ""], ["Địa chỉ", t.address || ""], ["Ghi chú", t.note || ""]]);
+      R.push([], ["HÀNG HÓA"], ["Sản phẩm", "Số lượng", "Loại", "Bảo hành (tháng)", "Hạn bảo hành đến", "Số seri"]);
+      (t.lines || []).forEach((l, i) => { const m = l.gift ? 0 : Number(l.months) || 0;
+        R.push([l.product, Number(l.qty) || 0, l.gift ? "Hàng tặng" : "Hàng bán", l.gift ? "Tặng" : (m || "Không BH"), m && t.saleDate ? fmt(iso(expiry(t.saleDate, m))) : "", snOf(t, i).join(", ") || (l.snMode === "anh" ? "Đối chiếu bằng ảnh" : "")]); });
+      sec("VẬN CHUYỂN", shipPairs("Ngày gửi hàng"));
+      sec("THANH TOÁN", payPairs(t.pay));
+      R.push([], ["Bán hàng / Kho", "Bên vận chuyển", "Khách hàng"], ["(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)"]);
+      return R;
+    }
+    R.push([`${COMPANY} – PHIẾU GIAO TRẢ HÀNG ${t.type === "bh" ? "BẢO HÀNH" : "SỬA CHỮA"}`], [`Mã phiếu: ${t.code} · Ngày in: ${fmtTime(new Date().toISOString())}`]);
+    sec("KHÁCH HÀNG & SẢN PHẨM", [["Khách hàng", t.customer], ["Số điện thoại", t.phone || ""], ["Sản phẩm", t.product], ["Số seri", t.serial], ["Loại", TYPE[t.type]],
+      ["Thời hạn bảo hành", t.type === "bh" && t.purchaseDate ? `Mua ${fmt(t.purchaseDate)}, ${t.months} tháng (lúc nhận: ${t.warrantyText || ""})` : ""], ["Ngày tiếp nhận", fmt(t.createdAt)], ["Lỗi khách báo", t.issue || ""]]);
+    sec("KẾT QUẢ XỬ LÝ", [["Tình trạng", t.ktFail ? "Kỹ thuật không sửa được – trả lại khách" : t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"], ["Lý do không sửa được", t.ktFail ? t.ktFail.reason : ""], ["Phương án", t.action ? ACTION[t.action] : ""],
+      ["Số seri cũ", t.exchange ? t.exchange.oldSerial : ""], ["Số seri mới đổi", t.exchange ? t.exchange.newSerial : ""],
+      ["Bảo hành tiếp đến", t.exchange ? `${fmt(t.exchange.until)} ${t.exchange.mode === "new" ? `(bảo hành mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}` : ""],
+      ["Linh kiện thay", t.parts || ""], ["Kỹ thuật viên", t.tech || ""], ["Ghi chú kỹ thuật", t.techNote || ""]]);
+    sec("VẬN CHUYỂN TRẢ KHÁCH", shipPairs("Ngày trả lại khách"));
+    sec("THANH TOÁN", payPairs(t.pay));
+    R.push([], ["QUÁ TRÌNH XỬ LÝ"], ["Thời gian", "Giai đoạn", "Người thực hiện", "Ghi chú"]);
+    (t.history || []).forEach(h => R.push([fmtTime(h.at), STAGES[h.stage]?.label || h.stage, h.by || "", noteView(h.note || "")]));
+    R.push([], ["Bộ phận bảo hành", "Bên vận chuyển", "Khách hàng"], ["(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)"]);
+    return R;
   }
-  function pdfHtmlOrder(o){
-    const rows = (pairs) => `<table>${pairs.filter(p => p[1]).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</table>`;
-    const s = o.ship || {};
-    return `<h1>PHIẾU GIAO HÀNG</h1>
-      <p class="c">Mã đơn: <b>${esc(o.code)}</b> · Ngày bán: ${fmt(o.saleDate)} · Ngày in: ${fmtTime(new Date().toISOString())}</p>
-      <h2>Khách hàng</h2>
-      ${rows([["Khách hàng", esc(o.customer)],["Số điện thoại", esc(o.phone)],["Địa chỉ", esc(o.address)],["Ghi chú", esc(o.note)]])}
-      <h2>Hàng hóa</h2>
-      <table><tr><td style="background:#0f766e;color:#fff">Sản phẩm</td><td style="background:#0f766e;color:#fff;width:auto">SL · Bảo hành · Số seri</td></tr>
-        ${(o.lines||[]).map((l,i) => `<tr><td>${l.gift ? "🎁 Hàng tặng: " : ""}${esc(l.product)}</td><td><b>${l.qty}</b> · ${l.gift ? "Tặng kèm" : l.months ? l.months + " tháng" : "Không BH"}${snOf(o,i).length ? "<br>SN: " + snOf(o,i).map(esc).join(", ") : ""}</td></tr>`).join("")}</table>
-      <h2>Vận chuyển</h2>
-      ${rows([["Hình thức", SHIP[s.method] || ""],[s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", esc(s.carrier)],[isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", esc(s.carrierPhone)],
-        [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", esc(s.tracking)],["Ngày gửi hàng", s.date ? `<b>${fmt(s.date)}</b>` : ""],["Ghi chú", esc(s.note)]])}
-      ${o.pay && !hidePrice() ? `<h2>Thanh toán</h2>${rows([["Tình trạng", `<b>${PAY[o.pay.status]}</b>`],["Số tiền", `<b>${money(o.pay.amount)}</b>`],["Hình thức", esc(o.pay.method)],["Ngày thanh toán", o.pay.paidDate ? fmt(o.pay.paidDate) : ""]])}` : ""}
-      <div class="sig"><div><b>Bán hàng / Kho</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Bên vận chuyển</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Khách hàng</b><i>(Ký, ghi rõ họ tên)</i></div></div>`;
-  }
-  let pdfBusy = false;
-  async function exportPdf(t){
+  async function exportPdf(t){   // (tên cũ) – nay xuất file Excel
     if (!t || pdfBusy) return; pdfBusy = true;
     try {
-      toast("Đang tạo PDF…");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-      const stage = $("#pdfStage"); stage.innerHTML = t.lines ? pdfHtmlOrder(t) : pdfHtml(t);
-      const canvas = await window.html2canvas(stage, {scale: 2, backgroundColor: "#ffffff"});
-      stage.innerHTML = "";
-      const pdf = new window.jspdf.jsPDF({unit: "mm", format: "a4"});
-      const W = 210, H = 297, imgH = canvas.height * W / canvas.width;
-      const img = canvas.toDataURL("image/jpeg", 0.92);
-      let y = 0; pdf.addImage(img, "JPEG", 0, 0, W, imgH);
-      while (imgH + y > H + 1) { y -= H; pdf.addPage(); pdf.addImage(img, "JPEG", 0, y, W, imgH); }
-      const blob = pdf.output("blob"), name = t.lines ? `Phieu-giao-hang_${t.code}.pdf` : `Phieu-giao-tra_${t.code}_${keySN(t.serial)}.pdf`;
-      await saveBlob(name, blob, "Đã lưu file PDF");
-    } catch(e){ toast("Không tạo được PDF, kiểm tra mạng và thử lại"); }
+      toast("Đang tạo file Excel…");
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, aoa = slipRows(t), ws = X.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = t.lines ? [{wch: 34}, {wch: 12}, {wch: 12}, {wch: 16}, {wch: 17}, {wch: 40}] : [{wch: 22}, {wch: 48}, {wch: 20}, {wch: 40}];
+      ws["!merges"] = [0, 1].map(r => ({s: {r, c: 0}, e: {r, c: t.lines ? 5 : 3}}));
+      Object.keys(ws).forEach(k => { if (k[0] !== "!" && typeof ws[k].v === "number" && ws[k].v >= 1000) ws[k].z = "#,##0"; });
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, t.lines ? "Phiếu giao hàng" : "Phiếu giao trả");
+      const name = t.lines ? `Phieu-giao-hang_${t.code}.xlsx` : `Phieu-giao-tra_${t.code}_${keySN(t.serial)}.xlsx`;
+      await saveBlob(name, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
     finally { pdfBusy = false; }
   }
 
