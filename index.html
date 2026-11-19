@@ -686,8 +686,6 @@
   try { boss = sessionStorage.getItem("bh_boss") === "1"; } catch(e){}
   const actor = () => boss && role !== "gd" ? `Giám đốc (tab ${ROLES[role].name})` : ROLES[role].name;
   try { const r = sessionStorage.getItem("bh_role"); if (ROLES[r]) role = r; } catch(e){}
-  // phiên nhạy cảm (Giám đốc, Kế toán): mở lại app phải nhập lại mật mã
-  try { const last = Number(localStorage.getItem("bh_act") || 0); if ((boss || role === "ac") && Date.now() - last > 10 * 60000) { role = null; boss = false; sessionStorage.removeItem("bh_role"); sessionStorage.removeItem("bh_boss"); } } catch(e){}
   let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], expenses = [], colEx = null, regImp = [], colRi = null, mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
   let prevOStage = null;
   let prevStage = null;        // Map id -> stage, để phát hiện chuyển giai đoạn
@@ -870,16 +868,8 @@
     document.querySelectorAll(".sheet-bg").forEach(b => b.classList.remove("show"));
     $("#app").classList.add("hide"); $("#login").classList.remove("hide");
   };
-  const IDLE_MS = 10 * 60000;
   function markActive(){ try { localStorage.setItem("bh_act", String(Date.now())); } catch(e){} }
   ["pointerdown", "keydown", "scroll"].forEach(ev => document.addEventListener(ev, () => { if (role) markActive(); }, {passive: true, capture: true}));
-  function idleCheck(){
-    if (!role || !(boss || role === "ac")) return;
-    const last = Number(localStorage.getItem("bh_act") || 0);
-    if (Date.now() - last > IDLE_MS) { const who = boss ? "Giám đốc" : "Kế toán"; $("#logout").click(); toast(`Đã tự thoát phiên ${who} sau 10 phút không dùng`); }
-  }
-  setInterval(idleCheck, 30000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) idleCheck(); });
   function setBoss(v){ boss = !!v; try { sessionStorage.setItem("bh_boss", boss ? "1" : ""); } catch(e){} }
   function enter(r){
     role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
