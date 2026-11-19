@@ -376,6 +376,14 @@
         <div id="gwBody"></div>
         <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
+      <div class="panel" id="bkBox"><h3>💾 Sao lưu & khôi phục dữ liệu</h3>
+        <div class="sub" id="bkLast" style="margin-bottom:8px"></div>
+        <div class="sub" style="margin-bottom:8px">Tải về <b>1 file</b> chứa toàn bộ dữ liệu (sổ bảo hành, phiếu BH/SC, đơn bán, tồn kho, sản phẩm, lịch sử nhập xuất, chi phí). Nên sao lưu <b>mỗi tuần</b> và cất lên Google Drive / USB.</div>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin:0 0 8px"><input type="checkbox" id="bkPh" style="width:auto;margin:0"> Kèm ảnh (seri, hóa đơn) – file sẽ lớn hơn</label>
+        <div class="btns" style="margin-top:0"><button class="btn pri" id="bkGo" type="button">💾 Sao lưu toàn bộ dữ liệu</button></div>
+        <div class="btns"><label class="btn" for="bkFile" style="text-align:center">♻️ Khôi phục từ bản sao lưu</label></div>
+        <input type="file" id="bkFile" accept=".json,application/json" style="display:none">
+        <div class="sub" id="bkProg" style="margin-top:6px"></div></div>
       <div id="gdStats"></div>
     </section>
 
@@ -1457,8 +1465,73 @@
     $("#gdLkList").innerHTML = L.map(t => tkCard(t)).join("");
     bindCards($("#gdLkList"));
   }
+  /* ================= SAO LƯU & KHÔI PHỤC DỮ LIỆU (Giám đốc) ================= */
+  const BK = [["reg", "warranties", "Sổ bảo hành (seri)"], ["tk", "tickets", "Phiếu bảo hành / sửa chữa"], ["od", "orders", "Đơn bán"], ["st", "stock", "Tồn kho theo seri"],
+    ["pr", "products", "Danh mục sản phẩm"], ["mv", "moves", "Lịch sử nhập / xuất"], ["ex", "expenses", "Chi phí công ty"], ["ph", "photos", "Ảnh"]];
+  const bkLastAt = () => { try { return localStorage.getItem("bh_backup_at") || ""; } catch(e){ return ""; } };
+  function drawBackup(){
+    const last = bkLastAt(), days = last ? daysSince(last) : null;
+    $("#bkLast").innerHTML = last ? `Lần sao lưu gần nhất trên máy này: <b>${fmtTime(last)}</b> (${days} ngày trước)${days > 7 ? ` <b style="color:var(--bad)">– đã quá 7 ngày, nên sao lưu ngay</b>` : ""}` : `<b style="color:var(--bad)">Máy này chưa sao lưu lần nào – nên sao lưu ngay.</b>`;
+    $("#bkBox").classList.toggle("latebox", !last || days > 7);
+  }
+  async function allPhotos(){
+    if (mode === "cloud" && colPh) { const snap = await colPh.get(); return snap.docs.map(d => Object.assign({id: d.id}, d.data())); }
+    return photosLocal.slice();
+  }
+  $("#bkGo").onclick = async () => {
+    const b = $("#bkGo"); b.disabled = true;
+    try {
+      $("#bkProg").textContent = "Đang gom dữ liệu…";
+      const withPh = $("#bkPh").checked, data = {};
+      BK.forEach(([k, name]) => { if (k !== "ph") data[name] = arrOf(k).map(x => JSON.parse(JSON.stringify(x))); });
+      if (withPh) { $("#bkProg").textContent = "Đang tải ảnh…"; data.photos = await allPhotos(); }
+      const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length])), now = new Date().toISOString();
+      const file = {app: "QUANG ANH AUDIO – Phần mềm bảo hành", format: 1, exportedAt: now, by: actor(), withPhotos: withPh, counts, data};
+      const stamp = iso(new Date()) + "_" + new Date().toTimeString().slice(0, 5).replace(":", "h");
+      await saveBlob(`QuangAnh_SaoLuu_${stamp}.json`, new Blob([JSON.stringify(file)], {type: "application/json"}), "Đã lưu file sao lưu");
+      try { localStorage.setItem("bh_backup_at", now); } catch(e){}
+      $("#bkProg").innerHTML = `✔ Đã sao lưu: ${BK.filter(([, n]) => counts[n] != null).map(([, n, l]) => `${l} <b>${counts[n]}</b>`).join(" · ")}. Hãy cất file lên Google Drive / USB.`;
+      drawBackup();
+    } catch(e){ $("#bkProg").textContent = "Không sao lưu được: " + (e.message || e); }
+    finally { b.disabled = false; }
+  };
+  $("#bkFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    let bk;
+    try { bk = JSON.parse(await f.text()); } catch(err){ toast("File không đọc được – chọn đúng file sao lưu .json"); return; }
+    if (!bk || !bk.data || !/QUANG ANH AUDIO/.test(bk.app || "")) { toast("Đây không phải file sao lưu của phần mềm"); return; }
+    const plan = BK.filter(([, n]) => Array.isArray(bk.data[n])).map(([k, n, l]) => { const cur = new Set(arrOf(k).map(x => x.id)), L = bk.data[n].filter(x => x && x.id);
+      return {k, n, l, L, missing: L.filter(x => !cur.has(x.id)), cur: k === "ph" ? null : arrOf(k).length}; });
+    const F = $("#actForm");
+    F.innerHTML = `<div class="grab"></div><h2>♻️ Khôi phục dữ liệu</h2>
+      <div class="sub">File: <b>${esc(f.name)}</b> · sao lưu lúc <b>${fmtTime(bk.exportedAt)}</b>${bk.by ? " · " + esc(bk.by) : ""}</div>
+      <table class="ptable" style="margin-top:10px"><tr><th style="text-align:left;width:auto">Dữ liệu</th><th>Trong file</th><th>Hiện có</th><th>Bị mất</th></tr>
+        ${plan.map(r => `<tr><td>${esc(r.l)}</td><td>${r.L.length}</td><td>${r.cur ?? "—"}</td><td><b style="color:${r.missing.length ? "var(--bad)" : "var(--ok)"}">${r.missing.length}</b></td></tr>`).join("")}</table>
+      <label>Cách khôi phục</label>
+      <div class="choice" style="grid-template-columns:1fr">
+        <button type="button" class="opt sel" data-rm="missing"><span class="ic">➕</span>Chỉ thêm lại mục bị mất<br><small>(an toàn – không đụng dữ liệu đang có)</small></button>
+        <button type="button" class="opt" data-rm="all"><span class="ic">⏪</span>Thêm mục bị mất + đưa mục đã sửa về như bản sao lưu<br><small>(những thay đổi sau thời điểm sao lưu sẽ bị ghi đè)</small></button></div>
+      <label>Gõ <b>KHOI PHUC</b> để xác nhận</label><input name="cf" autocomplete="off" placeholder="KHOI PHUC">
+      <div class="sub" id="rsProg" style="margin-top:8px"></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn danger">♻️ Khôi phục</button></div>`;
+    let rm = "missing";
+    F.querySelectorAll(".opt[data-rm]").forEach(o => o.onclick = () => { rm = o.dataset.rm; F.querySelectorAll(".opt[data-rm]").forEach(x => x.classList.toggle("sel", x === o)); });
+    actCtx = {run: async () => {
+      if (norm(F.cf.value).replace(/\s+/g, " ").trim() !== "khoi phuc") { toast("Gõ đúng chữ KHOI PHUC để xác nhận"); F.cf.focus(); throw new Error("x"); }
+      let total = 0;
+      for (const r of plan) {
+        const list = rm === "all" ? r.L : r.missing; if (!list.length) continue;
+        $("#rsProg").textContent = `Đang khôi phục ${r.l}…`;
+        await putMany(r.k, list, n => { $("#rsProg").textContent = `Đang khôi phục ${r.l}: ${n}/${list.length}`; });
+        total += list.length;
+      }
+      toast(total ? `Đã khôi phục ${total} mục từ bản sao lưu` : "Không có mục nào cần khôi phục");
+    }};
+    open("actBg");
+  });
+
   function renderGD(){
-    drawGdLk(); drawGdWeek();
+    drawGdLk(); drawGdWeek(); drawBackup();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
