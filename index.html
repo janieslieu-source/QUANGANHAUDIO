@@ -319,17 +319,22 @@
         <div class="seg" id="tKind" style="margin:4px 0 8px"><button type="button" data-tk="" class="on">🆕 Phiếu mới</button><button type="button" data-tk="1">🧪 Phiếu test</button></div>
         <div class="sub hide" id="tKindHint" style="margin:-4px 0 8px;color:#6d28d9">🧪 Phiếu test: chạy đủ quy trình như phiếu mới (Kho → Kỹ thuật → Vận chuyển → Kế toán). Xong quy trình bấm <b>🗑 Hủy đơn test</b> trên phiếu để xóa sạch.</div>
         <div id="batchBox"></div>
-        <label>Tên khách hàng *</label><input name="customer" required>
-        <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
-        <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
-        <label>Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" data-scankh="#recvForm [name=actCode]" data-scankh2="#recvForm [name=actCode2]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
+        <h4 class="sechd" style="margin-top:6px">① Quét hoặc gõ số seri</h4>
+        <label style="margin-top:4px">Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" data-scankh="#recvForm [name=actCode]" data-scankh2="#recvForm [name=actCode2]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
         <label>Mã kích hoạt <span class="sub">(không bắt buộc – đầu karaoke: mã thứ 2 trên tem)</span></label><input name="actCode" inputmode="numeric" placeholder="VD: 233594" autocomplete="off">
         <label>Mã kích hoạt mới <span class="sub">(không bắt buộc – mã thứ 3: mã cập nhật; có mã mới thì không lưu mã thứ 2)</span></label><input name="actCode2" inputmode="numeric" placeholder="Mã kích hoạt mới (nếu có)" autocomplete="off">
         <div class="sub" id="snWarn" style="color:var(--warn);margin-top:4px"></div>
         <div id="foundBox"></div>
+        <div id="custKind"></div>
+        <div id="custWrap" class="hide">
+        <h4 class="sechd" id="custHead">② Thông tin khách hàng</h4>
+        <label>Tên khách hàng *</label><input name="customer" required>
+        <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
+        <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
+        </div>
 
         <div id="typeWrap" class="hide">
-          <label>Loại hàng</label>
+          <h4 class="sechd">③ Loại hàng & mô tả lỗi</h4>
           <div class="choice">
             <button type="button" class="opt" data-type="bh"><span class="ic">🛡️</span>Bảo hành</button>
             <button type="button" class="opt" data-type="sc"><span class="ic">🛠️</span>Sửa chữa</button>
@@ -1416,9 +1421,20 @@
   document.querySelectorAll("#tKind button").forEach(b => b.onclick = () => setTKind(b.dataset.tk));
   function refreshRecv(){
     const sn = F.serial.value.trim(), r = findReg(sn);
+    // ① seri → phân loại khách cũ / khách mới; ② mới hiện ô thông tin khách
+    const hasSn = sn.length >= 4;
+    $("#custWrap").classList.toggle("hide", !hasSn);
+    if (!hasSn) $("#custKind").innerHTML = "";
+    else if (r) { const S = wStatus(sn), m = Number(r.months);
+      $("#custKind").innerHTML = `<div class="wbox ${S.w ? (S.w.ok ? "b-ok" : "b-bad") : ""}" style="margin-top:8px;text-align:left;font-size:14px"><b style="font-size:17px">👤 KHÁCH CŨ – seri đã có trong ${r.fromFile ? "sổ bảo hành (file thống kê)" : "hệ thống"}</b>
+        <div style="margin-top:4px">Khách: <strong>${esc(r.customer || "—")}</strong>${r.phone ? ` · ${esc(r.phone)}` : ""}<br>Sản phẩm: <strong>${esc(r.product || "—")}</strong>${r.purchaseDate ? `<br>Mua ngày <strong>${fmt(r.purchaseDate)}</strong>${r.orderCode ? ` · đơn ${esc(r.orderCode)}` : ""}` : ""}</div>
+        <div style="margin-top:4px;font-weight:700">${S.noDate ? "⚠️ Không ghi ngày bán – kiểm tra phiếu mua" : S.w.ok ? `🛡️ CÒN BẢO HÀNH${m >= 1200 ? " vĩnh viễn" : ` – còn ${S.days} ngày (hết hạn ${fmt(iso(S.exp))})`}` : `⛔ HẾT BẢO HÀNH từ ${fmt(iso(S.exp))}`}</div></div>`;
+      $("#custHead").textContent = "② Thông tin khách hàng (đã điền sẵn – sửa nếu cần)"; }
+    else { $("#custKind").innerHTML = `<div class="wbox" style="margin-top:8px;background:var(--infobg);color:var(--info);text-align:left;font-size:14px"><b style="font-size:17px">🆕 KHÁCH MỚI – seri chưa có trong hệ thống</b><div style="margin-top:4px">Kiểm tra lại số seri (quét lại nếu cần), rồi điền thông tin khách bên dưới. Seri này sẽ được ghi vào sổ khi lưu phiếu.</div></div>`;
+      $("#custHead").textContent = "② Thông tin khách hàng mới"; }
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
-    $("#foundBox").innerHTML = r ? `<div class="found">${r.fromFile ? "📄 Có trong sổ bảo hành (file thống kê)" : "✔ Seri đã có trong hệ thống"}: ${esc(r.product)} – ${esc(r.customer)}${r.fromFile ? `${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.fileNote ? " · " + esc(r.fileNote) : ""}${r.purchaseDate ? "" : " · <b>file không ghi ngày</b>"}${r.fileHist ? `<br><span style="font-size:12px">Lịch sử: ${esc(r.fileHist)}</span>` : ""}<br>` : ""}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
+    $("#foundBox").innerHTML = "";   // khách cũ / mới hiện ở #custKind
     $("#foundBox").innerHTML += dupBox(sn);
     const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
     $("#foundBox").innerHTML += own.length ? `<div class="found">🔄 Máy này đã đổi cho chính khách ${esc(own[0].customer)} ngày ${fmt(own[0].date)} (SN ${esc(own[0].oldSn)} → ${esc(own[0].newSn)})</div>` : "";
