@@ -1098,8 +1098,9 @@
       </dl>
       <h3 style="font-size:15px;margin:10px 0 4px">Quá trình xử lý</h3>
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
-      <div class="btns">${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns" style="flex-wrap:wrap">${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
+    if (canEditPay(t)) $("#dPayEdit").onclick = () => { close("detailBg"); detailId = null; openPay(t.id, null, true); };
     open("detailBg");
   }
 
@@ -1913,8 +1914,9 @@
         <div class="btns"><button class="btn danger" id="cxOk">✔ ${o.exportedAt ? (isWh() ? "Kho đồng ý – hàng đã về kho" : "Gửi Kho duyệt") : "Xác nhận hủy đơn"}</button></div></div>` : ""}
       ${o.stage === "cho_huy" ? `<div style="margin-top:12px;padding:10px;border:1px solid var(--bad);border-radius:10px"><b>↩️ Chờ Kho duyệt trả lại kho</b><div class="sub">${esc(o.cancelReq?.by || "")} · ${fmtTime(o.cancelReq?.at)} – ${esc(o.cancelReq?.reason || "")}</div>
         ${isWh() ? `<div class="btns"><button class="btn pri" id="cxApprove">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" id="cxReject">✖ Không duyệt</button></div>` : `<div class="sub">Kho bấm “Đồng ý” thì tồn kho tự cộng lại.</div>`}</div>` : ""}
-      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📄 Phiếu giao hàng PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📄 Phiếu giao hàng PDF</button>` : ""}${canEditPay(o) ? `<button class="btn" id="oPayEdit">✏️ Sửa chi phí</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (o.ship?.date && o.stage !== "huy") $("#oPdf").onclick = () => exportPdf(o);
+    if (canEditPay(o)) $("#oPayEdit").onclick = () => { close("detailBg"); openPay(o.id, null, true); };
     if (o.stage === "cho_huy" && isWh()) {
       $("#cxApprove").onclick = async () => { $("#cxApprove").disabled = true; try { await cancelOrder(o, o.cancelReq?.reason || ""); close("detailBg"); } catch(e){ $("#cxApprove").disabled = false; toast("Lưu thất bại, thử lại"); } };
       $("#cxReject").onclick = async () => { try { await advanceOrder(o, o.cancelReq?.prevStage || "cho_tt", "Kho không duyệt trả lại kho – đơn giữ nguyên", {cancelReq: null}); toast("Đã từ chối – đơn trở lại như cũ"); close("detailBg"); } catch(e){ toast("Lưu thất bại, thử lại"); } };
@@ -2783,8 +2785,9 @@
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
     $("#paidCnt").textContent = paid.length;
-    $("#paidList").innerHTML = paid.length ? paid.map(t => card(t)).join("") : `<div class="empty">Chưa có.</div>`;
+    $("#paidList").innerHTML = paid.length ? paid.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pedit="${esc(t.id)}">✏️ Sửa chi phí</button></div>`)).join("") : `<div class="empty">Chưa có.</div>`;
     bindAny($("#paidList"));
+    $("#paidList").querySelectorAll("[data-pedit]").forEach(b => b.onclick = () => openPay(b.dataset.pedit, null, true));
   }
   function drawDebt(){
     const q = norm($("#acQ").value);
@@ -2796,10 +2799,11 @@
     debt.sort((a,b) => debtAge(b) - debtAge(a));
     const od = debt.filter(x => debtAge(x) >= DEBT_DAYS).length;
     if (od) $("#debtSum").textContent += ` · ⏰ ${od} đơn quá ${DEBT_DAYS} ngày`;
-    $("#debtList").innerHTML = debt.length ? debt.map(t => card(t, `<div class="cardbtns"><button class="btn okb" data-paid="${esc(t.id)}">✓ Đã thu tiền</button></div>`)).join("")
+    $("#debtList").innerHTML = debt.length ? debt.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pedit="${esc(t.id)}">✏️ Sửa số nợ</button><button class="btn okb" data-paid="${esc(t.id)}">✓ Đã thu tiền</button></div>`)).join("")
       : `<div class="empty">${q ? "Không tìm thấy." : "Không có công nợ."}</div>`;
     bindAny($("#debtList"));
     $("#debtList").querySelectorAll("[data-paid]").forEach(b => b.onclick = () => openPay(b.dataset.paid, "da_tt"));
+    $("#debtList").querySelectorAll("[data-pedit]").forEach(b => b.onclick = () => openPay(b.dataset.pedit, null, true));
   }
   $("#acQ").addEventListener("input", drawDebt);
   $("#acMonth").addEventListener("change", e => { acMonth = e.target.value || iso(new Date()).slice(0,7); renderAC(); });
@@ -2807,14 +2811,17 @@
   $("#filePaid").onclick = () => exportPay("da_tt");
 
   let payStatus = null;
-  function openPay(id, preset){
+  // edit = true: sửa lại thanh toán / công nợ đã ghi (nhập nhầm số tiền…) – chỉ Kế toán, Giám đốc
+  const canEditPay = x => !!(x && x.pay) && (role === "ac" || boss);
+  function openPay(id, preset, edit){
     const t = findAny(id); if (!t) return;
     const isOd = !!t.lines;
     const p = t.pay || {};
     payStatus = preset || p.status || null;
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
-      <h2>💰 Thanh toán – ${esc(t.code)}</h2>
+      <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
+      ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
       ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
         : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>`}
       <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div>
@@ -2846,7 +2853,7 @@
       $("#amtLbl").textContent = payStatus === "cong_no" ? "Số tiền khách còn nợ (đ) *" : "Số tiền thanh toán (đ) *";
       $("#amtWords").textContent = F4.amount.value ? "= " + money(amt()) : "";
       $("#payOk").disabled = !payStatus;
-      $("#payOk").textContent = payStatus === "cong_no" ? "📒 Ghi công nợ" : "✅ Xác nhận đã thanh toán";
+      $("#payOk").textContent = edit ? "💾 Lưu thay đổi" : payStatus === "cong_no" ? "📒 Ghi công nợ" : "✅ Xác nhận đã thanh toán";
     };
     F4.amount.addEventListener("input", () => {
       const n = amt(); const pos = F4.amount.value.length;
@@ -2859,9 +2866,15 @@
       const pay = {status: payStatus, amount: amt(), note: F4.pnote.value.trim(), at: new Date().toISOString(),
         paidDate: payStatus === "da_tt" ? F4.paidDate.value : "", method: payStatus === "da_tt" ? F4.method.value : ""};
       if (t.pay && t.pay.status === "cong_no") pay.debtSince = t.pay.debtSince || t.pay.at;
-      const note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
+      else if (t.pay && t.pay.debtSince) pay.debtSince = t.pay.debtSince;   // sửa phiếu đã thu: giữ ngày bắt đầu nợ cũ
+      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
+      if (edit) {
+        if (payStatus === p.status && pay.amount === Number(p.amount) && pay.paidDate === (p.paidDate || "") && pay.method === (p.method || "") && pay.note === (p.note || "")) { toast("Chưa thay đổi gì"); throw new Error("x"); }
+        note = `✏️ Sửa chi phí: ${PAY[p.status] || ""} ${money(p.amount)} → ${PAY[payStatus]} ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
+        pay.editedAt = pay.at; pay.editedBy = actor(); pay.at = p.at || pay.at;   // giữ thời điểm ghi nhận gốc (tính tuổi nợ đúng)
+      }
       if (isOd) await advanceOrder(t, payStatus, note, {pay}); else await advance(t, payStatus, note, {pay});
-      toast(payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
+      toast(edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
     }};
     open("actBg");
   }
