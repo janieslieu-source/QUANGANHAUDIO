@@ -2910,13 +2910,13 @@
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
     // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
     const modes = (o.lines||[]).map((l,i) => snOf(o,i).length || inStock(l.product).length ? "nhap" : (noSerial(l.product) || !l.months) ? "khong" : "anh");
-    const XKHINT = {nhap: "Có thể chụp ảnh tem seri – app tự đọc số seri điền vào ô.", anh: "📷 Chụp ảnh tem seri (cần ít nhất 1 ảnh) – app tự đọc số seri điền vào ô bên dưới, không cần gõ. Đọc sai thì sửa lại; không đọc được vẫn xuất được, ảnh dùng để đối chiếu.", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
+    const XKHINT = {nhap: "Có thể chụp ảnh tem seri – app tự đọc số seri điền vào ô.", anh: "📷 Quét bằng camera, chụp ảnh tem hoặc gõ seri – chỉ cần 1 trong các cách. Ảnh không bắt buộc khi đã có số seri; chưa có seri thì chụp ít nhất 1 ảnh để đối chiếu.", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
     const drawModes = () => (o.lines||[]).forEach((l,i) => {
       const m = modes[i];
       F5.querySelectorAll(`.xkmode[data-i="${i}"] button`).forEach(b => b.classList.toggle("on", b.dataset.x === m));
       F5.querySelector(`.xksn[data-i="${i}"]`).classList.toggle("hide", m === "khong");
-      F5.querySelector(`.xksn[data-i="${i}"] .xklbl`).textContent = m === "anh" ? `Số seri đọc từ ảnh (kiểm tra lại, có thể sửa) – tối đa ${l.qty} seri`
-        : `Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty} seri (${SN_HINT})`;
+      F5.querySelector(`.xksn[data-i="${i}"] .xklbl`).textContent = m === "anh" ? `Số seri (quét / đọc từ ảnh / gõ – kiểm tra lại, có thể sửa) – tối đa ${l.qty * snPerOf(l.product)} seri`
+        : `Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty * snPerOf(l.product)} seri${snPerOf(l.product) > 1 ? ` (${l.qty} bộ × ${snPerOf(l.product)} seri)` : ""} (${SN_HINT})`;
       F5.querySelector(`.xkph[data-i="${i}"]`).classList.toggle("hide", m === "khong");
       F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = XKHINT[m] + (m === "khong" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
       sync();
@@ -2974,7 +2974,7 @@
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i], n = serials[i].length;
         if (modes[i] === "nhap" && ((l.months && n !== l.qty) || n > l.qty)) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n}) – hoặc chọn “📷 Ảnh seri”`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
-        if (modes[i] === "anh" && !F5.querySelector(`.xkph[data-i="${i}"]`)._photos().length) { toast(`${l.product}: chụp ít nhất 1 ảnh seri để đối chiếu`); throw new Error("x"); }
+        if (modes[i] === "anh" && !n && !F5.querySelector(`.xkph[data-i="${i}"]`)._photos().length) { toast(`${l.product}: quét / gõ seri hoặc chụp ít nhất 1 ảnh seri để đối chiếu`); throw new Error("x"); }
         if (modes[i] === "anh" && n > l.qty) { toast(`${l.product}: chỉ cần ${l.qty} seri nhưng đang có ${n} – xóa bớt seri đọc thừa`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
       }
       const badSn = rawAll.filter(x => !snOk(x));
