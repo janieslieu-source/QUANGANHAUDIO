@@ -892,7 +892,7 @@
     role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
     registerDevice();
     $("#login").classList.add("hide"); $("#app").classList.remove("hide");
-    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && !["kt", "cc"].includes(b.dataset.tab)); });
+    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt"); });   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
     markActive();
     ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
     const tb = document.querySelector(`.tab[data-tab="${r}"]`); if (tb && tb.scrollIntoView) tb.scrollIntoView({inline: "center", block: "nearest"});
