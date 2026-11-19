@@ -319,7 +319,9 @@
         <label>Tên khách hàng *</label><input name="customer" required>
         <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
-        <label>Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
+        <label>Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" data-scankh="#recvForm [name=actCode]" data-scankh2="#recvForm [name=actCode2]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
+        <label>Mã kích hoạt <span class="sub">(không bắt buộc – đầu karaoke: mã thứ 2 trên tem)</span></label><input name="actCode" inputmode="numeric" placeholder="VD: 233594" autocomplete="off">
+        <label>Mã kích hoạt mới <span class="sub">(không bắt buộc – mã thứ 3: mã cập nhật; có mã mới thì không lưu mã thứ 2)</span></label><input name="actCode2" inputmode="numeric" placeholder="Mã kích hoạt mới (nếu có)" autocomplete="off">
         <div class="sub" id="snWarn" style="color:var(--warn);margin-top:4px"></div>
         <div id="foundBox"></div>
 
@@ -1212,7 +1214,7 @@
         <dt>Mã phiếu</dt><dd>${esc(t.code)}</dd>
         <dt>Khách hàng</dt><dd>${esc(t.customer)}</dd>
         <dt>Điện thoại</dt><dd>${esc(t.phone)||"—"}</dd>
-        <dt>Số seri</dt><dd>${esc(t.serial)}</dd>
+        <dt>Số seri</dt><dd>${esc(t.serial)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
         ${t.type==="bh" && t.purchaseDate ? `<dt>Bảo hành</dt><dd>Mua ${fmt(t.purchaseDate)}, ${t.months} tháng – lúc nhận: ${esc(t.warrantyText)}</dd>` : ""}
         <dt>Lỗi</dt><dd>${esc(t.issue)||"—"}</dd>
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
@@ -1400,7 +1402,7 @@
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
     const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
-    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), history: []}, base);
+    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, {history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
     let newRec = null;
@@ -3322,6 +3324,30 @@
     });
     return out;
   }
+  async function ocrTexts(imgs){
+    await loadScript(OCR.lib);
+    if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
+      .then(async w => { await w.setParameters({tessedit_char_whitelist: "0123456789 "}); return w; })
+      .catch(e => { ocrWorker = null; throw e; });
+    const w = await ocrWorker, out = [];
+    for (const d of imgs) { const {data} = await w.recognize(d); out.push(data.text || ""); }
+    return out.join("\n");
+  }
+  // quy định sản phẩm đầu: MÃ 1 = SỐ SERI (5 số → thêm 525 phía trước), MÃ 2 (6 số) = MÃ KÍCH HOẠT, MÃ 3 (6 số) = MÃ KÍCH HOẠT MỚI (cập nhật)
+  function parseCodes(text){
+    const t = String(text || "").replace(/[oO]/g, "0").replace(/[lI|]/g, "1");
+    const run = join => { const r = {sn: "", kh: "", kh2: ""};
+      // join: chữ số bị cách (VD "25 142") trên cùng 1 dòng thì ghép lại
+      const toks = t.split(/\n+/).flatMap(line => ((join ? line.replace(/(\d)\s+(?=\d)/g, "$1") : line).match(/\d{5,10}/g) || []));
+      for (const k of toks) {
+        if (!r.sn) { if (/^525\d{5}$/.test(k)) r.sn = k; else if (/^\d{5}$/.test(k)) r.sn = "525" + k; }
+        else if (!r.kh && /^\d{6}$/.test(k)) r.kh = k;
+        else if (r.kh && !r.kh2 && /^\d{6}$/.test(k)) { r.kh2 = k; break; }
+      }
+      return r; };
+    const a = run(false), b = a.sn ? null : run(true);
+    return a.sn ? a : b;
+  }
   async function ocrSerials(imgs){
     await loadScript(OCR.lib);
     if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
@@ -3352,19 +3378,36 @@
   let scanStream = null, scanTimer = null, scanBusy = false;
   function stopScan(){ clearTimeout(scanTimer); scanTimer = null; if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; } }
   // chọn seri từ chữ đọc được: ưu tiên seri đúng quy định 525xxxxx, không có thì lấy mã số/chữ 5–20 ký tự
-  function pickSn(text){ const sn = snFromText(text); if (sn.length) return sn[0];
-    const raw = String(text || "").trim().replace(/\s+/g, ""); return /^[A-Za-z0-9\-]{5,20}$/.test(raw) ? raw.toUpperCase() : ""; }
-  async function openScanner(onSn){
+  function pickSn(text){ const pc = parseCodes(text); if (pc.sn) return pc;
+    const raw = String(text || "").trim().replace(/\s+/g, ""); return /^[A-Za-z0-9\-]{5,20}$/.test(raw) ? {sn: raw.toUpperCase(), kh: ""} : null; }
+  async function openScanner(onSn, want = {}){
     const S = $("#scanSheet");
     S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📷 Quét số seri</h2><div class="sub">Đưa <b>mã vạch / tem seri</b> vào giữa khung xanh, giữ yên 1–2 giây – app tự đọc và điền.</div>
       <div class="scanbox"><video playsinline muted autoplay></video><div class="aim"></div></div>
       <div class="sub scst" style="margin-top:8px">Đang mở camera…</div>
       <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn scocr">🔢 Tem không có mã vạch – đọc chữ số</button><button type="button" class="btn sctorch hide">🔦 Đèn</button>
         <label class="btn" style="text-align:center">🖼️ Chọn / chụp ảnh<input type="file" accept="image/*" capture="environment" class="scfile" hidden></label></div>
-      <div class="btns"><button type="button" class="btn scclose">Đóng</button></div>`;
+      <div class="btns"><button type="button" class="btn scman">⌨️ Gõ tay số seri</button><button type="button" class="btn scclose">Đóng</button></div>`;
+    S.querySelector(".scman").onclick = () => finish({sn: "", kh: "", kh2: ""});
     const v = S.querySelector("video"), st = S.querySelector(".scst"), say = (t, c) => { st.textContent = t; st.style.color = c || ""; };
     open("scanBg"); let done = false;
-    const finish = sn => { if (done) return; done = true; stopScan(); close("scanBg"); try { navigator.vibrate?.(150); } catch(e){} toast(`✔ Đã quét seri ${sn}`); onSn(sn); };
+    // bước DUYỆT: hiện seri đọc được → Đúng thì dùng luôn, sai thì gõ lại ngay tại đây
+    const finish = res => { if (done) return; done = true; stopScan(); try { navigator.vibrate?.(150); } catch(e){}
+      const r = typeof res === "string" ? {sn: res, kh: ""} : res;
+      S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✅ Kiểm tra số seri vừa quét</h2><div class="sub">So với tem trên máy: <b>đúng</b> thì bấm <b>Duyệt</b>, <b>sai</b> thì sửa lại số ngay ô dưới rồi bấm Duyệt.</div>
+        <label>Số seri</label><input class="cfsn" value="${esc(r.sn)}" autocomplete="off" inputmode="numeric" style="font-size:24px;font-weight:800;letter-spacing:1px;text-align:center">
+        ${want.kh ? `<label>Mã kích hoạt <span class="sub">(mã thứ 2 trên tem – nếu có)</span></label><input class="cfkh" value="${esc(r.kh || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">
+          <label>Mã kích hoạt mới <span class="sub">(mã thứ 3 – mã cập nhật, nếu có)</span></label><input class="cfkh2" value="${esc(r.kh2 || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">` : ""}
+        <div class="cfw" style="margin-top:8px"></div>
+        <div class="btns"><button type="button" class="btn okb cfok" style="font-size:17px">✔ Đúng – Duyệt</button></div>
+        <div class="btns"><button type="button" class="btn cfagain">🔄 Quét lại</button><button type="button" class="btn" data-close="scanBg">Hủy</button></div>`;
+      const inp = S.querySelector(".cfsn"), kh = S.querySelector(".cfkh"), kh2 = S.querySelector(".cfkh2"), w = S.querySelector(".cfw");
+      const prev = () => { const v = inp.value.trim(); const x = v ? findReg(v) : null;
+        w.innerHTML = !v ? "" : !snOk(v) ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại</div>` : x ? `<div class="found">✔ Có trong sổ bảo hành: ${esc(x.product || "")} – ${esc(x.customer || "")}</div>` : `<div class="sub">Seri chưa có trong sổ bảo hành</div>`; };
+      inp.addEventListener("input", prev); prev();
+      S.querySelector(".cfok").onclick = () => { const v = inp.value.trim().replace(/\s+/g, ""); if (!v) { toast("Nhập số seri"); inp.focus(); return; }
+        close("scanBg"); toast(`✔ Đã duyệt seri ${v}`); onSn(v, kh ? kh.value.trim() : "", kh2 ? kh2.value.trim() : ""); };
+      S.querySelector(".cfagain").onclick = () => openScanner(onSn, want); };
     S.querySelector(".scclose").onclick = () => { stopScan(); close("scanBg"); };
     const grab = () => { const c = document.createElement("canvas"), w = v.videoWidth, h = v.videoHeight; if (!w) return null;
       // cắt vùng khung xanh (giữa ảnh) cho đọc nhanh và chính xác hơn
@@ -3383,12 +3426,13 @@
       scanTimer = setTimeout(loop, 350); };
     // đọc chữ số trên tem (OCR) từ khung hình hiện tại
     S.querySelector(".scocr").onclick = async () => { const c = grab(); if (!c) { say("Camera chưa sẵn sàng", "var(--warn)"); return; }
-      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const sns = await ocrSerials([c.toDataURL("image/jpeg", .92)]); if (sns.length) finish(sns[0]); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
+      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const pc = parseCodes(await ocrTexts([c.toDataURL("image/jpeg", .92)])); if (pc.sn) finish(pc); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
       catch(e){ say("Không tải được bộ đọc chữ số (cần mạng)", "var(--bad)"); } };
     // chụp ảnh bằng ứng dụng camera (khi trình duyệt không mở được camera trực tiếp)
     S.querySelector(".scfile").onchange = async e => { const f = e.target.files[0]; if (!f) return; say("🔎 Đang đọc ảnh…");
-      let sns = []; try { sns = await barcodeSerials([f]); } catch(err){} if (!sns.length) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); try { sns = await ocrSerials([await compressImg(f)]); } catch(err){} }
-      if (sns.length) finish(sns[0]); else say("Không đọc được seri từ ảnh – chụp gần, rõ hơn, hoặc gõ tay", "var(--warn)"); };
+      let pc = null; try { const sns = await barcodeSerials([f]); if (sns.length) pc = {sn: sns[0], kh: "", kh2: ""}; } catch(err){}
+      if (!pc) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); try { const x = parseCodes(await ocrTexts([await compressImg(f)])); if (x.sn) pc = x; } catch(err){} }
+      if (pc) finish(pc); else say("Không đọc được seri từ ảnh – chụp gần, rõ hơn, hoặc gõ tay", "var(--warn)"); };
     if (!navigator.mediaDevices?.getUserMedia) { say("Trình duyệt không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); return; }
     try { scanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false});
       if (!$("#scanBg").classList.contains("show")) { stopScan(); return; }
@@ -3400,7 +3444,8 @@
     } catch(e){ say(e && e.name === "NotAllowedError" ? "Chưa cho phép dùng camera – bấm vào biểu tượng ổ khóa trên thanh địa chỉ → cho phép Camera, hoặc bấm “Chọn / chụp ảnh”" : "Không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); }
   }
   document.addEventListener("click", e => { const b = e.target.closest("[data-scan]"); if (!b) return; e.preventDefault();
-    const inp = document.querySelector(b.dataset.scan); if (inp) openScanner(sn => { inp.value = sn; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dispatchEvent(new Event("change", {bubbles: true})); }); });
+    const inp = document.querySelector(b.dataset.scan), khi = b.dataset.scankh ? document.querySelector(b.dataset.scankh) : null, kh2i = b.dataset.scankh2 ? document.querySelector(b.dataset.scankh2) : null;
+    if (inp) openScanner((sn, kh, kh2) => { inp.value = sn; if (khi && kh) khi.value = kh; if (kh2i && kh2) kh2i.value = kh2; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dispatchEvent(new Event("change", {bubbles: true})); }, {kh: !!khi}); });
   async function savePhotos(list, meta){
     const ids = [], now = new Date().toISOString();
     for (const d of list) { const id = "ph_" + uid(); await put("ph", Object.assign({id, data: d, at: now}, meta || {})); ids.push(id); }
