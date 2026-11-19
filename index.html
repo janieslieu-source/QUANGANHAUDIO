@@ -815,8 +815,16 @@
     $("#banner").classList.remove("show"); clearTimeout(nextBanner._t); setTimeout(nextBanner, 350);
     if (bannerTarget && !$("#app").classList.contains("hide")) goTo(bannerTarget);
   };
+  // Kỹ thuật (không phải Giám đốc): chỉ thấy thông báo liên quan Kỹ thuật – không thấy việc của Kế toán, Giám đốc, đơn bán
+  const KT_STAGES = ["cho_kt", "dang_sua", "cho_lk", "xong", "kt_tra"];
+  const ktOnly = () => role === "kt" && !boss;
   function events(){
     const ev = [];
+    if (ktOnly()) {
+      tickets.forEach(t => (t.history||[]).forEach(h => { const st = STAGES[h.stage];
+        if (KT_STAGES.includes(h.stage) || st?.to === "kt" || h.by === ROLES.kt.name) ev.push({t, h, title: `${t.product}`, sub: `SN ${t.serial}`, st}); }));
+      return ev.sort((a,b) => (b.h.at||"").localeCompare(a.h.at||"")).slice(0, 50);
+    }
     tickets.forEach(t => (t.history||[]).forEach(h => ev.push({t, h, title: `${t.product}`, sub: `SN ${t.serial}`, st: STAGES[h.stage]})));
     orders.forEach(o => (o.history||[]).forEach(h => ev.push({t: o, h, od: true, title: `Đơn ${o.code} · ${o.customer}`, sub: orderSummary(o), st: OSTAGES[h.stage]})));
     return ev.sort((a,b) => (b.h.at||"").localeCompare(a.h.at||"")).slice(0, 50);
@@ -1053,7 +1061,7 @@
     // Giám đốc: việc chờ GĐ duyệt; bộ phận khác: việc chờ chính bộ phận đó
     const pend = active ? pendingFor(boss ? "gd" : role).filter(x => !isUrgent(x)) : [];
     const total = urg.length + pend.length; urgCount = urg.length;
-    const day = active && !total && (boss || DAY_ROLES.includes(role)) ? notYetVC() : [];
+    const day = active && !total && (boss || DAY_ROLES.includes(role)) ? notYetVC().filter(x => !ktOnly() || (!x.lines && ["cho_kt", "dang_sua"].includes(x.stage))) : [];
     dayCount = day.length;
     document.body.classList.toggle("hasgap", total > 0 || day.length > 0);
     if (!total && day.length) {
