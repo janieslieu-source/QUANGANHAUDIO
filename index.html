@@ -3946,13 +3946,13 @@
   }
   let ccYm = null;
   // tên nhân viên chấm công (hệ thống nhận dạng theo tên gọi; khớp với tên đầy đủ trong danh mục nhân viên, ví dụ "LIÊU NGỌC ÁNH" = Ánh)
-  const CC_NAMES = ["Ánh", "Minh", "Danh", "Yến", "Thành", "Khang"];
+  const CC_NAMES = ["Liêu Ngọc Ánh", "Phạm Đức Minh", "Lê Ngọc Danh", "Thu Yến", "Trần Nguyễn Thuận Thành", "Trần Hữu Khang"];
   const lastWord = n => String(n || "").trim().split(/\s+/).pop();
   const ccShort = n => { const w = lastWord(n); return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""; };
   function ccPeople(){
     const emps = plEmployees(), used = new Set(), out = [];
-    CC_NAMES.forEach(nm => { const e = emps.find(x => !used.has(x.id) && (norm(x.name) === norm(nm) || norm(lastWord(x.name)) === norm(nm)));
-      if (e) { used.add(e.id); out.push(e); } else out.push({id: "nv_" + norm(nm), name: nm, kind: "nhanvien", active: true, virtual: true}); });
+    CC_NAMES.forEach(nm => { const e = emps.find(x => !used.has(x.id) && (norm(x.name) === norm(nm) || norm(lastWord(x.name)) === norm(lastWord(nm))));
+      if (e) { used.add(e.id); out.push(e); } else out.push({id: "nv_" + norm(lastWord(nm)), name: nm, kind: "nhanvien", active: true, virtual: true}); });
     emps.forEach(e => { if (!used.has(e.id)) out.push(e); });
     return out;
   }
