@@ -3334,13 +3334,13 @@
     return out.join("\n");
   }
   // quy định sản phẩm đầu: MÃ 1 = SỐ SERI (5 số → thêm 525 phía trước), MÃ 2 (6 số) = MÃ KÍCH HOẠT, MÃ 3 (6 số) = MÃ KÍCH HOẠT MỚI (cập nhật)
-  function parseCodes(text){
+  function parseCodes(text, strict){
     const t = String(text || "").replace(/[oO]/g, "0").replace(/[lI|]/g, "1");
     const run = join => { const r = {sn: "", kh: "", kh2: ""};
       // join: chữ số bị cách (VD "25 142") trên cùng 1 dòng thì ghép lại
       const toks = t.split(/\n+/).flatMap(line => ((join ? line.replace(/(\d)\s+(?=\d)/g, "$1") : line).match(/\d{5,10}/g) || []));
       for (const k of toks) {
-        if (!r.sn) { if (/^525\d{5}$/.test(k)) r.sn = k; else if (/^\d{5}$/.test(k)) r.sn = "525" + k; }
+        if (!r.sn) { if (/^525\d{5}$/.test(k)) r.sn = k; else if (!strict && !join && /^\d{5}$/.test(k)) r.sn = "525" + k; }   // 5 số phải đứng riêng, không ghép từ các số rời
         else if (!r.kh && /^\d{6}$/.test(k)) r.kh = k;
         else if (r.kh && !r.kh2 && /^\d{6}$/.test(k)) { r.kh2 = k; break; }
       }
@@ -3348,13 +3348,27 @@
     const a = run(false), b = a.sn ? null : run(true);
     return a.sn ? a : b;
   }
+  // xoay ảnh 90° / 270° (tem dán dọc) – trả về dataURL
+  function rotImg(src, deg){ return new Promise((ok, no) => { const im = new Image(); im.onload = () => { const c = document.createElement("canvas"), sw = deg % 180 !== 0;
+      c.width = sw ? im.height : im.width; c.height = sw ? im.width : im.height; const g = c.getContext("2d"); g.translate(c.width / 2, c.height / 2); g.rotate(deg * Math.PI / 180); g.drawImage(im, -im.width / 2, -im.height / 2);
+      ok(c.toDataURL("image/jpeg", .92)); }; im.onerror = no; im.src = src; }); }
+  // đọc chữ số trên tem: thử ảnh thẳng, không ra seri thì thử xoay 90° và 270° (tem dán dọc)
+  // ưu tiên seri đủ 8 số 525xxxxx (ở mọi chiều); chỉ khi không có mới lấy số 5 chữ số (thêm 525)
+  async function ocrCodes(src){
+    const texts = [];
+    for (const d of [0, 90, 270]) { try { const t = await ocrTexts([d ? await rotImg(src, d) : src]); texts.push(t); const pc = parseCodes(t, true); if (pc.sn) return pc; } catch(e){} }
+    for (const t of texts) { const pc = parseCodes(t); if (pc.sn) return pc; }
+    return {sn: "", kh: "", kh2: ""};
+  }
   async function ocrSerials(imgs){
     await loadScript(OCR.lib);
     if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
       .then(async w => { await w.setParameters({tessedit_char_whitelist: "0123456789 "}); return w; })
       .catch(e => { ocrWorker = null; throw e; });
     const w = await ocrWorker, found = [];
-    for (const d of imgs) { const {data} = await w.recognize(d); snFromText(data.text).forEach(s => found.includes(s) || found.push(s)); }
+    for (const d of imgs) { let {data} = await w.recognize(d), sns = snFromText(data.text);
+      for (const deg of [90, 270]) { if (sns.length) break; try { ({data} = await w.recognize(await rotImg(d, deg))); sns = snFromText(data.text); } catch(e){} }   // tem dán dọc
+      sns.forEach(s => found.includes(s) || found.push(s)); }
     return found;
   }
   // đọc seri từ ảnh rồi gọi apply(danh sách seri) – apply trả về số seri mới thêm
@@ -3426,12 +3440,12 @@
       scanTimer = setTimeout(loop, 350); };
     // đọc chữ số trên tem (OCR) từ khung hình hiện tại
     S.querySelector(".scocr").onclick = async () => { const c = grab(); if (!c) { say("Camera chưa sẵn sàng", "var(--warn)"); return; }
-      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const pc = parseCodes(await ocrTexts([c.toDataURL("image/jpeg", .92)])); if (pc.sn) finish(pc); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
+      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const pc = await ocrCodes(c.toDataURL("image/jpeg", .92)); if (pc.sn) finish(pc); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
       catch(e){ say("Không tải được bộ đọc chữ số (cần mạng)", "var(--bad)"); } };
     // chụp ảnh bằng ứng dụng camera (khi trình duyệt không mở được camera trực tiếp)
     S.querySelector(".scfile").onchange = async e => { const f = e.target.files[0]; if (!f) return; say("🔎 Đang đọc ảnh…");
       let pc = null; try { const sns = await barcodeSerials([f]); if (sns.length) pc = {sn: sns[0], kh: "", kh2: ""}; } catch(err){}
-      if (!pc) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); try { const x = parseCodes(await ocrTexts([await compressImg(f)])); if (x.sn) pc = x; } catch(err){} }
+      if (!pc) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); const u = URL.createObjectURL(f); try { const x = await ocrCodes(u); if (x.sn) pc = x; } catch(err){} finally { URL.revokeObjectURL(u); } }
       if (pc) finish(pc); else say("Không đọc được seri từ ảnh – chụp gần, rõ hơn, hoặc gõ tay", "var(--warn)"); };
     if (!navigator.mediaDevices?.getUserMedia) { say("Trình duyệt không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); return; }
     try { scanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false});
