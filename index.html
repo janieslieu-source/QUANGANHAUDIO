@@ -1767,6 +1767,7 @@
     }));
   }
   function drawRiBatches(){
+    $("#riList").innerHTML = ""; $("#riList").classList.add("hide"); return;   // không hiển thị danh sách file đã nhập (theo yêu cầu)
     const b = new Map(); regImp.forEach(d => { const k = d.batch || d.id; if (!b.has(k)) b.set(k, {file: d.file, at: d.at, by: d.by, n: 0, docs: []}); const x = b.get(k); x.n += (d.rows || []).length; x.docs.push(d.id); });
     const L = [...b.entries()].sort((a,b) => (b[1].at || "").localeCompare(a[1].at || ""));
     $("#riList").innerHTML = L.length ? `<details class="ridet"${drawRiBatches.open ? " open" : ""}><summary style="cursor:pointer;color:var(--muted);font-size:14px;padding:4px 0">📄 Đã nhập ${L.length} file · đang tra cứu ${riIdx.size.toLocaleString("vi-VN")} seri <span style="text-decoration:underline">(bấm để xem / xóa)</span></summary>` + L.map(([k, x]) => `<div class="item" style="cursor:default"><div class="row"><div><div class="pname">📄 ${esc(x.file || "File")}</div><div class="sub">${x.n.toLocaleString("vi-VN")} seri · nhập ${fmtTime(x.at)}${x.by ? " · " + esc(x.by) : ""}</div></div>
