@@ -413,7 +413,7 @@
         <div id="whSum" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button></div></div>
       <div class="panel" data-w="ton" id="nhapBox"><h3>➕ Nhập hàng mới</h3>
-        <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri là đủ</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
+        <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri – app tự đọc số seri</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
         <div id="nhRows"></div>
         <button type="button" class="btn sm" id="nhAdd" style="margin-top:8px">+ Thêm dòng</button>
         <label>Nhà cung cấp / ghi chú</label><input id="nhNote" placeholder="VD: Nhập từ NCC A, phiếu số 12">
@@ -2046,7 +2046,7 @@
         <div>${l.gift ? '<span class="tag gift">🎁 Hàng tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "tặng kèm" : l.months ? l.months + " tháng BH" : "không BH"})</span></div>
         <div class="seg xkmode" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-x="nhap" style="font-size:13px;padding:8px 4px">🔢 Nhập seri</button><button type="button" data-x="anh" style="font-size:13px;padding:8px 4px">📷 Ảnh seri</button><button type="button" data-x="khong" style="font-size:13px;padding:8px 4px">➖ Không seri</button></div>
         <div class="sub xkhint" data-i="${i}"></div>
-        <div class="xksn" data-i="${i}"><label style="margin-top:4px">Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty} seri (${SN_HINT})</label>
+        <div class="xksn" data-i="${i}"><label class="xklbl" style="margin-top:4px"></label>
           ${(() => { const av = inStock(l.product); return av.length ? `<div class="row" style="align-items:center;margin:6px 0 4px"><span class="sub">Kho còn <b>${av.length}</b> seri – bấm để chọn:</span>
             <button type="button" class="btn sm pri auto" data-i="${i}">⚡ Chọn tự động ${l.qty}</button></div>
             <div class="chips snpick" data-i="${i}" style="flex-wrap:wrap;max-height:150px;overflow:auto">${av.slice(0, 200).map(x => `<button type="button" class="chip" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
@@ -2058,18 +2058,21 @@
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
     // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
     const modes = (o.lines||[]).map((l,i) => snOf(o,i).length || inStock(l.product).length ? "nhap" : (noSerial(l.product) || !l.months) ? "khong" : "anh");
-    const XKHINT = {nhap: "", anh: "📷 Chụp ảnh tem / số seri để đối chiếu – không cần gõ seri (cần ít nhất 1 ảnh).", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
+    const XKHINT = {nhap: "Có thể chụp ảnh tem seri – app tự đọc số seri điền vào ô.", anh: "📷 Chụp ảnh tem seri (cần ít nhất 1 ảnh) – app tự đọc số seri điền vào ô bên dưới, không cần gõ. Đọc sai thì sửa lại; không đọc được vẫn xuất được, ảnh dùng để đối chiếu.", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
     const drawModes = () => (o.lines||[]).forEach((l,i) => {
       const m = modes[i];
       F5.querySelectorAll(`.xkmode[data-i="${i}"] button`).forEach(b => b.classList.toggle("on", b.dataset.x === m));
-      F5.querySelector(`.xksn[data-i="${i}"]`).classList.toggle("hide", m !== "nhap");
+      F5.querySelector(`.xksn[data-i="${i}"]`).classList.toggle("hide", m === "khong");
+      F5.querySelector(`.xksn[data-i="${i}"] .xklbl`).textContent = m === "anh" ? `Số seri đọc từ ảnh (kiểm tra lại, có thể sửa) – tối đa ${l.qty} seri`
+        : `Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty} seri (${SN_HINT})`;
       F5.querySelector(`.xkph[data-i="${i}"]`).classList.toggle("hide", m === "khong");
-      F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = XKHINT[m] + (m !== "nhap" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
+      F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = XKHINT[m] + (m === "khong" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
+      sync();
     });
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
     const count = () => (o.lines||[]).forEach((l,i) => { const L = snList(i), n = L.length, bad = L.filter(x => !snOk(x)), el = F5.querySelector(`.snc[data-i="${i}"]`);
       el.textContent = `Đã nhập ${n}/${l.qty} seri` + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
-      el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || l.months) ? "var(--bad)" : ""; });
+      el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || (l.months && modes[i] === "nhap")) ? "var(--bad)" : ""; });
     const setList = (i, L) => { F5.querySelector(`.sn[data-i="${i}"]`).value = L.join("\n"); sync(); };
     const sync = () => { count(); F5.querySelectorAll(".snpick").forEach(box => { const L = snList(box.dataset.i).map(keySN);
       box.querySelectorAll(".chip").forEach(c => c.classList.toggle("sel", L.includes(keySN(c.dataset.sn)))); }); };
@@ -2083,14 +2086,20 @@
       setList(i, inStock(l.product).map(x => x.serial).filter(sn => !used.has(keySN(sn))).slice(0, l.qty));
     });
     F5.querySelectorAll(".sn").forEach(t => t.addEventListener("input", sync)); sync();
-    F5.querySelectorAll(".xkph").forEach(photoPicker);
+    // chụp ảnh tem seri -> tự đọc số seri, thêm vào ô seri của dòng đó (bỏ seri đã có hoặc đã dùng ở dòng khác)
+    F5.querySelectorAll(".xkph").forEach(box => photoPicker(box, 3, imgs => autoReadSn(box, imgs, sns => {
+      const i = Number(box.dataset.i); if (modes[i] === "khong") return 0;
+      const L = snList(i), used = new Set((o.lines||[]).flatMap((_, j) => snList(j)).map(keySN)), add = sns.filter(s => !used.has(keySN(s)));
+      setList(i, L.concat(add)); return add.length;
+    })));
     drawModes();
     actCtx = {run: async () => {
-      const serials = (o.lines||[]).map((l,i) => modes[i] === "nhap" ? snList(i) : []);
+      const serials = (o.lines||[]).map((l,i) => modes[i] === "khong" ? [] : snList(i));
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i], n = serials[i].length;
         if (modes[i] === "nhap" && ((l.months && n !== l.qty) || n > l.qty)) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n}) – hoặc chọn “📷 Ảnh seri”`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
         if (modes[i] === "anh" && !F5.querySelector(`.xkph[data-i="${i}"]`)._photos().length) { toast(`${l.product}: chụp ít nhất 1 ảnh seri để đối chiếu`); throw new Error("x"); }
+        if (modes[i] === "anh" && n > l.qty) { toast(`${l.product}: chỉ cần ${l.qty} seri nhưng đang có ${n} – xóa bớt seri đọc thừa`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
       }
       const badSn = serials.flat().filter(x => !snOk(x));
       if (badSn.length) { toast(`Seri sai định dạng: ${badSn.join(", ")} – phải ${SN_HINT}`); throw new Error("x"); }
@@ -2407,9 +2416,10 @@
       return d;
     } finally { URL.revokeObjectURL(url); }
   }
-  function photoPicker(box, max){
+  // onAdd(ảnh mới thêm) – dùng để tự đọc số seri từ ảnh
+  function photoPicker(box, max, onAdd){
     max = max || 3;
-    box.innerHTML = `<div class="phbar"><label class="btn sm phbtn">📷 Ảnh số seri <span class="sub">(tối đa <b class="phmax">${max}</b>)</span><input type="file" accept="image/*" multiple style="display:none"></label><div class="phthumbs"></div></div>`;
+    box.innerHTML = `<div class="phbar"><label class="btn sm phbtn">📷 Ảnh số seri <span class="sub">(tối đa <b class="phmax">${max}</b>)</span><input type="file" accept="image/*" multiple style="display:none"></label><div class="phthumbs"></div></div><div class="sub phocr"></div>`;
     const list = [], inp = box.querySelector("input"), th = box.querySelector(".phthumbs");
     const draw = () => {
       th.innerHTML = list.map((d, i) => `<span class="pht"><img src="${d}" alt="Ảnh seri ${i + 1}"><button type="button" data-i="${i}">✕</button></span>`).join("");
@@ -2420,11 +2430,46 @@
     inp.onchange = async () => {
       const fs = [...inp.files], room = max - list.length; inp.value = "";
       if (fs.length > room) toast(`Chỉ lưu tối đa ${max} ảnh – lấy ${room} ảnh đầu`);
-      for (const f of fs.slice(0, room)) { try { list.push(await compressImg(f)); } catch(e){ toast("Không đọc được ảnh"); } }
+      const added = [];
+      for (const f of fs.slice(0, room)) { try { const d = await compressImg(f); list.push(d); added.push(d); } catch(e){ toast("Không đọc được ảnh"); } }
       draw();
+      if (onAdd && added.length) onAdd(added);
     };
     box._photos = () => list.slice();
     box._clear = () => { list.length = 0; draw(); };
+  }
+  /* ---------- Tự đọc số seri từ ảnh (OCR – Tesseract, chạy ngay trên điện thoại, lần đầu cần mạng để tải bộ đọc) ---------- */
+  const OCR = {lib: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js", worker: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+    core: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1", lang: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int"};
+  let ocrWorker = null;
+  // tìm mọi seri đúng quy định (525 + 5 số) trong chữ đọc được; bỏ khoảng trắng giữa các chữ số trên cùng 1 dòng
+  function snFromText(text){
+    const out = [];
+    String(text || "").split(/\n+/).forEach(line => {
+      const digits = line.replace(/[oO]/g, "0").replace(/[lI|]/g, "1").replace(/[^\d]+/g, m => /^\s+$/.test(m) ? "" : " ");
+      (digits.match(/525\d{5}/g) || []).forEach(s => { if (!out.includes(s)) out.push(s); });
+    });
+    return out;
+  }
+  async function ocrSerials(imgs){
+    await loadScript(OCR.lib);
+    if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
+      .then(async w => { await w.setParameters({tessedit_char_whitelist: "0123456789 "}); return w; })
+      .catch(e => { ocrWorker = null; throw e; });
+    const w = await ocrWorker, found = [];
+    for (const d of imgs) { const {data} = await w.recognize(d); snFromText(data.text).forEach(s => found.includes(s) || found.push(s)); }
+    return found;
+  }
+  // đọc seri từ ảnh rồi gọi apply(danh sách seri) – apply trả về số seri mới thêm
+  async function autoReadSn(box, imgs, apply){
+    const st = box.querySelector(".phocr"); if (!st) return;
+    st.style.color = ""; st.textContent = "🔎 Đang đọc số seri từ ảnh… (lần đầu hơi lâu)";
+    try {
+      const sns = await ocrSerials(imgs), n = apply(sns);
+      st.style.color = sns.length ? "var(--ok)" : "var(--warn)";
+      st.textContent = sns.length ? `✔ Đọc được ${sns.length} seri từ ảnh${n < sns.length ? ` (${sns.length - n} seri đã có sẵn)` : ""} – kiểm tra lại cho đúng với ảnh`
+        : "Không đọc được seri – chụp gần, rõ, đủ sáng rồi thử lại, hoặc gõ tay";
+    } catch(e){ st.style.color = "var(--warn)"; st.textContent = "Không tải được bộ đọc seri (cần mạng) – ảnh vẫn được lưu, có thể gõ tay seri"; }
   }
   async function savePhotos(list, meta){
     const ids = [], now = new Date().toISOString();
@@ -2460,7 +2505,13 @@
       <div class="full nhsnbox"><div class="nhsns"></div><button type="button" class="btn sm nhsnadd" style="margin-top:6px">+ Thêm dòng seri</button></div>
       <div class="full nhph"></div></div>`);
     const el = $("#nhRows").lastElementChild, $e = q => el.querySelector(q);
-    photoPicker($e(".nhph"), 3);
+    // dòng "Có seri": chụp ảnh tem seri -> tự đọc seri, mỗi seri thêm 1 dòng (số lượng tự đếm)
+    const readSn = imgs => autoReadSn($e(".nhph"), imgs, list => {
+      const have = new Set(sns().map(keySN)), add = list.filter(s => !have.has(keySN(s)));
+      el.querySelectorAll(".nhsn").forEach(x => { if (!x.value.trim()) x.parentElement.remove(); });
+      add.forEach(s => addSn(s, true)); upd(); return add.length;
+    });
+    photoPicker($e(".nhph"), 3, imgs => { if (el._hasSn) readSn(imgs); });
     el._hasSn = false;
     const sns = () => [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean);
     const setSnBtns = () => el.querySelectorAll(".nhsnopt button").forEach(x => x.classList.toggle("on", (x.dataset.s === "1") === el._hasSn));
@@ -2470,7 +2521,7 @@
       if (!moi && !el._snTouched && n !== el._snFor) { el._snFor = n; el._hasSn = !!n && !noSerial(n) && stock.some(x => norm(x.product) === norm(n)); setSnBtns(); }
       const list = sns(), useSn = el._hasSn;
       $e(".nhsnbox").classList.toggle("hide", !useSn);
-      $e(".nhsnhint").textContent = useSn ? "📷 Đã chụp ảnh tem seri thì không cần gõ seri – ảnh dùng để đối chiếu. Gõ seri thì số lượng tự đếm." : "Hàng nhỏ / không có seri – chỉ cộng tồn theo số lượng (ảnh không bắt buộc).";
+      $e(".nhsnhint").textContent = useSn ? "📷 Chụp ảnh tem seri – app tự đọc số seri và thêm từng dòng (số lượng tự đếm); kiểm tra lại cho đúng. Không đọc được thì có ảnh là đủ, không cần gõ." : "Hàng nhỏ / không có seri – chỉ cộng tồn theo số lượng (ảnh không bắt buộc).";
       if (useSn && list.length) { $e(".nhq").value = list.length; $e(".nhq").readOnly = true; } else $e(".nhq").readOnly = false;
       const q = parseInt($e(".nhq").value) || 0, exists = n && (findProduct(n) || productNames().some(p => norm(p) === norm(n)));
       let h = "";
@@ -2480,10 +2531,10 @@
       el.querySelectorAll(".nhsn").forEach(x => { const v = x.value.trim(), st = v && findStock(v); x.style.borderColor = !v ? "" : (!snOk(v) || (st && st.status === "in") || list.filter(y => keySN(y) === keySN(v)).length > 1) ? "var(--bad)" : ""; x.title = st && st.status === "in" ? "Seri đã có trong kho" : ""; });
     };
     el._upd = upd;
-    const addSn = v => { $e(".nhsns").insertAdjacentHTML("beforeend", `<div style="display:flex;gap:6px;margin-top:6px"><input class="nhsn" inputmode="numeric" maxlength="8" placeholder="Seri 525xxxxx" value="${esc(v || "")}"><button type="button" class="btn sm nhsnrm">✕</button></div>`);
+    const addSn = (v, noFocus) => { $e(".nhsns").insertAdjacentHTML("beforeend", `<div style="display:flex;gap:6px;margin-top:6px"><input class="nhsn" inputmode="numeric" maxlength="8" placeholder="Seri 525xxxxx" value="${esc(v || "")}"><button type="button" class="btn sm nhsnrm">✕</button></div>`);
       const row = $e(".nhsns").lastElementChild, inp = row.querySelector("input");
       inp.addEventListener("input", upd); inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addSn(); } });
-      row.querySelector(".nhsnrm").onclick = () => { row.remove(); upd(); }; upd(); setTimeout(() => inp.focus(), 30); };
+      row.querySelector(".nhsnrm").onclick = () => { row.remove(); upd(); }; upd(); if (!noFocus) setTimeout(() => inp.focus(), 30); };
     $e(".nhsnadd").onclick = () => addSn();
     el.querySelectorAll(".nhseg button").forEach(b => b.onclick = () => {
       el.dataset.m = b.dataset.m; el.querySelectorAll(".nhseg button").forEach(x => x.classList.toggle("on", x === b));
@@ -2491,7 +2542,8 @@
       $e(".nhn").placeholder = moi ? "Gõ tên sản phẩm mới" : "Bấm chọn sản phẩm trong kho";
       $e(".nhlbl").textContent = moi ? "Tên sản phẩm mới · Số lượng" : "Chọn sản phẩm · Số lượng";
       $e(".nhph")._setMax(moi ? 2 : 3); upd(); });
-    el.querySelectorAll(".nhsnopt button").forEach(b => b.onclick = () => { el._hasSn = b.dataset.s === "1"; el._snTouched = true; setSnBtns(); upd(); });
+    el.querySelectorAll(".nhsnopt button").forEach(b => b.onclick = () => { el._hasSn = b.dataset.s === "1"; el._snTouched = true; setSnBtns(); upd();
+      const ph = $e(".nhph")._photos(); if (el._hasSn && ph.length && !sns().length) readSn(ph); });   // đã chụp ảnh trước rồi mới chọn "Có seri"
     attachPicker($e(".nhn"), $e(".sugg"), upd);
     $e(".nhn").addEventListener("input", upd);
     $e(".nhq").addEventListener("input", upd);
