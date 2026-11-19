@@ -3102,14 +3102,31 @@
       foot: ["TỔNG CỘNG", vnd(tot.open), vnd(tot.inn), vnd(tot.out), vnd(tot.adj), vnd(tot.close)], sign: ["Thủ kho", "Kế toán", "Giám đốc"]});
   };
 
-  /* ================= CHI PHÍ CÔNG TY (chụp ảnh chi tiêu, công ty trả / khách trả, tự cộng dồn) ================= */
-  const EX_CATS = ["Nhập hàng", "Ship hàng", "Mua hàng", "Trả nợ nhà cung cấp", "Chành xe / Bưu điện", "Mua linh kiện", "Xăng xe", "Ăn uống / tiếp khách", "Văn phòng phẩm", "Điện nước / Internet", "Khác"];
-  const EX_PAYER = {cty: "🏢 Công ty trả", khach: "👤 Khách trả"};
+  /* ================= CHI PHÍ CÔNG TY =================
+     Loại chi: nhap (nhập hàng – trả 1 lần / trả một phần, còn nợ NCC), ship (trả ship cho đơn, tính lại khách -> công nợ),
+     dodung (đồ dùng bộ phận, máy móc có bảo hành), luong (lương nhân viên), tranoncc (trả nợ nhà cung cấp), khac (chi khác)
+     Chụp ảnh hay tự điền đều cộng dồn. "Tiền công ty đã chi" = tiền thật sự chi ra trong ngày chi. */
+  const EX_KINDS = {nhap: "📦 Nhập hàng", ship: "🚚 Ship hàng", dodung: "🧰 Đồ dùng bộ phận", luong: "👷 Lương nhân viên", tranoncc: "💳 Trả nợ NCC", khac: "📝 Chi khác"};
+  const EX_LABEL = {nhap: "Nhập hàng", ship: "Ship hàng", dodung: "Đồ dùng bộ phận", luong: "Lương nhân viên", tranoncc: "Trả nợ nhà cung cấp", khac: "Chi khác"};
+  const EX_DEPTS = ["Kỹ thuật", "Kho", "Bán hàng", "Vận chuyển", "Kế toán", "Bảo hành", "Văn phòng / chung"];
+  const EX_OTHER = ["Xăng xe", "Ăn uống / tiếp khách", "Văn phòng phẩm", "Điện nước / Internet", "Chành xe / Bưu điện", "Thuê mặt bằng", "Khác"];
+  const exKind = x => x.kind || "khac";
   const exAmt = x => Number(x.amount) || 0;
+  // tiền công ty thật sự chi ra
+  const exCash = x => { const k = exKind(x); if (k === "nhap") return Number(x.paid) || 0; if ((k === "ship" || k === "khac") && x.payer === "khach") return 0; return exAmt(x); };
+  const exCat = x => exKind(x) === "khac" ? (x.cat || "Khác") : EX_LABEL[exKind(x)];
+  const exTitle = x => { const k = exKind(x);
+    if (k === "nhap") return `Nhập ${x.qty || ""} ${x.product || ""}${x.supplier ? " – " + x.supplier : ""}`;
+    if (k === "ship") return `Ship đơn ${x.ref || ""}${x.customer ? " – " + x.customer : ""}`;
+    if (k === "dodung") return `${x.item || ""}${Number(x.qty) > 1 ? " × " + x.qty : ""} – BP ${x.dept || ""}`;
+    if (k === "luong") return `Lương ${x.employee || ""}${x.month ? " tháng " + x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}`;
+    if (k === "tranoncc") return `Trả nợ ${x.supplier || "nhà cung cấp"}`;
+    return x.content || "Chi khác"; };
+  const exWho = x => x.supplier || x.customer || x.employee || (x.dept ? "BP " + x.dept : "");
   const refOf = code => code ? (orders.find(o => o.code === code) || tickets.find(t => t.code === code)) : null;
   const exFor = code => expenses.filter(x => x.ref === code);
   const exLine = code => { const L = exFor(code); if (!L.length || hidePrice()) return "";
-    return `<div class="sub" style="margin-top:4px">🧾 Chi phí: ${L.map(x => `${esc(x.content)} <b>${money(exAmt(x))}</b> (${x.payer === "khach" ? "khách trả" : "công ty trả"})`).join(" · ")}</div>`; };
+    return `<div class="sub" style="margin-top:4px">🧾 Chi phí: ${L.map(x => `${esc(exKind(x) === "ship" ? "Phí ship" : exTitle(x))} <b>${money(exAmt(x))}</b> (${x.payer === "khach" ? "khách trả" : x.charge ? "công ty trả, tính lại khách" : "công ty trả"})`).join(" · ")}</div>`; };
   function exRange(mode, day){
     const d = new Date((day || iso(new Date())) + "T00:00:00");
     if (mode === "day") { const e = new Date(d); e.setDate(d.getDate() + 1); return {s: d, e, label: "Ngày " + fmt(iso(d))}; }
@@ -3118,101 +3135,208 @@
   }
   const exIn = (s, e) => expenses.filter(x => { const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
-    const cty = L.filter(x => x.payer !== "khach"), kh = L.filter(x => x.payer === "khach"), cat = {};
-    cty.forEach(x => { const k = x.cat || "Khác"; cat[k] = cat[k] || {n: 0, amt: 0}; cat[k].n++; cat[k].amt += exAmt(x); });
-    return {cty: cty.reduce((a,x) => a + exAmt(x), 0), kh: kh.reduce((a,x) => a + exAmt(x), 0), nCty: cty.length, nKh: kh.length, cat};
+    const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
+    L.forEach(x => { const c = exCash(x), k = exKind(x);
+      if (c > 0) { const n = exCat(x); cat[n] = cat[n] || {n: 0, amt: 0}; cat[n].n++; cat[n].amt += c; cty += c; nCty++; }
+      if ((k === "ship" || k === "khac") && x.payer === "khach") { kh += exAmt(x); nKh++; }
+      if (k === "nhap") { goods += exAmt(x); goodsDebt += Math.max(0, exAmt(x) - (Number(x.paid) || 0)); }
+      if (k === "ship" && x.charge) shipCharge += exAmt(x); });
+    return {cty, nCty, kh, nKh, cat, goods, goodsDebt, shipCharge};
+  }
+  // nợ nhà cung cấp (từ trước tới nay): tiền hàng chưa trả – các lần trả nợ
+  function supplierDebts(){
+    const m = {};
+    expenses.forEach(x => { const k = exKind(x); if (!x.supplier || (k !== "nhap" && k !== "tranoncc")) return; const key = norm(x.supplier);
+      m[key] = m[key] || {name: x.supplier, goods: 0, paid: 0, debt: 0, last: ""}; const r = m[key];
+      if (k === "nhap") { r.goods += exAmt(x); r.paid += Number(x.paid) || 0; r.debt += exAmt(x) - (Number(x.paid) || 0); }
+      else { r.paid += exAmt(x); r.debt -= exAmt(x); }
+      if ((x.date || "") > r.last) r.last = x.date || ""; });
+    return Object.values(m).sort((a,b) => b.debt - a.debt);
+  }
+  const supDebtOf = name => supplierDebts().find(r => norm(r.name) === norm(name))?.debt || 0;
+  // phí ship tính lại khách -> cộng vào công nợ của đơn / phiếu
+  async function chargeShip(x, amount){
+    const now = new Date().toISOString(), save = (stage, note, extra) => x.lines ? advanceOrder(x, stage, note, extra) : advance(x, stage, note, extra);
+    if (x.stage === "cong_no" && x.pay) {
+      const pay = Object.assign({}, x.pay, {amount: (Number(x.pay.amount) || 0) + amount, gd: boss ? "ok" : (x.pay.gd ? "cho" : x.pay.gd)});
+      await save("cong_no", `🚚 Cộng phí ship ${money(amount)} vào công nợ: ${money(x.pay.amount)} → ${money(pay.amount)}`, {pay});
+      return "đã cộng vào công nợ";
+    }
+    if (x.stage === "da_tt" && x.pay) {
+      const pay = {status: "cong_no", amount, at: now, note: `Phí ship tính lại khách (đã thanh toán trước ${money(x.pay.amount)})`, paidBefore: x.pay, gd: boss ? "ok" : "cho"};
+      await save("cong_no", `🚚 Phí ship ${money(amount)} tính lại khách → chuyển công nợ`, {pay});
+      return "khách đã thanh toán trước – chuyển thành công nợ phí ship";
+    }
+    await save(x.stage, `🚚 Phí ship ${money(amount)} tính lại khách – Kế toán cộng vào khi ghi thanh toán`, {shipCharge: (Number(x.shipCharge) || 0) + amount});
+    return "Kế toán sẽ cộng khi ghi thanh toán";
   }
   function drawExpenses(host){
     if (!host) return;
     if (!host._built) {
-      host._built = true; host._mode = "month"; host._payer = "cty";
+      host._built = true; host._mode = "month"; host._kind = "nhap"; host._payer = "cty"; host._payMode = "full";
       host.innerHTML = `<h3>🧾 Chi phí công ty</h3>
-        <div class="sub" style="margin-bottom:6px">Chụp ảnh hóa đơn / chuyển khoản, ghi nội dung chi (VD: “Ship đơn A Thắng”), chọn <b>Công ty trả</b> hay <b>Khách trả</b> – app tự cộng dồn theo ngày, tuần, tháng.</div>
+        <div class="sub" style="margin-bottom:6px">Chọn loại chi → điền thông tin (chụp ảnh hay tự điền đều được) → app tự tính và cộng dồn.</div>
         <details class="exform" open><summary style="cursor:pointer;font-weight:650;padding:4px 0">➕ Ghi khoản chi mới</summary>
-          <div class="exph" style="margin-top:6px"></div>
-          <label>Nội dung chi *</label><input class="exc" placeholder="VD: Ship đơn A Thắng, Grab giao hàng Q7…">
-          <div class="two"><div><label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 50.000"></div>
-            <div><label>Ngày chi</label><input class="exd" type="date"></div></div>
-          <div class="two"><div><label>Loại chi</label><select class="ext">${EX_CATS.map(c => `<option>${c}</option>`).join("")}</select></div>
-            <div><label>Đơn / phiếu liên quan</label><input class="exr" list="exRefList" placeholder="Mã đơn (tùy chọn)" autocomplete="off"></div></div>
-          <div class="sub exrinfo"></div>
-          <label>Nhà cung cấp / người nhận tiền</label><input class="exs" list="exSupList" placeholder="VD: NCC Hà Nội, tài xế Grab… (tùy chọn)" autocomplete="off">
-          <label>Ai trả? *</label>
-          <div class="choice"><button type="button" class="opt" data-p="cty"><span class="ic">🏢</span>Công ty trả</button><button type="button" class="opt" data-p="khach"><span class="ic">👤</span>Khách trả</button></div>
+          <div class="seg exkind" style="flex-wrap:wrap;margin-top:6px">${Object.entries(EX_KINDS).map(([k,v]) => `<button type="button" data-k="${k}" style="flex:1 1 30%;min-width:100px;padding:9px 4px;font-size:13px">${v}</button>`).join("")}</div>
+          <div class="exfields"></div>
+          <div class="exph" style="margin-top:8px"></div>
           <label>Ghi chú</label><input class="exn" placeholder="Tùy chọn">
           <div class="btns"><button type="button" class="btn pri exgo">💾 Lưu khoản chi</button></div></details>
+        <div class="panel exsupbox hide" style="margin:12px 0 0;padding:10px"><b style="font-size:14px">💳 Nợ nhà cung cấp</b><div class="exsup" style="margin-top:6px"></div></div>
         <div class="row" style="align-items:center;margin-top:14px;gap:8px"><b style="font-size:14px">📊 Tổng hợp chi phí</b><input type="date" class="exday" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="seg exseg" style="margin-top:6px"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button></div>
         <div class="exsum"></div>
-        <input class="exq" type="search" placeholder="Tìm nội dung, mã đơn, khách…" style="margin-top:8px">
+        <input class="exq" type="search" placeholder="Tìm nội dung, mã đơn, khách, NCC, nhân viên…" style="margin-top:8px">
         <div class="list exlist" style="margin-top:8px"></div>
         <div class="btns"><button type="button" class="btn exfile">📊 Excel chi phí</button></div>`;
-      const $h = q => host.querySelector(q);
+      const $h = q => host.querySelector(q), money0 = el => Number(String(el?.value || "").replace(/[^\d]/g, "")) || 0;
       photoPicker($h(".exph"), 3, null, "📷 Chụp ảnh hóa đơn / chi tiêu");
-      $h(".exd").value = iso(new Date()); $h(".exday").value = iso(new Date());
-      const syncP = () => host.querySelectorAll(".opt[data-p]").forEach(o => o.classList.toggle("sel", o.dataset.p === host._payer));
-      host.querySelectorAll(".opt[data-p]").forEach(o => o.onclick = () => { host._payer = o.dataset.p; syncP(); }); syncP();
-      $h(".exa").addEventListener("input", () => { const v = $h(".exa"), n = Number(String(v.value).replace(/[^\d]/g, "")) || 0; v.value = v.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); });
-      $h(".exr").addEventListener("input", () => { const r = refOf($h(".exr").value.trim()); $h(".exrinfo").textContent = r ? `→ ${r.customer}${r.lines ? " · " + orderSummary(r) : " · " + r.product}` : ""; });
-      // tự đoán loại chi theo nội dung gõ vào (vẫn chọn lại được)
-      $h(".exc").addEventListener("input", () => { const t = norm($h(".exc").value), set = v => $h(".ext").value = v;
-        if (/tra no|no ncc|nha cung cap|ncc/.test(t)) set("Trả nợ nhà cung cấp"); else if (/nhap hang|nhap kho|tien hang/.test(t)) set("Nhập hàng");
-        else if (/ship|grab|giao hang|van chuyen/.test(t)) set("Ship hàng"); else if (/chanh|buu dien|viettel post|ghn|ghtk/.test(t)) set("Chành xe / Bưu điện");
-        else if (/linh kien/.test(t)) set("Mua linh kiện"); else if (/^mua|mua hang/.test(t)) set("Mua hàng"); else if (/xang/.test(t)) set("Xăng xe"); });
+      $h(".exday").value = iso(new Date());
+      const fmtMoneyInput = el => el.addEventListener("input", () => { const n = money0(el); el.value = el.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); host._calc && host._calc(); });
+      const payerBtns = () => `<label>Ai trả? *</label><div class="choice"><button type="button" class="opt" data-p="cty"><span class="ic">🏢</span>Công ty trả</button><button type="button" class="opt" data-p="khach"><span class="ic">👤</span>Khách trả</button></div>`;
+      const dateF = (lbl) => `<label>${lbl}</label><input class="exd" type="date" value="${iso(new Date())}">`;
+      const buildFields = () => {
+        const k = host._kind, F = $h(".exfields"); host._calc = null;
+        host.querySelectorAll(".exkind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+        if (k === "nhap") F.innerHTML = `<div class="two"><div>${dateF("Ngày nhập *")}</div><div><label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="VD: NCC Hà Nội"></div></div>
+          <div class="two"><div><label>Sản phẩm nhập *</label><input class="expr" list="prodList" autocomplete="off" placeholder="Tên sản phẩm"></div><div><label>Số lượng *</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <div class="two"><div><label>Số SP có VAT (0 = không VAT)</label><input class="exvq" type="number" min="0" inputmode="numeric" value="0"></div><div><label>Thuế VAT (%)</label><input class="exvr" type="number" min="0" step="0.5" value="8"></div></div>
+          <label>Tổng tiền hàng (đ) – đã gồm VAT *</label><input class="exa" inputmode="numeric" placeholder="VD: 102.400.000">
+          <div class="found excost" style="display:none;margin-top:6px"></div>
+          <label>Thanh toán</label><div class="choice"><button type="button" class="opt" data-pm="full"><span class="ic">✅</span>Thanh toán 1 lần (đủ)</button><button type="button" class="opt" data-pm="part"><span class="ic">💳</span>Trả một phần / chưa trả</button></div>
+          <div class="expaidw hide"><label>Đã thanh toán (đ)</label><input class="expaid" inputmode="numeric" placeholder="VD: 50.000.000 (0 nếu chưa trả)"></div>
+          <div class="sub exdebt" style="margin-top:6px"></div>`;
+        else if (k === "ship") F.innerHTML = `<label>Trả ship cho đơn nào? *</label><input class="exr" list="exRefList" autocomplete="off" placeholder="Gõ mã đơn hoặc tên khách">
+          <div class="found exrinfo" style="display:none;margin-top:6px"></div>
+          <div class="two"><div><label>Phí ship (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 50.000"></div><div>${dateF("Ngày trả ship")}</div></div>
+          ${payerBtns()}
+          <label class="exchargew" style="display:flex;gap:8px;align-items:flex-start;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" class="excharge" style="width:auto;margin:3px 0 0"> <span><b>Tính lại phí ship cho khách</b> – tự cộng vào công nợ của khách</span></label>`;
+        else if (k === "dodung") F.innerHTML = `<div class="two"><div><label>Bộ phận *</label><select class="exdept">${EX_DEPTS.map(d => `<option>${d}</option>`).join("")}</select></div><div>${dateF("Ngày mua *")}</div></div>
+          <div class="two"><div><label>Tên đồ dùng *</label><input class="exitem" placeholder="VD: Máy hàn, mỏ hàn, kệ kho…"></div><div><label>Số lượng</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <label>Chi phí (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 1.500.000">
+          <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" class="exmach" style="width:auto;margin:0"> Là máy móc / thiết bị</label>
+          <div class="exwarw hide"><label>Bảo hành</label><select class="exwm"><option value="0">Không bảo hành</option>${[3,6,12,18,24,36].map(m => `<option value="${m}" ${m === 12 ? "selected" : ""}>${m} tháng</option>`).join("")}</select><div class="sub exwu" style="margin-top:4px"></div></div>`;
+        else if (k === "luong") F.innerHTML = `<label>Tên nhân viên *</label><input class="exemp" list="exEmpList" autocomplete="off" placeholder="VD: Lê Ngọc Danh">
+          <div class="two"><div><label>Lương tháng</label><input class="exmon" type="month" value="${iso(new Date()).slice(0, 7)}"></div><div>${dateF("Ngày trả lương")}</div></div>
+          <label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 8.000.000">`;
+        else if (k === "tranoncc") F.innerHTML = `<label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="Chọn nhà cung cấp">
+          <div class="sub exsupdebt" style="margin-top:4px"></div>
+          <div class="two"><div><label>Số tiền trả (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 20.000.000"></div><div>${dateF("Ngày trả")}</div></div>
+          <div class="sub exdebt" style="margin-top:6px"></div>`;
+        else F.innerHTML = `<label>Nội dung chi *</label><input class="exc" placeholder="VD: Đổ xăng xe giao hàng, tiếp khách…">
+          <div class="two"><div><label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 200.000"></div><div>${dateF("Ngày chi")}</div></div>
+          <label>Loại chi</label><select class="excat">${EX_OTHER.map(c => `<option>${c}</option>`).join("")}</select>${payerBtns()}`;
+        host.querySelectorAll(".exfields .exa, .exfields .expaid").forEach(fmtMoneyInput);
+        const syncP = () => { host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.classList.toggle("sel", o.dataset.p === host._payer));
+          const cw = $h(".exchargew"); if (cw) { cw.style.display = host._payer === "cty" ? "flex" : "none"; if (host._payer !== "cty") $h(".excharge").checked = false; } };
+        host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.onclick = () => { host._payer = o.dataset.p; syncP(); }); syncP();
+        if (k === "nhap") {
+          host._calc = () => { const qty = parseInt($h(".exqty").value) || 0, total = money0($h(".exa")), c = costCalc("total", total, qty, $h(".exvq").value, $h(".exvr").value);
+            $h(".excost").innerHTML = costHtml(c); $h(".excost").style.display = c ? "" : "none";
+            host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.classList.toggle("sel", o.dataset.pm === host._payMode));
+            $h(".expaidw").classList.toggle("hide", host._payMode !== "part");
+            const paid = host._payMode === "full" ? total : Math.min(total, money0($h(".expaid"))), debt = total - paid;
+            $h(".exdebt").innerHTML = total ? `Đã thanh toán: <b>${money(paid)}</b> · Còn nợ nhà cung cấp: <b style="color:${debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(debt)}</b>` : "";
+            const sup = $h(".exsupn").value.trim(); if (sup && supDebtOf(sup)) $h(".exdebt").innerHTML += `<br>Nợ cũ với ${esc(sup)}: ${money(supDebtOf(sup))} → sau đợt này: <b>${money(supDebtOf(sup) + debt)}</b>`; };
+          host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.onclick = () => { host._payMode = o.dataset.pm; host._calc(); if (host._payMode === "part") $h(".expaid").focus(); });
+          [".exqty", ".exvq", ".exvr", ".exsupn"].forEach(s => $h(s).addEventListener("input", host._calc));
+        }
+        if (k === "ship") $h(".exr").addEventListener("input", () => { const r = refOf($h(".exr").value.trim()), box = $h(".exrinfo");
+          box.style.display = r ? "" : "none";
+          box.innerHTML = r ? `🛒 <b>${esc(r.code)}</b> · Ngày mua: <b>${fmt(r.saleDate || r.createdAt)}</b> · Khách: <b>${esc(r.customer)}</b>${r.phone ? " · " + esc(r.phone) : ""}<br>${esc(r.lines ? orderSummary(r) : r.product)} · ${esc((r.lines ? OSTAGES : STAGES)[r.stage]?.label || "")}${r.pay ? ` · ${PAY[r.pay.status]} ${money(r.pay.amount)}` : ""}` : ""; });
+        if (k === "dodung") { const w = () => { const on = $h(".exmach").checked, m = Number($h(".exwm").value); $h(".exwarw").classList.toggle("hide", !on);
+            $h(".exwu").textContent = on && m ? `Bảo hành đến ${fmt(iso(addMonths(new Date(($h(".exd").value || iso(new Date())) + "T00:00:00"), m)))}` : ""; };
+          [".exmach", ".exwm", ".exd"].forEach(s => $h(s).addEventListener("change", w)); w(); }
+        if (k === "tranoncc") { host._calc = () => { const sup = $h(".exsupn").value.trim(), d = sup ? supDebtOf(sup) : 0, a = money0($h(".exa"));
+            $h(".exsupdebt").innerHTML = sup ? `Đang nợ ${esc(sup)}: <b style="color:var(--bad)">${money(d)}</b>` : "";
+            $h(".exdebt").innerHTML = sup && a ? `Sau khi trả còn nợ: <b>${money(d - a)}</b>${d - a < 0 ? " (trả dư)" : ""}` : ""; };
+          $h(".exsupn").addEventListener("input", host._calc); }
+        host._calc && host._calc();
+      };
+      host.querySelectorAll(".exkind button").forEach(b => b.onclick = () => { host._kind = b.dataset.k; host._payer = "cty"; buildFields(); });
+      buildFields();
       host.querySelectorAll(".exseg button").forEach(b => b.onclick = () => { host._mode = b.dataset.m; drawExpenses(host); });
       $h(".exday").addEventListener("change", () => drawExpenses(host));
       $h(".exq").addEventListener("input", () => drawExpenses(host));
       $h(".exgo").onclick = async () => {
-        const content = $h(".exc").value.trim(), amount = Number(String($h(".exa").value).replace(/[^\d]/g, "")) || 0;
-        if (!content) { toast("Nhập nội dung chi"); $h(".exc").focus(); return; }
-        if (!amount) { toast("Nhập số tiền"); $h(".exa").focus(); return; }
+        const k = host._kind, v = s => ($h(s)?.value || "").trim(), amount = money0($h(".exa")), date = v(".exd") || iso(new Date());
+        const rec = {id: "ex_" + uid(), kind: k, date, amount, note: v(".exn"), by: actor(), at: new Date().toISOString()};
+        const need = (cond, msg, sel) => { if (!cond) { toast(msg); if (sel) $h(sel)?.focus(); throw new Error("x"); } };
+        let shipTarget = null;
+        try {
+          need(amount > 0, "Nhập số tiền", ".exa");
+          if (k === "nhap") { const qty = parseInt(v(".exqty")) || 0, c = costCalc("total", amount, qty, v(".exvq"), v(".exvr"));
+            need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
+            const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
+            Object.assign(rec, {supplier: v(".exsupn"), product: v(".expr"), qty, vatQty: c.vatQty, vatRate: c.vatRate, unit: c.unit, unitVat: c.unitVat, paid, debt: amount - paid, payMode: host._payMode}); }
+          else if (k === "ship") { shipTarget = refOf(v(".exr")); need(shipTarget, "Chọn đơn cần trả ship (gõ đúng mã đơn)", ".exr");
+            Object.assign(rec, {ref: shipTarget.code, customer: shipTarget.customer, saleDate: shipTarget.saleDate || (shipTarget.createdAt || "").slice(0, 10), payer: host._payer, charge: host._payer === "cty" && !!$h(".excharge")?.checked}); }
+          else if (k === "dodung") { need(v(".exitem"), "Nhập tên đồ dùng", ".exitem"); const mach = $h(".exmach").checked, wm = mach ? Number(v(".exwm")) : 0;
+            Object.assign(rec, {dept: v(".exdept"), item: v(".exitem"), qty: parseInt(v(".exqty")) || 1, machine: mach, wMonths: wm, wUntil: wm ? iso(addMonths(new Date(date + "T00:00:00"), wm)) : ""}); }
+          else if (k === "luong") { need(v(".exemp"), "Nhập tên nhân viên", ".exemp"); Object.assign(rec, {employee: v(".exemp"), month: v(".exmon")}); }
+          else if (k === "tranoncc") { need(v(".exsupn"), "Chọn nhà cung cấp", ".exsupn"); Object.assign(rec, {supplier: v(".exsupn")}); }
+          else { need(v(".exc"), "Nhập nội dung chi", ".exc"); Object.assign(rec, {content: v(".exc"), cat: v(".excat"), payer: host._payer}); }
+        } catch(e){ return; }
         const b = $h(".exgo"); b.disabled = true;
         try {
-          const now = new Date().toISOString(), ref = $h(".exr").value.trim(), r = refOf(ref), ph = $h(".exph")._photos();
-          const photos = ph.length ? await savePhotos(ph, {product: "Chi phí", ref: content}) : [];
-          await put("ex", {id: "ex_" + uid(), content, amount, date: $h(".exd").value || iso(new Date()), cat: $h(".ext").value, ref, customer: r ? r.customer : "", payer: host._payer, supplier: $h(".exs").value.trim(), note: $h(".exn").value.trim(), photos, by: actor(), at: now});
-          toast(`Đã lưu: ${content} – ${money(amount)} (${host._payer === "khach" ? "khách trả" : "công ty trả"})`);
-          ["exc", "exa", "exr", "exn", "exs"].forEach(k => $h("." + k).value = ""); $h(".exrinfo").textContent = ""; $h(".exph")._clear();
+          const ph = $h(".exph")._photos();
+          rec.photos = ph.length ? await savePhotos(ph, {product: "Chi phí", ref: exTitle(rec)}) : [];
+          await put("ex", rec);
+          let extra = "";
+          if (rec.charge && shipTarget) extra = " · " + await chargeShip(shipTarget, amount);
+          toast(`Đã lưu: ${exTitle(rec)} – ${money(amount)}${extra}`);
+          buildFields(); $h(".exn").value = ""; $h(".exph")._clear();
         } catch(e){} finally { b.disabled = false; }
       };
       $h(".exfile").onclick = () => {
-        const {s, e, label} = exRange(host._mode, $h(".exday").value), L = exIn(s, e).sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.at || "").localeCompare(b.at || "")), S = exSum(L);
-        exportReportPdf({file: `Chi-phi_${{day: "ngay", week: "tuan", month: "thang"}[host._mode]}_${iso(s)}`, title: "Chi phí công ty", period: label,
-          summary: [["Công ty trả (đ)", vnd(S.cty)], ["Khách trả (đ)", vnd(S.kh)], ["Số khoản chi", L.length]],
-          head: [{t: "Ngày chi"}, {t: "Nội dung"}, {t: "Loại chi"}, {t: "Nhà cung cấp / người nhận"}, {t: "Mã đơn / phiếu"}, {t: "Khách hàng"}, {t: "Ai trả"}, {t: "Người ghi"}, {t: "Ghi chú"}, {t: "Có ảnh"}, {t: "Số tiền (đ)", r: 1}],
-          rows: L.map(x => [fmt(x.date), x.content, x.cat || "", x.supplier || "", x.ref || "", x.customer || "", x.payer === "khach" ? "Khách trả" : "Công ty trả", x.by || "", x.note || "", (x.photos || []).length ? "Có" : "", vnd(exAmt(x))]),
-          foot: ["", "Công ty trả", "", "", "", "", "", "", "", "", vnd(S.cty)],
-          extra: extraTable("Công ty trả theo loại chi", ["Loại chi", "Số khoản", "Số tiền (đ)"], Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [k, v.n, vnd(v.amt)]))});
+        const {s, e, label} = exRange(host._mode, $h(".exday").value), L = exIn(s, e).sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.at || "").localeCompare(b.at || "")), S = exSum(L), sup = supplierDebts();
+        exportSheets(`Chi-phi_${{day: "ngay", week: "tuan", month: "thang"}[host._mode]}_${iso(s)}`, "Chi phí công ty", label, [
+          {name: "Chi phí", pre: [["Tiền công ty đã chi (đ)", S.cty], ["Khách tự trả (đ)", S.kh], ["Giá trị hàng nhập (đ)", S.goods], ["Còn nợ NCC từ hàng nhập kỳ này (đ)", S.goodsDebt], ["Phí ship tính lại khách (đ)", S.shipCharge]],
+            head: ["Ngày", "Loại chi", "Nội dung", "NCC / Khách / NV / Bộ phận", "Mã đơn", "Sản phẩm / đồ dùng", "SL", "Có VAT", "Tổng giá trị (đ)", "Công ty đã chi (đ)", "Còn nợ NCC (đ)", "Ai trả", "Tính lại khách", "Bảo hành", "Người ghi", "Ghi chú", "Có ảnh"],
+            rows: L.map(x => { const k = exKind(x); return [fmt(x.date), exCat(x), exTitle(x), exWho(x), x.ref || "", x.product || x.item || "", Number(x.qty) || "", k === "nhap" ? (x.vatQty ? `${x.vatQty} SP (${x.vatRate}%)` : "Không") : "", exAmt(x), exCash(x), k === "nhap" ? Math.max(0, exAmt(x) - (Number(x.paid) || 0)) : "",
+              x.payer === "khach" ? "Khách trả" : "Công ty", x.charge ? "Có" : "", x.machine ? (x.wMonths ? `${x.wMonths} tháng (đến ${fmt(x.wUntil)})` : "Không BH") : "", x.by || "", x.note || "", (x.photos || []).length ? "Có" : ""]; }),
+            foot: ["", "TỔNG", "", "", "", "", "", "", L.reduce((a,x) => a + exAmt(x), 0), S.cty, S.goodsDebt]},
+          {name: "Theo loại chi", head: ["Loại chi", "Số khoản", "Công ty đã chi (đ)"], rows: Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [k, v.n, v.amt]), foot: ["TỔNG", S.nCty, S.cty]},
+          {name: "Nợ nhà cung cấp", head: ["Nhà cung cấp", "Tổng tiền hàng (đ)", "Đã trả (đ)", "Còn nợ (đ)", "Lần gần nhất"], rows: sup.map(r => [r.name, r.goods, r.paid, r.debt, fmt(r.last)]), foot: ["TỔNG", sup.reduce((a,r) => a + r.goods, 0), sup.reduce((a,r) => a + r.paid, 0), sup.reduce((a,r) => a + r.debt, 0), ""]}]);
       };
     }
     const $h = q => host.querySelector(q);
     host.querySelectorAll(".exseg button").forEach(b => b.classList.toggle("on", b.dataset.m === host._mode));
-    const {s, e, label} = exRange(host._mode, $h(".exday").value), L0 = exIn(s, e), S = exSum(L0), td = exSum(exIn(...(() => { const r = exRange("day", iso(new Date())); return [r.s, r.e]; })()));
+    const {s, e, label} = exRange(host._mode, $h(".exday").value), L0 = exIn(s, e), S = exSum(L0);
+    const tdR = exRange("day", iso(new Date())), td = exSum(exIn(tdR.s, tdR.e));
     $h(".exsum").innerHTML = `<div class="sub" style="margin:6px 0"><b>${label}</b></div>
       <div class="stats" style="grid-template-columns:repeat(2,1fr)">
-        <div class="stat c-bad"><b style="font-size:15px">${money(S.cty)}</b><span>🏢 Công ty trả (${S.nCty} khoản)</span></div>
-        <div class="stat c-info"><b style="font-size:15px">${money(S.kh)}</b><span>👤 Khách trả (${S.nKh} khoản)</span></div>
-        <div class="stat" style="grid-column:1/-1"><b style="font-size:15px">${money(td.cty)}</b><span>Hôm nay công ty đã chi</span></div></div>
-      ${Object.keys(S.cat).length ? `<table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Công ty trả theo loại</th><th>Số khoản</th><th style="width:110px">Số tiền</th></tr>${Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : ""}`;
+        <div class="stat c-bad"><b style="font-size:15px">${money(S.cty)}</b><span>🏢 Tiền công ty đã chi (${S.nCty} khoản)</span></div>
+        <div class="stat"><b style="font-size:15px">${money(td.cty)}</b><span>Hôm nay đã chi</span></div>
+        ${S.goods ? `<div class="stat c-info"><b style="font-size:15px">${money(S.goods)}</b><span>📦 Giá trị hàng nhập</span></div><div class="stat c-warn"><b style="font-size:15px">${money(S.goodsDebt)}</b><span>Còn nợ NCC (hàng nhập kỳ này)</span></div>` : ""}
+        ${S.kh ? `<div class="stat c-info"><b style="font-size:15px">${money(S.kh)}</b><span>👤 Khách tự trả (${S.nKh})</span></div>` : ""}
+        ${S.shipCharge ? `<div class="stat c-ok"><b style="font-size:15px">${money(S.shipCharge)}</b><span>🚚 Phí ship tính lại khách</span></div>` : ""}</div>
+      ${Object.keys(S.cat).length ? `<table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Công ty đã chi theo loại</th><th>Số khoản</th><th style="width:110px">Số tiền</th></tr>${Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : ""}`;
+    const sup = supplierDebts().filter(r => Math.round(r.debt) !== 0);
+    $h(".exsupbox").classList.toggle("hide", !sup.length);
+    $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b></td></tr>`).join("")}</table>` : "";
     const q = norm($h(".exq").value);
     let L = L0.slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
-    if (q) L = L.filter(x => norm([x.content, x.ref, x.customer, x.cat, x.note, x.by, x.supplier].join(" ")).includes(q));
+    if (q) L = L.filter(x => norm([exTitle(x), exWho(x), x.ref, x.product, x.item, x.note, x.by, exCat(x)].join(" ")).includes(q));
     const canDel = boss || role === "ac";
-    $h(".exlist").innerHTML = L.length ? L.slice(0, 60).map(x => `<div class="item" style="cursor:default"><div class="row"><div><div class="pname">${esc(x.content)}</div>
-        <div class="sub">${fmt(x.date)} · ${esc(x.cat || "")}${x.supplier ? " · " + esc(x.supplier) : ""}${x.ref ? ` · ${esc(x.ref)}${x.customer ? " – " + esc(x.customer) : ""}` : ""}${x.by ? " · " + esc(x.by) : ""}</div>${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
-        <div style="text-align:right"><b style="color:${x.payer === "khach" ? "var(--info)" : "var(--bad)"}">${money(exAmt(x))}</b><div class="sub">${x.payer === "khach" ? "Khách trả" : "Công ty trả"}</div></div></div>
-        <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + x.content)}${canDel ? `<button type="button" class="btn sm danger" data-exdel="${esc(x.id)}" style="margin-left:auto">🗑 Xóa</button>` : ""}</div></div>`).join("")
+    $h(".exlist").innerHTML = L.length ? L.slice(0, 60).map(x => { const k = exKind(x), c = exCash(x);
+      const detail = k === "nhap" ? `${x.vatQty ? `${x.vatQty}/${x.qty} SP có VAT ${x.vatRate}% · ` : "Không VAT · "}${money(x.unit)}/SP${x.vatQty ? ` (có VAT ${money(x.unitVat)})` : ""}<br>Tổng ${money(exAmt(x))} · đã trả <b>${money(x.paid)}</b>${exAmt(x) - x.paid > 0 ? ` · <b style="color:var(--bad)">còn nợ ${money(exAmt(x) - x.paid)}</b>` : " · đã thanh toán đủ"}`
+        : k === "ship" ? `Ngày mua ${fmt(x.saleDate)}${x.charge ? " · <b style='color:var(--ok)'>tính lại khách (cộng công nợ)</b>" : ""}`
+        : k === "dodung" ? `${x.machine ? (x.wMonths ? `🛡️ BH ${x.wMonths} tháng – đến ${fmt(x.wUntil)}` : "Máy móc · không bảo hành") : "Đồ dùng"}`
+        : k === "luong" ? `Lương tháng ${x.month ? x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}` : k === "khac" ? esc(x.cat || "") : "";
+      return `<div class="item" style="cursor:default"><div class="row"><div><div class="pname"><span class="tag ${k === "nhap" ? "vc" : k === "ship" ? "bh" : "sc"}">${esc(EX_LABEL[k])}</span>${esc(exTitle(x))}</div>
+        <div class="sub">${fmt(x.date)}${x.by ? " · " + esc(x.by) : ""}</div><div class="sub">${detail}</div>${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
+        <div style="text-align:right"><b style="color:${c ? "var(--bad)" : "var(--info)"}">${money(c || exAmt(x))}</b><div class="sub">${c ? (k === "nhap" && c < exAmt(x) ? "đã chi" : "công ty chi") : "khách trả"}</div></div></div>
+        <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + exTitle(x))}${canDel ? `<button type="button" class="btn sm danger" data-exdel="${esc(x.id)}" style="margin-left:auto">🗑 Xóa</button>` : ""}</div></div>`; }).join("")
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có khoản chi trong kỳ."}</div>`;
     host.querySelectorAll("[data-exdel]").forEach(b => b.onclick = async () => { const x = expenses.find(y => y.id === b.dataset.exdel); if (!x) return;
-      if (!confirm(`Xóa khoản chi “${x.content}” – ${money(exAmt(x))}?`)) return;
+      if (!confirm(`Xóa khoản chi “${exTitle(x)}” – ${money(exAmt(x))}?${x.charge ? "\n(Phí ship đã cộng vào công nợ khách sẽ KHÔNG tự trừ lại – nhờ Kế toán sửa chi phí đơn đó)" : ""}`)) return;
       try { await delDoc("ex", x.id); toast("Đã xóa khoản chi"); } catch(e){} });
-    // gợi ý mã đơn / phiếu gần đây
-    let dl = document.getElementById("exRefList");
-    if (!dl) { dl = document.createElement("datalist"); dl.id = "exRefList"; document.body.appendChild(dl); }
-    let dl2 = document.getElementById("exSupList");
-    if (!dl2) { dl2 = document.createElement("datalist"); dl2.id = "exSupList"; document.body.appendChild(dl2); }
-    dl2.innerHTML = [...new Set(expenses.map(x => x.supplier).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join("");
-    dl.innerHTML = [...orders, ...tickets].sort((a,b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || "")).slice(0, 80).map(x => `<option value="${esc(x.code)}" label="${esc(x.customer)}">`).join("");
+    // danh sách gợi ý
+    const dlist = (id, vals) => { let d = document.getElementById(id); if (!d) { d = document.createElement("datalist"); d.id = id; document.body.appendChild(d); } d.innerHTML = vals.join(""); };
+    dlist("exSupList", supplierDebts().map(r => `<option value="${esc(r.name)}" label="Còn nợ ${esc(money(r.debt))}">`));
+    dlist("exEmpList", [...new Set(expenses.filter(x => x.employee).map(x => x.employee))].map(v => `<option value="${esc(v)}">`));
+    dlist("exRefList", [...orders, ...tickets].filter(x => x.stage !== "huy").sort((a,b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || "")).slice(0, 120).map(x => `<option value="${esc(x.code)}" label="${esc(x.customer)} · ${esc(fmt(x.saleDate || x.createdAt))}">`));
   }
 
   /* ================= KẾ TOÁN ================= */
@@ -3315,6 +3439,7 @@
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
       <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
+      ${!edit && t.shipCharge && !t.shipChargeDone ? `<div class="reason">🚚 Phí ship tính lại khách: <b>${money(t.shipCharge)}</b> – nhớ cộng vào số tiền thanh toán / công nợ.</div>` : ""}
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
       ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
@@ -3373,7 +3498,8 @@
       const reqOk = req && ((payStatus === "da_tt" && pay.amount === Number(req.amount)) || (payStatus === "cong_no" && pay.amount === Math.max(0, debt0 - Number(req.amount))));
       Object.assign(pay, boss ? {gd: "ok", gdAt: pay.editedAt || pay.at, gdBy: "Giám đốc"} : reqOk ? {gd: "ok", gdAt: pay.at, gdBy: "Giám đốc (đã báo khách trả)"} : {gd: "cho"});
       if (req) note += ` (theo Giám đốc báo khách trả ${money(req.amount)})`;
-      if (isOd) await advanceOrder(t, payStatus, note, {pay, payReq: null}); else await advance(t, payStatus, note, {pay, payReq: null});
+      const shipDone = !edit && t.shipCharge && !t.shipChargeDone ? {shipChargeDone: true} : {};
+      if (isOd) await advanceOrder(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone)); else await advance(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone));
       if (!boss && !reqOk) pushTo("gd", `👔 Giám đốc duyệt ${PAY[payStatus].toLowerCase()}: ${t.code} – ${t.customer}`, `${money(pay.amount)}${edit ? " (Kế toán đã sửa)" : ""}`, t.id);
       toast(edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
     }};
@@ -3446,9 +3572,11 @@
       h = `<div class="sub" style="margin-bottom:6px">Theo đơn bán trong ${P} (ngày bán)</div>` + miniTable(["#  Khách hàng", "Số đơn", "SL mua", "Giá trị (đ)"], D.cus.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}`, r.orders, r.qty, r.value]));
     } else if (gwTab === "exp") { const E = D.exS;
       h = `<div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px">
-        <div class="stat c-bad"><b style="font-size:15px">${money(E.cty)}</b><span>🏢 Công ty trả (${E.nCty} khoản)</span></div>
-        <div class="stat c-info"><b style="font-size:15px">${money(E.kh)}</b><span>👤 Khách trả (${E.nKh} khoản)</span></div></div>` +
-        miniTable(["Công ty trả theo loại chi", "Số khoản", "Số tiền (đ)"], Object.entries(E.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [esc(k), v.n, v.amt]));
+        <div class="stat c-bad"><b style="font-size:15px">${money(E.cty)}</b><span>🏢 Tiền công ty đã chi (${E.nCty} khoản)</span></div>
+        <div class="stat c-info"><b style="font-size:15px">${money(E.goods)}</b><span>📦 Giá trị hàng nhập</span></div>
+        <div class="stat c-warn"><b style="font-size:15px">${money(supplierDebts().reduce((a,r) => a + r.debt, 0))}</b><span>💳 Đang nợ nhà cung cấp</span></div>
+        <div class="stat c-ok"><b style="font-size:15px">${money(E.shipCharge)}</b><span>🚚 Phí ship tính lại khách</span></div></div>` +
+        miniTable(["Công ty đã chi theo loại", "Số khoản", "Số tiền (đ)"], Object.entries(E.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [esc(k), v.n, v.amt]));
     } else {
       h = `<div class="sub" style="margin-bottom:6px">Công nợ đang còn, tính đến hôm nay · xếp theo số ngày nợ lâu nhất</div>` + miniTable(["Khách hàng", "Nợ lâu nhất", "Số phiếu", "Còn nợ (đ)"], D.old.slice(0, 15).map(r => [`${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}<div class="sub">${esc(r.codes.join(", "))}</div>`, `${r.oldest} ngày${r.oldest >= DEBT_DAYS ? " ⏰" : ""}`, r.n, r.amt]));
     }
@@ -3487,10 +3615,10 @@
         head: ["Ngày", "Số đơn", "SL bán", "Tặng", "Giá trị (đ)"], rows: S.days, foot: ["TỔNG", S.orders, S.qty, S.gift, S.value]},
       {name: "Hàng xuất nhiều nhất", head: ["Hạng", "Sản phẩm", "SL bán", "Tặng", "Tổng xuất", "Số đơn", "Số khách"], rows: D.top.map((r, i) => [i + 1, r.name, r.qty, r.gift, r.total, r.orders, r.cus])},
       {name: "Khách mua nhiều nhất", head: ["Hạng", "Khách hàng", "SĐT", "Số đơn", "SL mua", "Giá trị (đ)"], rows: D.cus.map((r, i) => [i + 1, r.name, r.phone, r.orders, r.qty, r.value])},
-      {name: "Chi phí", pre: [["Công ty trả (đ)", D.exS.cty], ["Khách trả (đ)", D.exS.kh]].concat(Object.entries(D.exS.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [`  ${k} (đ)`, v.amt])),
-        head: ["Ngày chi", "Nội dung", "Loại chi", "Nhà cung cấp / người nhận", "Mã đơn", "Khách hàng", "Ai trả", "Số tiền (đ)"],
-        rows: D.exL.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(x => [fmt(x.date), x.content, x.cat || "", x.supplier || "", x.ref || "", x.customer || "", x.payer === "khach" ? "Khách trả" : "Công ty trả", exAmt(x)]),
-        foot: ["", "TỔNG công ty trả", "", "", "", "", "", D.exS.cty]},
+      {name: "Chi phí", pre: [["Tiền công ty đã chi (đ)", D.exS.cty], ["Giá trị hàng nhập (đ)", D.exS.goods], ["Phí ship tính lại khách (đ)", D.exS.shipCharge]].concat(Object.entries(D.exS.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [`  ${k} (đ)`, v.amt])),
+        head: ["Ngày", "Loại chi", "Nội dung", "NCC / Khách / NV / Bộ phận", "Mã đơn", "Tổng giá trị (đ)", "Công ty đã chi (đ)", "Còn nợ NCC (đ)"],
+        rows: D.exL.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(x => [fmt(x.date), exCat(x), exTitle(x), exWho(x), x.ref || "", exAmt(x), exCash(x), exKind(x) === "nhap" ? Math.max(0, exAmt(x) - (Number(x.paid) || 0)) : ""]),
+        foot: ["", "TỔNG", "", "", "", D.exL.reduce((a,x) => a + exAmt(x), 0), D.exS.cty, D.exS.goodsDebt]},
       {name: "Khách nợ lâu nhất", head: ["Hạng", "Khách hàng", "SĐT", "Nợ lâu nhất (ngày)", "Nợ từ ngày", "Số phiếu", "Mã phiếu", "Còn nợ (đ)"], rows: D.old.map((r, i) => [i + 1, r.name, r.phone, r.oldest, fmt(r.since), r.n, r.codes.join(", "), r.amt]),
         foot: ["", "TỔNG", "", "", "", D.old.reduce((a,r) => a + r.n, 0), "", D.old.reduce((a,r) => a + r.amt, 0)]}]);
   };
