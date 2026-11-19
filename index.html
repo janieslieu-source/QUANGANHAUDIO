@@ -316,6 +316,8 @@
     <section id="v-bh">
       <form class="panel" id="recvForm" autocomplete="off">
         <h3>📥 Tiếp nhận hàng</h3>
+        <div class="seg" id="tKind" style="margin:4px 0 8px"><button type="button" data-tk="" class="on">🆕 Phiếu mới</button><button type="button" data-tk="1">🧪 Phiếu test</button></div>
+        <div class="sub hide" id="tKindHint" style="margin:-4px 0 8px;color:#6d28d9">🧪 Phiếu test: chạy đủ quy trình như phiếu mới (Kho → Kỹ thuật → Vận chuyển → Kế toán). Xong quy trình bấm <b>🗑 Hủy đơn test</b> trên phiếu để xóa sạch.</div>
         <div id="batchBox"></div>
         <label>Tên khách hàng *</label><input name="customer" required>
         <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
@@ -367,7 +369,7 @@
 
           <div id="issueWrap" class="hide">
             <label>Mô tả lỗi / tình trạng *</label><textarea name="issue"></textarea>
-            <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="ttest" style="width:auto;margin:0"> 🧪 Đơn test (thử nghiệm) – cuối đợt test xóa hàng loạt ở tab Giám đốc</label>
+<input type="hidden" name="ttest" value="">
             <div class="btns"><button class="btn pri" type="submit" id="recvBtn">Gửi</button></div>
             <div class="btns"><button class="btn" type="submit" id="recvMore">➕ Lưu & thêm hàng mới (cùng khách)</button></div>
           </div>
@@ -1410,6 +1412,8 @@
     return `<div class="reason" style="margin-top:8px;${bad ? "background:var(--badbg);color:var(--bad)" : ""}"><b>${sameDay.length ? `⛔ HÔM NAY đã nhập ${sameDay.length} phiếu cho seri này – rất có thể trùng phiếu!` : open.length ? "⚠️ Seri này ĐANG có phiếu chưa xong – kiểm tra kẻo tạo trùng" : "ℹ️ Seri này từng nhận bảo hành / sửa chữa"}</b>${L.slice(0, 5).map(row).join("")}${L.length > 5 ? `<div class="sub">… và ${L.length - 5} phiếu cũ hơn</div>` : ""}</div>`;
   }
   const F = $("#recvForm");
+  function setTKind(v){ F.ttest.value = v ? "1" : ""; document.querySelectorAll("#tKind button").forEach(b => b.classList.toggle("on", b.dataset.tk === (v ? "1" : ""))); $("#tKindHint").classList.toggle("hide", !v); }
+  document.querySelectorAll("#tKind button").forEach(b => b.onclick = () => setTKind(b.dataset.tk));
   function refreshRecv(){
     const sn = F.serial.value.trim(), r = findReg(sn);
     $("#typeWrap").classList.toggle("hide", !sn);
@@ -1469,7 +1473,7 @@
     $("#batchBox").innerHTML = b && b.items.length ? `<div class="found" style="margin-bottom:6px">🧾 Đã nhận cho <b>${esc(b.customer)}</b> (${b.items.length} hàng):<br>${b.items.map((x, i) => `${i + 1}. ${esc(x.product)} · SN ${esc(x.serial)} – ${x.text}`).join("<br>")}
       <div style="margin-top:6px"><button type="button" class="btn sm" id="batchEnd">✔ Xong khách này</button></div></div>` : "";
     $("#itemHead").textContent = b && b.items.length ? `Hàng thứ ${b.items.length + 1} – Tên sản phẩm *` : "Tên sản phẩm *";
-    if ($("#batchEnd")) $("#batchEnd").onclick = () => { recvBatch = null; F.reset(); recvType = null; bhMode = "sua"; refreshRecv(); };
+    if ($("#batchEnd")) $("#batchEnd").onclick = () => { recvBatch = null; F.reset(); setTKind(""); recvType = null; bhMode = "sua"; refreshRecv(); };
   }
   F.customer.addEventListener("input", () => { if (F.serial.value.trim()) refreshRecv(); });
   F.serial.addEventListener("input", () => {
@@ -1497,7 +1501,7 @@
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
     const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
-    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, F.ttest.checked ? {test: true} : {}, {history: []}, base);
+    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, F.ttest.value ? {test: true} : {}, {history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
     let newRec = null;
@@ -1533,13 +1537,13 @@
     recvBatch.items.push({product: t.product, serial: t.serial, text: label});
     if (more) {   // giữ tên khách & SĐT, xóa phần hàng để nhập hàng tiếp theo
       const c = F.customer.value, ph = F.phone.value;
-      F.reset(); F.exProduct.dataset.touched = ""; F.customer.value = c; F.phone.value = ph; recvType = null; bhMode = "sua"; refreshRecv();
+      const tk = F.ttest.value; F.reset(); setTKind(tk); F.exProduct.dataset.touched = ""; F.customer.value = c; F.phone.value = ph; recvType = null; bhMode = "sua"; refreshRecv();
       toast(`Đã lưu hàng ${recvBatch.items.length} (${label.replace(/^\S+\s/, "")}) – nhập hàng tiếp theo`);
       setTimeout(() => F.product.focus(), 50);
       return;
     }
     const many = recvBatch.items.length > 1; recvBatch = null;
-    F.reset(); F.exProduct.dataset.touched = ""; recvType = null; bhMode = "sua"; refreshRecv();
+    F.reset(); setTKind(""); F.exProduct.dataset.touched = ""; recvType = null; bhMode = "sua"; refreshRecv();
     if (many) { toast("Đã lưu đủ hàng của khách – các bộ phận đã được báo"); return; }
     if (isEx) { toast("Đã đổi mới – chuyển Kho bàn giao máy mới"); goTo("wh", `Đổi mới bảo hành: ${t.product} – máy mới SN ${t.exchange.newSerial}. Kho nhập mật mã để bàn giao cho Vận chuyển.`); }
     else if (stage === "cho_gd") { toast("Đã gửi giám đốc duyệt"); goTo("gd", `Có hàng sửa chữa mới: ${t.product} (SN ${t.serial}) cần giám đốc duyệt.`); }
