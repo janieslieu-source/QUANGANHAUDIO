@@ -304,6 +304,7 @@
       <button class="tab" data-tab="kt"><span class="ti">🔧</span>Kỹ thuật<span class="cnt hide"></span></button>
       <button class="tab" data-tab="vc"><span class="ti">🚚</span>Vận chuyển<span class="cnt hide"></span></button>
       <button class="tab" data-tab="ac"><span class="ti">💰</span>Kế toán<span class="cnt hide"></span></button>
+      <button class="tab hide" data-tab="nc"><span class="ti">📅</span>Ngày công<span class="cnt hide"></span></button>
       <button class="tab" data-tab="sa"><span class="ti">🛒</span>Bán hàng<span class="cnt hide"></span></button>
       <button class="tab" data-tab="wh"><span class="ti">📦</span>Kho<span class="cnt hide"></span></button>
       <button class="tab" data-tab="cc"><span class="ti">🕘</span>Chấm công<span class="cnt hide"></span></button>
@@ -557,9 +558,13 @@
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
         <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
-      <div class="panel hide" id="ccBox"></div>
       <div class="panel hide" id="plBox"></div>
       <div class="panel exbox" id="exAc"></div>
+    </section>
+
+    <!-- ===== NGÀY CÔNG (Kế toán, Giám đốc) ===== -->
+    <section id="v-nc" class="hide">
+      <div class="panel hide" id="ccBox"></div>
     </section>
 
     <!-- ===== CHẤM CÔNG ===== -->
@@ -869,7 +874,7 @@
     if (await checkPw(loginRole, $("#pw").value)) { $("#pw").value = ""; setBoss(loginRole === "gd"); enter(loginRole); }
     else { $("#pwErr").textContent = "Sai mật mã. Vui lòng thử lại."; $("#pw").select(); }
   };
-  document.querySelectorAll(".tab").forEach(b => b.onclick = () => b.dataset.tab === "cc" ? showCC() : goTo(b.dataset.tab));
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => b.dataset.tab === "cc" ? showCC() : b.dataset.tab === "nc" ? showNC() : goTo(b.dataset.tab));
   const ktLocked = () => role === "kt" && !boss;
   function goTo(r, reason){
     if (r === role) { if (ccView) enter(r); else renderAll(); return; }
@@ -901,7 +906,8 @@
     $("#login").classList.add("hide"); $("#app").classList.remove("hide");
     document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt"); });   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
     markActive();
-    ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
+    ["bh","gd","kt","vc","ac","sa","wh","cc","nc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
+    $('.tab[data-tab="nc"]').classList.toggle("hide", !(boss || r === "ac"));   // tab Ngày công: chỉ Kế toán, Giám đốc
     const tb = document.querySelector(`.tab[data-tab="${r}"]`); if (tb && tb.scrollIntoView) tb.scrollIntoView({inline: "center", block: "nearest"});
     $("#appTitle").textContent = boss && r !== "gd" ? `👔 GĐ › ${ROLES[r].icon} ${ROLES[r].name}` : ROLES[r].icon + " " + ROLES[r].name;
     renderAll(); window.scrollTo(0,0);
@@ -1191,7 +1197,7 @@
                wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho").length};
     document.querySelectorAll(".tab").forEach(b => { const c = b.querySelector(".cnt"), v = n[b.dataset.tab]; c.textContent = v; c.classList.toggle("hide", !v); });
     if (!role) return;
-    if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
+    if (ccView === "nc") drawCC(); else if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
     if (detailId && $("#detailBg").classList.contains("show")) showDetail(detailId);
   }
   const isLate = t => !CLOSED.includes(t.stage) && daysSince(t.createdAt) > LATE_DAYS;
@@ -4385,13 +4391,14 @@
     ccYm = ccYm || iso(new Date()).slice(0, 7);
     const emps = ccPeople(), n = ccDays(ccYm), [y, m] = ccYm.split("-"), sh = ccSheet(ccYm), tdy = iso(new Date());
     const wd = d => new Date(+y, +m - 1, d).getDay();
-    host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y} <span class="sub" style="font-weight:400">(nhận tự động từ mục Chấm công)</span></h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
-      <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:#dcfce7;color:#16a34a;padding:0 4px;border-radius:4px;font-weight:700">✔ xanh</span> = nhân viên tự chấm công thành công trên app. Cột CN tô xám. Cột <b>Giờ</b> = tổng giờ tự chấm (60 phút = 1 giờ).</div>
+    host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y} <span class="sub" style="font-weight:400">(tự động từ tab Chấm công)</span></h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
+      <div class="sub" style="margin:6px 0">Ký hiệu: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương · <b style="color:#16a34a">✔</b> nhân viên tự chấm. Cột <b>Giờ</b> = tổng giờ làm (60 phút = 1 giờ). Chạm vào ô để xem giờ vào / ra.</div>
+      <div class="reason" style="margin:6px 0">🔒 Không sửa trực tiếp trên điện thoại. Muốn chấm lại cho nhân viên: <b>📊 Xuất Excel</b> → sửa trong Excel → <b>📥 Nhập lại Excel đã sửa</b>.</div>
       ${(() => { const L = emps.map(e => ({e, lg: expenses.find(x => x.kind === "cclog" && x.nvId === e.id && x.date === tdy)})), ok = L.filter(x => x.lg?.in).length;
         return `<div class="found" style="margin:8px 0"><b>Hôm nay ${fmt(tdy)}: ${ok}/${L.length} người đã chấm công</b>${L.map(({e, lg}) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span>${lg?.in ? `<b style="color:#16a34a">✅</b>` : "⏳"} <b>${esc(ccShort(e.name))}</b>${norm(e.name) !== norm(ccShort(e.name)) ? ` <span class="sub">${esc(e.name)}</span>` : ""}</span><span class="sub" style="text-align:right">${lg?.in ? `vào ${tm(lg.in)}${lg.out ? ` · tan ${tm(lg.out)} · ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ` : ""}${lg.inLoc?.dist != null ? ` · ${lg.inLoc.dist} m` : ""}` : "chưa chấm"}</span></div>`).join("")}</div>`; })()}
       ${emps.length ? `<div style="overflow-x:auto;margin:0 -4px"><table class="cctab" style="border-collapse:collapse;font-size:13px">
         <tr><th style="position:sticky;left:0;background:var(--card);text-align:left;min-width:110px;padding:4px">Nhân viên</th>${Array.from({length: n}, (_, i) => `<th style="padding:2px;min-width:30px;${wd(i + 1) === 0 ? "background:var(--line)" : ""}${`${ccYm}-${String(i + 1).padStart(2, "0")}` === tdy ? ";color:var(--brand)" : ""}">${i + 1}<div class="sub" style="font-size:10px">${["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]}</div></th>`).join("")}<th style="padding:4px">Công</th><th style="padding:4px">Giờ</th><th style="padding:4px">Nghỉ</th><th style="padding:4px">K</th></tr>
-        ${emps.map(e => { const s = ccSummary(ccYm, e.id); return `<tr><td style="position:sticky;left:0;background:var(--card);padding:4px;font-weight:600;white-space:nowrap">${esc(e.name)}<div class="sub"><button type="button" class="link" data-ccfill="${esc(e.id)}" style="padding:0;font-size:11px">✔ chấm đủ ngày thường</button></div></td>
+        ${emps.map(e => { const s = ccSummary(ccYm, e.id); return `<tr><td style="position:sticky;left:0;background:var(--card);padding:4px;font-weight:600;white-space:nowrap">${esc(e.name)}</td>
           ${Array.from({length: n}, (_, i) => { const r = ccCode(ccYm, e.id, i + 1); return `<td class="cccell" data-nv="${esc(e.id)}" data-d="${i + 1}" title="${esc(r.lg ? `Vào ${tm(r.lg.in)}${r.lg.out ? " · ra " + tm(r.lg.out) + " · làm " + hm(ccMin(r.lg)) : ""}${r.lg.inLoc ? ` · cách công ty ${r.lg.inLoc.dist ?? "?"} m` : ""}` : CC_LABEL[r.c] || "Chưa chấm")}"
             style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:#dcfce7;color:#16a34a;" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${r.src === "nv" && r.c === "X" ? "✔" : CC_SHOW[r.c] || ""}</td>`; }).join("")}
           <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
@@ -4411,7 +4418,16 @@
       mut(doc.codes); if (noteFor !== undefined && dayFor) { doc.notes = doc.notes || {}; doc.notes[nv] = doc.notes[nv] || {}; if (noteFor) doc.notes[nv][dayFor] = noteFor; else delete doc.notes[nv][dayFor]; }
       doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
     // chạm vào ô → mở bảng CHỈNH SỬA (xem thông tin, chọn lại, bấm Lưu) – tránh lỡ tay đổi ngày
-    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => openCCEdit(td.dataset.nv, Number(td.dataset.d)));
+    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => openCCInfo(td.dataset.nv, Number(td.dataset.d)));
+    // chạm ô: chỉ XEM thông tin (giờ vào / ra, ai chấm) – không sửa
+    const openCCInfo = (nv, d) => { const e = emps.find(x => x.id === nv); if (!e) return;
+      const ds = `${ccYm}-${String(d).padStart(2, "0")}`, note = ccSheet(ccYm)?.notes?.[nv]?.[d] || "", lg = expenses.find(x => x.kind === "cclog" && x.nvId === nv && x.date === ds), cur = ccCode(ccYm, nv, d);
+      $("#detail").innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📅 ${esc(e.name)}</h2><div class="sub">${["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"][new Date(ds).getDay()]} ${fmt(ds)}</div>
+        <div class="found" style="margin-top:10px"><b>${cur.c ? esc(CC_LABEL[cur.c] || cur.c) : "Chưa chấm"}</b>${cur.c ? ` ${cur.src === "kt" ? "(Kế toán chấm / nhập Excel)" : "(nhân viên tự chấm)"}` : ""}
+          ${lg?.in ? `<br>🕘 Vào ca <b>${tm(lg.in)}</b>${lg.out ? ` · tan ca <b>${tm(lg.out)}</b> · làm <b>${hm(ccMin(lg))}</b> (= ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ)` : " · chưa tan ca"}${lg.inLoc?.dist != null ? `<br>📍 Cách công ty ${lg.inLoc.dist} m` : ""}` : "<br>Nhân viên không tự chấm ngày này"}${note ? `<br>📝 ${esc(note)}` : ""}</div>
+        <div class="sub" style="margin-top:8px">🔒 Muốn chấm lại: Xuất Excel → sửa → Nhập lại Excel đã sửa.</div>
+        <div class="btns"><button type="button" class="btn" data-close="detailBg">Đóng</button></div>`;
+      open("detailBg"); };
     const openCCEdit = (nv, d) => { const e = emps.find(x => x.id === nv); if (!e) return;
       const ds = `${ccYm}-${String(d).padStart(2, "0")}`, man = ccSheet(ccYm)?.codes?.[nv]?.[d] || "", note = ccSheet(ccYm)?.notes?.[nv]?.[d] || "";
       const lg = expenses.find(x => x.kind === "cclog" && x.nvId === nv && x.date === ds), cur = ccCode(ccYm, nv, d);
@@ -4430,7 +4446,7 @@
         await saveCodes(c => { c[nv] = c[nv] || {}; if (pick) c[nv][d] = pick; else delete c[nv][d]; }, nv, nt, d);
       }, after: () => toast(`Đã lưu chấm công ${ccShort(e.name)} ngày ${fmt(ds)}`)};
       open("actBg"); };
-    host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
+    if (0) host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
       if (!confirm(`Chấm X (cả ngày) cho tất cả ngày thường còn trống của ${emps.find(x => x.id === nv)?.name || ""} trong tháng?`)) return;
       saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }, nv); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
     $("#ccAddr").value = cfg?.address || ""; if (cfg?.lat) $("#ccLL").value = `${cfg.lat.toFixed(6)}, ${cfg.lng.toFixed(6)}`;
@@ -4534,10 +4550,12 @@
   const openCheckin = () => drawSelf($("#actForm"), true);
   // tab Chấm công: chỉ để nhân viên chấm; bảng tổng hợp nằm ở tab Kế toán
   function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement) && !F.querySelector(".ccok")) drawSelf(F, false); }
-  function showCC(){ ccView = true;
-    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === "cc"));
-    ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== "cc"));
-    $("#appTitle").textContent = "🕘 Chấm công"; drawCCView(); window.scrollTo(0, 0); }
+  function showView(v, title, draw){ ccView = v;
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === v));
+    ["bh","gd","kt","vc","ac","sa","wh","cc","nc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== v));
+    $("#appTitle").textContent = title; draw(); window.scrollTo(0, 0); }
+  const showCC = () => showView("cc", "🕘 Chấm công", drawCCView);
+  const showNC = () => { if (!(boss || role === "ac")) { toast("Chỉ Kế toán / Giám đốc xem ngày công"); return; } showView("nc", "📅 Ngày công", drawCC); };
   $("#ccQuick").onclick = () => openCheckin();
 
   /* ================= KẾ TOÁN ================= */
@@ -4596,7 +4614,7 @@
           if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
           pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
-    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawCC(); drawPayroll();
+    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawPayroll();
     $("#acMonth").value = acMonth;
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
