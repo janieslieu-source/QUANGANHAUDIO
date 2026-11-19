@@ -87,9 +87,16 @@
   .tag.gift{background:#fce7f3;color:#be185d}
   .chip.promo{border-color:#f9a8d4;background:#fdf2f8;color:#9d174d;font-weight:600}
   @media (prefers-color-scheme: dark){.giftline{background:#2a1020} .panel .giftline input{background:var(--card)} .tag.gift{background:#500724;color:#fbcfe8}}
-  .sugg{position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;max-height:240px;overflow:auto;box-shadow:0 10px 24px rgba(0,0,0,.18);margin-top:4px}
-  .sg,.sgh{display:grid;grid-template-columns:1fr 54px 96px;gap:8px;align-items:center;width:100%;padding:11px 12px;border-bottom:1px solid var(--line);color:var(--ink);font-size:15px;cursor:pointer}
-  .sgh{font-size:11px;color:var(--muted);font-weight:600;padding:7px 12px;cursor:default;position:sticky;top:0;background:var(--card)}
+  .sugg{position:absolute;left:0;right:0;top:100%;z-index:20;background:var(--card);border:2px solid var(--brand);border-radius:12px;max-height:min(58vh,460px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;box-shadow:0 12px 28px rgba(0,0,0,.25);margin-top:4px;scrollbar-width:auto;scrollbar-color:var(--brand) var(--bg)}
+  /* thanh cuộn to, dễ kéo bằng ngón tay */
+  /* danh sách gợi ý rộng bằng cả dòng (tràn sang ô số lượng) để tên sản phẩm không bị ngắt nhiều dòng */
+  .oline > div:not(.full) > .sugg{right:-72px}
+  .prow > div:not(.full) > .sugg{right:-78px}
+  .sugg::-webkit-scrollbar{width:14px}
+  .sugg::-webkit-scrollbar-track{background:var(--bg);border-radius:12px}
+  .sugg::-webkit-scrollbar-thumb{background:var(--brand);border-radius:12px;border:3px solid var(--bg);min-height:48px}
+  .sg,.sgh{display:grid;grid-template-columns:1fr 52px 70px;gap:8px;align-items:center;width:100%;padding:14px 12px;min-height:52px;border-bottom:1px solid var(--line);color:var(--ink);font-size:16px;cursor:pointer}
+  .sgh{font-size:12px;color:var(--muted);font-weight:600;padding:8px 12px;min-height:0;cursor:default;z-index:1;position:sticky;top:0;background:var(--card)}
   .sg b,.sgh span:nth-child(2){text-align:center} .sgl,.sgh span:nth-child(3){text-align:center;white-space:nowrap}
   .sgl a{color:var(--info);font-weight:600;text-decoration:none}
   .cpy{border:1px solid var(--line);background:var(--card);border-radius:7px;padding:2px 6px;font-size:13px;cursor:pointer;color:var(--ink)}
@@ -1993,31 +2000,41 @@
       const list = (q ? all.filter(n => norm(n).includes(q)) : all).slice(0, 40);
       if (!list.length) { sg.classList.add("hide"); return; }
       // thứ tự cột: Tên sản phẩm · Tồn kho · Link tham khảo
-      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm</span><span>Tồn kho</span><span>Link tham khảo</span></div>` + list.map(n => { const k = stockOf(n), u = linkOf(n);
+      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${(q ? all.filter(n => norm(n).includes(q)) : all).length > list.length ? "+" : ""})</b>${list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k = stockOf(n), u = linkOf(n);
         return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
       sg.classList.remove("hide");
-      sg.querySelectorAll(".sg").forEach(b => b.addEventListener("pointerdown", e => { if (e.target.closest("a,.cpy")) return; e.preventDefault(); lp.value = b.dataset.n; sg.classList.add("hide"); onPick(); el.querySelector(".lq").focus(); }));
-      sg.querySelectorAll(".sgl a, .sgl .cpy").forEach(a => a.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); }));
+      // chọn bằng "chạm" (click) – kéo để cuộn danh sách không bị chọn nhầm
+      sg.querySelectorAll(".sg").forEach(b => b.addEventListener("click", e => { if (e.target.closest("a,.cpy")) return; lp.value = b.dataset.n; sg.classList.add("hide"); onPick(); el.querySelector(".lq").focus(); }));
       sg.querySelectorAll(".sgl a").forEach(a => a.addEventListener("click", e => { e.stopPropagation(); }));
     };
     lp.addEventListener("focus", showSugg); lp.addEventListener("input", showSugg);
-    lp.addEventListener("blur", () => setTimeout(() => sg.classList.add("hide"), 150));
+    keepSugg(sg); lp.addEventListener("blur", () => setTimeout(() => { if (!suggBusy(sg)) sg.classList.add("hide"); }, 150));
     el.querySelector(".lq").addEventListener("input", refreshAllLineStock);
     el.querySelector(".lm")?.addEventListener("change", () => { el.dataset.mTouched = "1"; });
   }
+  // Danh sách gợi ý: đang chạm / cuộn thì không đóng; chạm ra ngoài thì đóng
+  function keepSugg(sg){
+    if (sg._kept) return; sg._kept = true;
+    const mark = () => { sg._t = Date.now(); };
+    ["pointerdown", "touchstart", "scroll", "wheel"].forEach(ev => sg.addEventListener(ev, mark, {passive: true}));
+  }
+  const suggBusy = sg => Date.now() - (sg._t || 0) < 800;
+  document.addEventListener("pointerdown", e => {
+    document.querySelectorAll(".sugg:not(.hide)").forEach(sg => { if (!sg.parentElement.contains(e.target)) sg.classList.add("hide"); });
+  }, true);
   function attachPicker(inp, sg, onPick, parts){
     const show = () => {
       const q = norm(inp.value), all = parts ? [...new Map([...productNames(), ...extNames()].map(n => [norm(n), n])).values()].sort((a,b) => a.localeCompare(b, "vi")) : productNames();
       const list = (q ? all.filter(n => norm(n).includes(q)) : all).slice(0, 40);
       if (!list.length) { sg.classList.add("hide"); return; }
-      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm</span><span>Tồn kho</span><span>Link tham khảo</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
+      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${(q ? all.filter(n => norm(n).includes(q)) : all).length > list.length ? "+" : ""})</b>${list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
         return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${ex != null ? ' <span class="sub">🧩 LK ngoài</span>' : ""}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
       sg.classList.remove("hide");
-      sg.querySelectorAll(".sg").forEach(b => b.addEventListener("pointerdown", e => { if (e.target.closest("a,.cpy")) return; e.preventDefault(); inp.value = b.dataset.n; sg.classList.add("hide"); onPick && onPick(); }));
-      sg.querySelectorAll(".sgl a, .sgl .cpy").forEach(a => a.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); }));
+      sg.querySelectorAll(".sg").forEach(b => b.addEventListener("click", e => { if (e.target.closest("a,.cpy")) return; inp.value = b.dataset.n; sg.classList.add("hide"); onPick && onPick(); }));
+      sg.querySelectorAll(".sgl a").forEach(a => a.addEventListener("click", e => { e.stopPropagation(); }));
     };
     inp.addEventListener("focus", show); inp.addEventListener("input", () => { show(); onPick && onPick(); });
-    inp.addEventListener("blur", () => setTimeout(() => sg.classList.add("hide"), 150));
+    keepSugg(sg); inp.addEventListener("blur", () => setTimeout(() => { if (!suggBusy(sg)) sg.classList.add("hide"); }, 150));
   }
   const allLineEls = () => [...$("#olines").children, ...$("#glines").children];
   function refreshAllLineStock(){ allLineEls().forEach(showLineStock); }
