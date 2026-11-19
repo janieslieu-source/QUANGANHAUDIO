@@ -59,6 +59,7 @@
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
   .panel{scroll-margin-top:150px}
   .panel h3{margin:0 0 10px;font-size:15px}
+  #gwSeg button{flex:1 1 30%;min-width:100px;padding:9px 4px;font-size:13px}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
   .stat{background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center}
   .stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
@@ -92,6 +93,7 @@
   /* danh sách gợi ý rộng bằng cả dòng (tràn sang ô số lượng) để tên sản phẩm không bị ngắt nhiều dòng */
   .oline > div:not(.full) > .sugg{right:-72px}
   .prow > div:not(.full) > .sugg{right:-78px}
+  .oline.nhrow{grid-template-columns:1fr 88px} .nhrow > div:not(.full) > .sugg{right:-96px}
   .sugg::-webkit-scrollbar{width:14px}
   .sugg::-webkit-scrollbar-track{background:var(--bg);border-radius:12px}
   .sugg::-webkit-scrollbar-thumb{background:var(--brand);border-radius:12px;border:3px solid var(--bg);min-height:48px}
@@ -338,7 +340,7 @@
                 <select name="exMode"><option value="keep" id="exKeepOpt">Tiếp tục hạn cũ</option><option value="new">Bảo hành mới tính từ hôm nay</option></select>
                 <div id="exMonthsW" class="hide"><label>Số tháng bảo hành mới</label>
                   <select name="exMonths"><option value="3">3 tháng</option><option value="6">6 tháng</option><option value="12" selected>12 tháng</option><option value="18">18 tháng</option><option value="24">24 tháng</option><option value="36">36 tháng</option></select></div>
-                <div class="found" id="exPrev"></div>
+                <div class="found" id="exPrev"></div><div id="exPrevW"></div>
               </div>
             </div>
           </div>
@@ -363,10 +365,16 @@
         <div class="list" id="gdPayList"></div></div>
       <div class="panel" id="gdDebtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ còn sót</h3><b id="gdDebtSum" style="color:var(--bad)"></b></div>
         <div id="gdDebtBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📄 PDF công nợ còn sót</button></div>
+        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📊 Excel công nợ còn sót</button></div>
         <div class="row" style="align-items:center;margin-top:12px;gap:8px"><b style="font-size:14px">📊 Công nợ trong tuần</b><input type="date" id="gdWkDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="sub" style="margin-top:4px">Chọn 1 ngày bất kỳ trong tuần (Thứ 2 → Chủ nhật): nợ mới, đã thu, còn nợ cuối tuần theo từng khách.</div>
-        <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📄 Lưu file PDF công nợ tuần</button></div></div>
+        <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📊 Lưu file Excel công nợ tuần</button></div></div>
+      <div class="panel" id="gdWeekBox"><div class="row" style="align-items:center"><h3 style="margin:0" id="gwTitle">📊 Báo cáo tuần</h3><input type="date" id="gwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
+        <div class="seg" id="gwMode" style="margin:8px 0 4px"><button data-m="week">📅 Theo tuần</button><button data-m="month">🗓️ Theo tháng</button></div>
+        <div class="sub" id="gwLabel" style="margin:4px 0 8px"></div>
+        <div class="seg" id="gwSeg" style="flex-wrap:wrap"><button data-k="debt">📒 Công nợ</button><button data-k="sale">🛒 Bán hàng</button><button data-k="top">🏆 Hàng xuất nhiều</button><button data-k="cus">👥 Khách mua nhiều</button><button data-k="old">⏰ Khách nợ lâu</button><button data-k="exp">🧾 Chi phí</button></div>
+        <div id="gwBody"></div>
+        <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
       <div id="gdStats"></div>
     </section>
@@ -379,6 +387,7 @@
         <div class="seg" id="vcSeg"><button data-g="tk">🛠️ Bảo hành & Sửa chữa</button><button data-g="od" class="yel">🛒 Đơn bán</button></div>
         <div style="margin-bottom:10px"><input id="vcQ" type="search" placeholder="Tìm seri, khách, chành xe, mã vận đơn…" autocomplete="off"></div>
         <div class="list" id="vcDone"></div></div>
+      <div class="panel exbox" id="exVc"></div>
     </section>
 
     <!-- ===== BÁN HÀNG ===== -->
@@ -423,15 +432,16 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
         <input type="date" id="whDay" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="whSum" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="fileWh">📄 PDF xuất kho trong ngày</button></div></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn okb" id="xlsWh">📊 Excel xuất kho trong ngày</button></div>
+        <div class="sub" style="margin-top:6px">File Excel: mỗi số seri 1 dòng – ngày giờ xuất, mã đơn, khách hàng, SĐT, sản phẩm, số seri, số tháng bảo hành, <b>hạn bảo hành đến ngày</b>, cách gửi hàng.</div></div>
       <div class="panel" data-w="ton" id="nhapBox"><h3>➕ Nhập hàng mới</h3>
-        <div class="sub" style="margin-bottom:6px">Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri – app tự đọc số seri</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
+        <div class="sub" style="margin-bottom:6px">Mỗi dòng có thể mở <b>💰 Giá vốn đợt nhập</b>: điền tổng tiền + số SP có VAT → app tự tính giá 1 sản phẩm có / không VAT. Mỗi dòng chọn <b>📦 Có sẵn trong kho</b> hoặc <b>🆕 Sản phẩm mới</b>, rồi chọn <b>Có seri</b> / <b>Không có seri</b>. Hàng có seri: <b>chụp ảnh tem seri – app tự đọc số seri</b> (không cần gõ), hoặc gõ từng seri – số lượng tự đếm. Hàng nhỏ: chọn Không có seri, chỉ nhập số lượng. Bấm Nhập kho → tồn kho <b>tự cộng</b>.</div>
         <div id="nhRows"></div>
         <button type="button" class="btn sm" id="nhAdd" style="margin-top:8px">+ Thêm dòng</button>
         <label>Nhà cung cấp / ghi chú</label><input id="nhNote" placeholder="VD: Nhập từ NCC A, phiếu số 12">
@@ -456,7 +466,12 @@
         <div class="two" id="rpOne"><div><label style="margin-top:0">Chọn ngày</label><input type="date" id="rpDate"></div><div><label style="margin-top:0">Tìm sản phẩm</label><input id="rpQ" type="search" placeholder="Tên / mã hàng…"></div></div>
         <div class="two hide" id="rpTwo"><div><label style="margin-top:6px">Từ ngày</label><input type="date" id="rpFrom"></div><div><label style="margin-top:6px">Đến ngày</label><input type="date" id="rpTo"></div></div>
         <div id="rpBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="rpFile">📄 Tải báo cáo PDF</button></div></div>
+        <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
+      <div class="panel" data-w="doi"><h3>🔄 Hàng đổi cho khách <span class="sub" id="dxCnt"></span></h3>
+        <div class="sub" style="margin-bottom:8px">Máy đổi mới bảo hành: <b>seri cũ</b> (máy thu hồi) → <b>seri mới</b> (máy giao khách). Nhập trùng các seri này ở bất kỳ đâu, hệ thống sẽ cảnh báo và chuyển Kho duyệt.</div>
+        <input id="dxQ" type="search" placeholder="Tìm seri cũ / mới, khách hàng, sản phẩm, mã phiếu…" autocomplete="off">
+        <div id="dxBody" style="margin-top:10px"></div>
+        <div class="btns"><button class="btn" id="dxFile" type="button">📊 Excel hàng đổi</button></div></div>
       <div class="panel" data-w="ngoai"><h3>🧩 Danh mục linh kiện ngoài</h3>
         <div class="sub" style="margin-bottom:8px">Linh kiện <b>không có tên trong kho chính</b> (mua ngoài). Kỹ thuật dùng loại nào thì tự trừ vào danh mục này, không ảnh hưởng tồn kho chính.</div>
         <div class="two"><div><label style="margin-top:0">Tên linh kiện</label><input id="lknN" list="lknList" autocomplete="off" placeholder="VD: Tụ 2200uF 50V"></div>
@@ -471,7 +486,7 @@
         <div class="seg" id="thSeg"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button><button data-m="all">Tất cả</button></div>
         <div class="two"><div><label style="margin-top:0">Chọn ngày</label><input type="date" id="thDate"></div><div><label style="margin-top:0">Tìm</label><input id="thQ" type="search" placeholder="Linh kiện, máy, seri…"></div></div>
         <div id="thBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="thFile">📄 Tải file PDF</button></div></div>
+        <div class="btns"><button class="btn" id="thFile">📊 Tải file Excel</button></div></div>
     </section>
 
     <!-- ===== KẾ TOÁN ===== -->
@@ -483,16 +498,17 @@
       <div class="panel" id="debtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ</h3><b id="debtSum" style="color:var(--bad)"></b></div>
         <div style="margin:10px 0"><input id="acQ" type="search" placeholder="Tìm khách, SĐT, seri, mã phiếu…" autocomplete="off"></div>
         <div class="list" id="debtList"></div>
-        <div class="btns"><button class="btn" id="fileDebt">📄 PDF công nợ</button></div></div>
+        <div class="btns"><button class="btn" id="fileDebt">📊 Excel công nợ</button></div></div>
       <div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">✅ Đã thanh toán</h3>
         <input type="month" id="acMonth" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="stats" style="grid-template-columns:repeat(2,1fr);margin:10px 0"><div class="stat c-ok"><b id="paidSum">0</b><span>Đã thu trong tháng</span></div><div class="stat"><b id="paidCnt">0</b><span>Số phiếu</span></div></div>
         <div class="list" id="paidList"></div>
-        <div class="btns"><button class="btn" id="filePaid">📄 PDF thanh toán tháng</button></div></div>
+        <div class="btns"><button class="btn" id="filePaid">📊 Excel thanh toán tháng</button></div></div>
       <div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Công nợ theo tuần</h3>
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
-        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📄 PDF tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📄 PDF tuần – tất cả</button></div></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
+      <div class="panel exbox" id="exAc"></div>
     </section>
 
     <!-- ===== KỸ THUẬT ===== -->
@@ -566,6 +582,7 @@
     tra_lai:  {label:"GĐ không duyệt – chờ vận chuyển trả",cls:"b-bad",  to:"vc"},
     kt_tra:   {label:"Kỹ thuật không sửa được – chờ vận chuyển trả", cls:"b-bad", to:"vc"},
     cho_lk:   {label:"Chờ linh kiện về",                   cls:"b-warn", to:null},
+    kho_tra:  {label:"Kho không duyệt – chờ vận chuyển trả khách", cls:"b-bad", to:"vc"},
     huy:      {label:"Đã hủy phiếu",                       cls:"b-bad",  to:null},
     da_giao:  {label:"Đã gửi trả khách",                   cls:"b-ok",   to:null},
     cho_tt:   {label:"Đã gửi trả – chờ kế toán",           cls:"b-info", to:"ac"},
@@ -594,7 +611,7 @@
     list.forEach(t => partsOf(t).forEach(p => { const k = norm(p.name); (acc[k] = acc[k] || {name: p.name, qty: 0, n: 0}); acc[k].qty += p.qty; acc[k].n++; }));
     return Object.values(acc).sort((a,b) => b.qty - a.qty);
   }
-  const WAIT_VC = ["xong","tra_lai","kt_tra"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt","huy"];   // CLOSED = đã trả hàng cho khách
+  const WAIT_VC = ["xong","tra_lai","kt_tra","kho_tra"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt","huy"];   // CLOSED = đã trả hàng cho khách
   const PAY = {cong_no:"Công nợ", da_tt:"Đã thanh toán"};
   const OSTAGES = {
     cho_xk:  {label:"Chờ xuất kho",                 cls:"b-warn", to:"wh"},
@@ -629,7 +646,7 @@
   try { const r = sessionStorage.getItem("bh_role"); if (ROLES[r]) role = r; } catch(e){}
   // phiên nhạy cảm (Giám đốc, Kế toán): mở lại app phải nhập lại mật mã
   try { const last = Number(localStorage.getItem("bh_act") || 0); if ((boss || role === "ac") && Date.now() - last > 10 * 60000) { role = null; boss = false; sessionStorage.removeItem("bh_role"); sessionStorage.removeItem("bh_boss"); } } catch(e){}
-  let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
+  let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], expenses = [], colEx = null, mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
   let prevOStage = null;
   let prevStage = null;        // Map id -> stage, để phát hiện chuyển giai đoạn
   let gdMonth = null;   // tháng đang xem ở báo cáo (YYYY-MM)
@@ -840,17 +857,24 @@
     try { products = JSON.parse(localStorage.getItem("baohanh_pr") || "[]"); } catch(e){ products = []; }
     try { moves = JSON.parse(localStorage.getItem("baohanh_mv") || "[]"); } catch(e){ moves = []; }
     try { photosLocal = JSON.parse(localStorage.getItem("baohanh_ph") || "[]"); } catch(e){ photosLocal = []; }
+    try { expenses = JSON.parse(localStorage.getItem("baohanh_ex") || "[]"); } catch(e){ expenses = []; }
   }
   function saveLocal(){
     try { localStorage.setItem("baohanh_v1", JSON.stringify(reg)); localStorage.setItem("baohanh_tk", JSON.stringify(tickets)); localStorage.setItem("baohanh_od", JSON.stringify(orders)); localStorage.setItem("baohanh_st", JSON.stringify(stock)); localStorage.setItem("baohanh_pr", JSON.stringify(products)); localStorage.setItem("baohanh_mv", JSON.stringify(moves)); } catch(e){}
     try { localStorage.setItem("baohanh_ph", JSON.stringify(photosLocal)); } catch(e){}
+    try { localStorage.setItem("baohanh_ex", JSON.stringify(expenses)); } catch(e){}
   }
   function dbErr(e){
     toast(e && e.code === "quota_exceeded" ? "Bộ nhớ đã đầy, hãy xóa bớt dữ liệu cũ."
         : e && e.code === "invalid_argument" ? "Tài khoản của bạn chỉ có quyền xem." : "Lưu thất bại, thử lại sau.");
   }
-  const colOf = k => ({tk: colTk, od: colOd, st: colSt, pr: colPr, mv: colMv, ph: colPh})[k] || colReg;
-  const arrOf = k => ({tk: tickets, od: orders, st: stock, pr: products, mv: moves, ph: photosLocal})[k] || reg;
+  const colOf = k => ({tk: colTk, od: colOd, st: colSt, pr: colPr, mv: colMv, ph: colPh, ex: colEx})[k] || colReg;
+  const arrOf = k => ({tk: tickets, od: orders, st: stock, pr: products, mv: moves, ph: photosLocal, ex: expenses})[k] || reg;
+  // xóa 1 bản ghi (dùng cho chi phí nhập nhầm)
+  async function delDoc(kind, id){
+    if (mode === "cloud") { try { await colOf(kind).doc(id).delete(); } catch(e){ dbErr(e); throw e; } }
+    else { const arr = arrOf(kind), i = arr.findIndex(x => x.id === id); if (i >= 0) arr.splice(i, 1); saveLocal(); renderAll(); }
+  }
   // ghi nhiều bản ghi một lúc (nhập file tồn kho): 8 lệnh song song, báo tiến độ
   let bulk = 0, pendingSnap = {};   // đang ghi hàng loạt: tạm dừng vẽ lại + gom dữ liệu máy chủ gửi về
   function flushSnaps(){
@@ -910,7 +934,7 @@
     // Firebase chỉ dùng khi chạy ngoài Claude (VD: GitHub Pages)
     if (!db && FIREBASE_CONFIG && !window.claude) db = await initFirebase();
     if (!db) return;
-    colReg = db.collection("warranties"); colTk = db.collection("tickets"); colDev = db.collection("devices"); colOd = db.collection("orders"); colSt = db.collection("stock"); colPr = db.collection("products"); colMv = db.collection("moves"); colPh = db.collection("photos"); registerDevice();
+    colReg = db.collection("warranties"); colTk = db.collection("tickets"); colDev = db.collection("devices"); colOd = db.collection("orders"); colSt = db.collection("stock"); colPr = db.collection("products"); colMv = db.collection("moves"); colPh = db.collection("photos"); colEx = db.collection("expenses"); registerDevice();
     const timer = setTimeout(() => setSync(false, "Chưa kết nối"), 10000);
     let gotTk = false, gotOd = false;
     const take = s => s.docs.map(d => Object.assign({id:d.id}, d.data()));
@@ -922,6 +946,7 @@
       mode = "cloud"; onOrders(s.docs.map(d => Object.assign({id:d.id}, d.data())));
     }, () => {});
     colReg.onSnapshot(s => { mode = "cloud"; reg = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
+    colEx.onSnapshot(s => { mode = "cloud"; expenses = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
     colTk.onSnapshot(s => {
       if (!s.metadata.fromCache) clearTimeout(timer);
       if (!gotTk) { prevStage = null; gotTk = true; }   // lần đầu: không bắn thông báo cũ
@@ -1112,10 +1137,10 @@
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
-      ${lkLine(t)}
+      ${lkLine(t)}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
-      ${gdLine(t)}
+      ${gdLine(t)}${exLine(t.code)}
       <div class="sub" style="margin-top:4px">${esc(t.code)} · nhận ${fmt(t.createdAt)} ${isLate(t) ? `<b style="color:var(--bad)">(🚨 tồn ${daysSince(t.createdAt)} ngày)</b>` : `(${daysSince(t.createdAt)} ngày)`}</div>
       ${btns || ""}
     </div>`;
@@ -1151,7 +1176,7 @@
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
       ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canWaitLk(t) ? `<button class="btn" id="dLkWait">⏳ Chờ linh kiện</button>` : ""}${t.stage === "cho_lk" && canKtFail(t) ? `<button class="btn okb" id="dLkOk">✅ Linh kiện đã về</button>` : ""}${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
       ${t.stage === "huy" && t.cancel ? `<div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">❌ Đã hủy phiếu – ${esc(t.cancel.by)} · ${fmtTime(t.cancel.at)}<br>Lý do: ${esc(t.cancel.reason)}</div>` : ""}
-      <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📊 Xuất Excel</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
     if (canEditPay(t)) $("#dPayEdit").onclick = () => { close("detailBg"); detailId = null; openPay(t.id, null, true); };
     if (canWaitLk(t)) $("#dLkWait").onclick = () => { close("detailBg"); detailId = null; openWaitLk(t.id); };
@@ -1169,6 +1194,9 @@
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
     $("#foundBox").innerHTML = r ? `<div class="found">✔ Seri đã có trong hệ thống: ${esc(r.product)} – ${esc(r.customer)}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
+    const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
+    $("#foundBox").innerHTML += own.length ? `<div class="found">🔄 Máy này đã đổi cho chính khách ${esc(own[0].customer)} ngày ${fmt(own[0].date)} (SN ${esc(own[0].oldSn)} → ${esc(own[0].newSn)})</div>` : "";
+    $("#foundBox").innerHTML += hitBox(exHitsFor(sn, F.customer.value), "Vẫn lưu được – phiếu sẽ chuyển <b>Kho duyệt</b> trước khi xử lý.");
     document.querySelectorAll("#recvForm .opt[data-type]").forEach(o => o.classList.toggle("sel", o.dataset.type === recvType));
     document.querySelectorAll("#recvForm .opt[data-bm]").forEach(o => o.classList.toggle("sel", o.dataset.bm === bhMode));
     $("#bhWrap").classList.toggle("hide", recvType !== "bh");
@@ -1197,6 +1225,7 @@
           $("#exPrev").textContent = `🛡️ Máy mới (SN ${nsn || "…"}) bảo hành đến ${fmt(iso(until))}`;
           if (!F.exProduct.value.trim() && !F.exProduct.dataset.touched) F.exProduct.value = F.product.value.trim();
           const np = F.exProduct.value.trim(), inSt = nsn && findStock(nsn);
+          const nh = nsn ? exHits(nsn) : []; $("#exPrevW").innerHTML = hitBox(nh, nh.length ? "Seri mới này đã từng dùng khi đổi hàng – Kho sẽ phải <b>duyệt</b> trước khi giao máy." : "");
           if (nsn && snOk(nsn)) $("#exPrev").textContent += inSt ? (inSt.status === "in" ? " · 📦 seri có trong kho – kho tự trừ" : " · ⚠️ seri này kho ghi đã xuất") : ` · 📦 kho trừ 1 “${np}” (tồn ${stockOf(np)})`;
           if (!np) canSend = false;
           if (nsn && !snOk(nsn)) $("#exPrev").textContent = `⚠️ Seri mới sai định dạng – phải ${SN_HINT}`;
@@ -1220,6 +1249,7 @@
     $("#itemHead").textContent = b && b.items.length ? `Hàng thứ ${b.items.length + 1} – Tên sản phẩm *` : "Tên sản phẩm *";
     if ($("#batchEnd")) $("#batchEnd").onclick = () => { recvBatch = null; F.reset(); recvType = null; bhMode = "sua"; refreshRecv(); };
   }
+  F.customer.addEventListener("input", () => { if (F.serial.value.trim()) refreshRecv(); });
   F.serial.addEventListener("input", () => {
     const r = findReg(F.serial.value);
     if (r) { if (!F.customer.value) F.customer.value = r.customer || ""; if (!F.product.value) F.product.value = r.product || ""; if (!F.phone.value) F.phone.value = r.phone || ""; }
@@ -1251,13 +1281,16 @@
       const until = iso(mode === "new" ? addMonths(today(), months) : expiry(pd, mo));
       t0.action = "doimoi";
       const newProduct = F.exProduct.value.trim() || base.product;
-      t0.exchange = {oldSerial: base.serial, newSerial, newProduct, mode, months: mode === "new" ? months : null, until};
+      t0.exchange = {oldSerial: base.serial, newSerial, newProduct, mode, months: mode === "new" ? months : null, until, at: new Date().toISOString()};
       regRec.replacedBy = newSerial;
       const now = new Date().toISOString(), nr = findReg(newSerial);
       newRec = Object.assign({}, nr || {id: uid(), createdAt: now}, {customer: base.customer, phone: base.phone, product: t0.exchange.newProduct, serial: newSerial, replacedFrom: base.serial, updatedAt: now},
         mode === "new" ? {purchaseDate: iso(today()), months} : {purchaseDate: pd, months: Number(mo)});
     }
     const stage = recvType === "bh" ? "cho_kho" : "cho_gd";   // bảo hành (sửa hoặc đổi mới) → Kho; sửa chữa → Giám đốc
+    // cảnh báo seri trùng với lịch sử đổi hàng -> Kho phải duyệt
+    const warn = [...exHitsFor(base.serial, base.customer), ...(t0.exchange ? exHits(t0.exchange.newSerial) : [])].map(hitText);
+    if (warn.length) t0.snWarn = [...new Set(warn)];
     const t = push(t0, stage, isEx ? `Đổi mới tại quầy: SN ${t0.exchange.oldSerial} → SN ${t0.exchange.newSerial}, bảo hành đến ${fmt(t0.exchange.until)}`
       : recvType === "bh" ? `Còn bảo hành (${t0.warrantyText})` : "Khách yêu cầu sửa chữa");
     try {
@@ -1417,7 +1450,7 @@
     bindCards($("#gdLkList"));
   }
   function renderGD(){
-    drawGdLk();
+    drawGdLk(); drawGdWeek();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
@@ -1459,7 +1492,7 @@
       <div class="panel"><h3>Hàng theo giai đoạn</h3>${hbars(Object.keys(STAGES).map(k => [STAGES[k].label, c(k)]))}</div>
       ${Object.keys(prod).length ? `<div class="panel"><h3>Sản phẩm nhận nhiều nhất</h3>${hbars(Object.entries(prod).sort((a,b) => b[1]-a[1]).slice(0,5))}</div>` : ""}
       ${Object.keys(parts).length ? `<div class="panel"><h3>Linh kiện thay nhiều nhất</h3>${hbars(Object.entries(parts).sort((a,b) => b[1]-a[1]).slice(0,5))}</div>` : ""}
-      <div class="panel"><div class="row"><h3>Tất cả phiếu gần đây</h3><span><button class="link" id="gdPdf">📄 PDF</button> <button class="link" id="copyCsv">Sao chép CSV</button></span></div>
+      <div class="panel"><div class="row"><h3>Tất cả phiếu gần đây</h3><span><button class="link" id="gdPdf">📊 Excel</button> <button class="link" id="copyCsv">Sao chép CSV</button></span></div>
         <div class="list" id="gdAll">${all.length ? all.map(t => tkCard(t)).join("") : `<div class="empty">Chưa có phiếu.</div>`}</div></div>`;
     bindCards($("#gdAll"));
     $("#gdMonth").onchange = e => { gdMonth = e.target.value || iso(new Date()).slice(0,7); renderGD(); };
@@ -1513,10 +1546,10 @@
         <table class="ptable"><tr><th>Sản phẩm</th><th style="text-align:left;width:auto">Seri cũ → mới</th><th>BH đến</th></tr>${ex.map(t => `<tr><td>${esc(t.product)}</td><td style="text-align:left">${esc(t.exchange.oldSerial)} → <b>${esc(t.exchange.newSerial)}</b></td><td>${fmt(t.exchange.until)}</td></tr>`).join("")}</table>` : ""; })()}
       ${partsTable(sc, "Sửa chữa", "sc")}
       <div class="btns" style="flex-wrap:wrap">
-        <button class="btn okb" id="fileBH">📄 PDF linh kiện BẢO HÀNH</button>
-        <button class="btn pri" id="fileSC">📄 PDF hàng SỬA CHỮA</button>
+        <button class="btn okb" id="fileBH">📊 Excel linh kiện BẢO HÀNH</button>
+        <button class="btn pri" id="fileSC">📊 Excel hàng SỬA CHỮA</button>
       </div>
-      <div class="sub" style="margin-top:6px">File PDF theo mẫu báo cáo, mỗi dòng 1 linh kiện, cuối có bảng tổng hợp – dùng để đối chiếu, đòi bảo hành với nhà cung cấp.</div>
+      <div class="sub" style="margin-top:6px">File Excel theo mẫu báo cáo, mỗi dòng 1 linh kiện, trang 2 là bảng tổng hợp – dùng để đối chiếu, đòi bảo hành với nhà cung cấp.</div>
     </div>`;
   }
   async function exportParts(type){
@@ -1861,7 +1894,9 @@
   function renderVC(){
     const wait = tickets.filter(t => WAIT_VC.includes(t.stage)).sort((a,b) => (a.updatedAt||"").localeCompare(b.updatedAt||""));
     $("#vcCnt").textContent = wait.length ? `(${wait.length})` : "";
-    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "kt_tra"
+    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "kho_tra"
+        ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Kho không duyệt (seri trùng) – trả nguyên trạng cho khách${t.snReject?.reason ? ". Lý do: " + esc(t.snReject.reason) : ""}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
+        : t.stage === "kt_tra"
         ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Kỹ thuật không sửa được – trả lại khách${t.ktFail?.reason ? ". Lý do: " + esc(t.ktFail.reason) : ""}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
         : t.stage === "tra_lai"
         ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Giám đốc không duyệt sửa – trả nguyên trạng cho khách${(() => { const h = (t.history||[]).filter(h => h.stage === "tra_lai").pop(); return h && h.note ? ". Lý do: " + esc(h.note) : ""; })()}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
@@ -1875,7 +1910,7 @@
       : `<div class="empty">Không có đơn chờ gửi.</div>`;
     bindOd($("#vcOdList"));
     $("#vcOdList").querySelectorAll("[data-ship]").forEach(b => b.onclick = () => openShip(b.dataset.ship));
-    drawVcDone();
+    drawVcDone(); drawExpenses($("#exVc"));
     const cs = new Set(); [...tickets, ...orders].forEach(t => t.ship && t.ship.method === "chanh" && t.ship.carrier && cs.add(t.ship.carrier));
     $("#carrierList").innerHTML = [...cs].map(c => `<option value="${esc(c)}">`).join("");
   }
@@ -1886,7 +1921,7 @@
     if (q) rows = rows.filter(t => norm([t.code,t.serial,t.customer,t.phone,t.product,t.lines ? orderSummary(t) : "",t.ship?.carrier,t.ship?.tracking].join(" ")).includes(q));
     rows.sort((a,b) => (b.ship?.date||"").localeCompare(a.ship?.date||"") || (b.updatedAt||"").localeCompare(a.updatedAt||""));
     rows = rows.slice(0, 50);
-    $("#vcDone").innerHTML = rows.length ? rows.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pdf="${esc(t.id)}">📄 Xuất PDF</button></div>`)).join("")
+    $("#vcDone").innerHTML = rows.length ? rows.map(t => card(t, `<div class="cardbtns"><button class="btn" data-pdf="${esc(t.id)}">📊 Xuất Excel</button></div>`)).join("")
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng đã gửi."}</div>`;
     bindAny($("#vcDone"));
     $("#vcDone").querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => exportPdf(findAny(b.dataset.pdf)));
@@ -1932,7 +1967,7 @@
         <label>${isOd ? "Ngày gửi hàng *" : "Ngày trả lại khách *"}</label><input name="date" type="date" value="${iso(new Date())}">
         <label>Ghi chú</label><textarea name="snote"></textarea>
       </div>
-      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="shipOk" disabled>Lưu & xuất PDF</button></div>`;
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="shipOk" disabled>Lưu & xuất Excel</button></div>`;
     const sync = () => {
       F3.querySelectorAll(".opt").forEach(o => o.classList.toggle("sel", o.dataset.m === shipMethod));
       $("#shipWrap").classList.toggle("hide", !shipMethod);
@@ -1955,7 +1990,7 @@
       let c;
       if (isOd) c = await advanceOrder(t, "cho_tt", note, {ship});
       else { c = push(t, "cho_tt", note, {ship}); await put("tk", c); sendPush(c); }
-      toast("Đã lưu – đang tạo PDF…");
+      toast("Đã lưu – đang tạo file Excel…");
       setTimeout(() => exportPdf(c), 300);
     }, after: () => setTimeout(() => { acGroup = isOd ? "od" : "tk"; goTo("ac", isOd ? `Vận chuyển đã gửi đơn ${t.code} (${t.customer}). Kế toán nhập mật mã để ghi nhận thanh toán.` : `Vận chuyển đã gửi: ${t.product} (SN ${t.serial}). Kế toán nhập mật mã để ghi nhận thanh toán.`); }, 600)};
     open("actBg");
@@ -2111,7 +2146,7 @@
       <div class="sub" style="margin-top:4px">🚚 ${OSHIP[o.ship?.method] || ""}${o.ship?.carrier ? " " + esc(o.ship.carrier) : ""}${o.ship?.tracking ? " · MVĐ " + esc(o.ship.tracking) : ""}${o.ship?.date ? " · <b>gửi " + fmt(o.ship.date) + "</b>" : ""}${o.exportedAt ? " · xuất kho " + fmtTime(o.exportedAt) : ""}</div>
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
       ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
-      ${gdLine(o)}
+      ${gdLine(o)}${exLine(o.code)}
       ${btns || ""}</div>`;
   }
   const card = (x, btns) => x.lines ? odCard(x, btns) : tkCard(x, btns);
@@ -2176,7 +2211,7 @@
         <div class="btns"><button class="btn danger" id="cxOk">✔ ${o.exportedAt ? (isWh() ? "Kho đồng ý – hàng đã về kho" : "Gửi Kho duyệt") : "Xác nhận hủy đơn"}</button></div></div>` : ""}
       ${o.stage === "cho_huy" ? `<div style="margin-top:12px;padding:10px;border:1px solid var(--bad);border-radius:10px"><b>↩️ Chờ Kho duyệt trả lại kho</b><div class="sub">${esc(o.cancelReq?.by || "")} · ${fmtTime(o.cancelReq?.at)} – ${esc(o.cancelReq?.reason || "")}</div>
         ${isWh() ? `<div class="btns"><button class="btn pri" id="cxApprove">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" id="cxReject">✖ Không duyệt</button></div>` : `<div class="sub">Kho bấm “Đồng ý” thì tồn kho tự cộng lại.</div>`}</div>` : ""}
-      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📄 Phiếu giao hàng PDF</button>` : ""}${canReportPaid(o) ? `<button class="btn okb" id="oPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(o) ? `<button class="btn" id="oPayEdit">✏️ Sửa chi phí</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
+      <div class="btns">${canCancel(o) ? `<button class="btn" id="oCancel" style="color:var(--bad);border-color:var(--bad)">${o.exportedAt ? "↩️ Hàng trả lại kho" : "❌ Hủy đơn"}</button>` : ""}${o.ship?.date && o.stage !== "huy" ? `<button class="btn pri" id="oPdf">📊 Phiếu giao hàng Excel</button>` : ""}${canReportPaid(o) ? `<button class="btn okb" id="oPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(o) ? `<button class="btn" id="oPayEdit">✏️ Sửa chi phí</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (o.ship?.date && o.stage !== "huy") $("#oPdf").onclick = () => exportPdf(o);
     if (canEditPay(o)) $("#oPayEdit").onclick = () => { close("detailBg"); openPay(o.id, null, true); };
     if (canReportPaid(o)) $("#oPaidReq").onclick = () => { close("detailBg"); openPaidReq(o.id); };
@@ -2236,6 +2271,37 @@
   }
   $("#saQ").addEventListener("input", drawSaList);
 
+  /* ================= HÀNG ĐỔI CHO KHÁCH & CẢNH BÁO SERI TRÙNG ================= */
+  const exDate = t => t.exchange?.at || t.createdAt;
+  const exchanges = () => tickets.filter(t => t.exchange && t.stage !== "huy").sort((a,b) => (exDate(b) || "").localeCompare(exDate(a) || ""));
+  // seri này từng là seri cũ (máy đã thu hồi) hoặc seri mới (máy đã giao khách) trong một lần đổi?
+  function exHits(sn, skipId){
+    const k = keySN(sn); if (!k) return [];
+    return exchanges().filter(t => t.id !== skipId && (keySN(t.exchange.oldSerial) === k || keySN(t.exchange.newSerial) === k))
+      .map(t => ({t, side: keySN(t.exchange.newSerial) === k ? "new" : "old", customer: t.customer, date: exDate(t), oldSn: t.exchange.oldSerial, newSn: t.exchange.newSerial, product: t.exchange.newProduct || t.product}));
+  }
+  // bỏ qua: chính khách đó mang máy đã đổi (seri mới) đi bảo hành lại – bình thường
+  const exHitsFor = (sn, customer, skipId) => exHits(sn, skipId).filter(h => !(h.side === "new" && customer && norm(h.customer) === norm(customer)));
+  const hitText = h => `Seri ${h.side === "new" ? h.newSn : h.oldSn} ${h.side === "new" ? "đã ĐỔI GIAO cho khách" : "là máy CŨ đã thu hồi khi đổi cho khách"} ${h.customer} ngày ${fmt(h.date)} (SN ${h.oldSn} → ${h.newSn}, phiếu ${h.t.code})`;
+  const hitBox = (hits, extra) => hits.length ? `<div class="found" style="background:var(--badbg);color:var(--bad);margin-top:6px">⚠️ <b>CẢNH BÁO SERI TRÙNG</b><br>${hits.map(h => "• " + esc(hitText(h))).join("<br>")}${extra ? "<br>" + extra : ""}</div>` : "";
+  let dxQ = "";
+  function drawExchanges(){
+    const q = norm(dxQ), all = exchanges(), L = q ? all.filter(t => norm([t.exchange.oldSerial, t.exchange.newSerial, t.customer, t.phone, t.product, t.exchange.newProduct, t.code].join(" ")).includes(q)) : all;
+    $("#dxCnt").textContent = all.length ? `(${all.length})` : "";
+    $("#dxBody").innerHTML = L.length ? L.slice(0, 100).map(t => `<div class="item" data-id="${esc(t.id)}"><div class="row"><div><div class="pname">${esc(t.exchange.newProduct || t.product)}</div>
+        <div class="sub">👤 <b>${esc(t.customer)}</b>${t.phone ? " · " + esc(t.phone) : ""} · đổi ngày <b>${fmt(exDate(t))}</b></div>
+        <div style="margin-top:4px">SN cũ <b>${esc(t.exchange.oldSerial)}</b> → SN mới <b style="color:var(--ok)">${esc(t.exchange.newSerial)}</b></div>
+        <div class="sub">🛡️ BH đến ${fmt(t.exchange.until)} · ${esc(t.code)}${t.snWarn?.length ? ` · <b style="color:var(--bad)">⚠️ có cảnh báo seri${t.snOk ? " – Kho đã duyệt" : ""}</b>` : ""}</div></div>
+        <span class="badge ${STAGES[t.stage]?.cls || ""}">${esc(STAGES[t.stage]?.label || "")}</span></div></div>`).join("") + (L.length > 100 ? `<div class="sub">+${L.length - 100} lần đổi khác – gõ để tìm.</div>` : "")
+      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng đổi cho khách."}</div>`;
+    bindCards($("#dxBody"));
+  }
+  $("#dxQ").addEventListener("input", e => { dxQ = e.target.value; drawExchanges(); });
+  $("#dxFile").onclick = () => { const L = exchanges();
+    exportReportPdf({file: "Hang-doi-cho-khach_" + iso(new Date()), title: "Hàng đổi cho khách", period: "Tính đến " + fmt(iso(new Date())), summary: [["Số lần đổi", L.length]],
+      head: [{t: "Ngày đổi"}, {t: "Mã phiếu"}, {t: "Khách hàng"}, {t: "SĐT"}, {t: "Sản phẩm"}, {t: "Seri cũ (thu hồi)"}, {t: "Seri mới (giao khách)"}, {t: "Bảo hành đến"}, {t: "Cảnh báo seri"}, {t: "Giai đoạn"}],
+      rows: L.map(t => [fmt(exDate(t)), t.code, t.customer, t.phone || "", t.exchange.newProduct || t.product, t.exchange.oldSerial, t.exchange.newSerial, fmt(t.exchange.until), t.snWarn?.length ? (t.snOk ? "Kho đã duyệt" : "Chờ Kho duyệt") : "", STAGES[t.stage]?.label || ""])}); };
+
   /* ================= KHO ================= */
   let whDay = null;
   const dayOf = s => s ? iso(new Date(s)) : "";
@@ -2245,7 +2311,7 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt();
+    drawThao(); drawExt(); drawExchanges();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
@@ -2253,7 +2319,9 @@
     const wait = orders.filter(o => o.stage === "cho_xk").sort((a,b) => (isUrgent(b) - isUrgent(a)) || (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#whCnt").textContent = wait.length + cx.length + tk.length ? `(${wait.length + cx.length + tk.length})` : "";
     $("#whList").innerHTML = tk.map(t => tkCard(t, `<div class="sub" style="margin:6px 0">🧰 ${t.exchange ? `Đổi mới: nhận máy cũ SN ${esc(t.serial)}, giao máy mới ${esc(t.exchange.newProduct || t.product)} SN <b>${esc(t.exchange.newSerial)}</b>` : `${TYPE[t.type]}: nhận máy vào kho, chuẩn bị linh kiện rồi chuyển Kỹ thuật`}</div>
-        <div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
+        ${t.snWarn?.length && !t.snOk ? `<div class="found" style="background:var(--badbg);color:var(--bad)">⚠️ <b>CẢNH BÁO SERI TRÙNG – cần Kho duyệt</b><br>${t.snWarn.map(w => "• " + esc(w)).join("<br>")}</div>
+        <div class="cardbtns"><button class="btn danger" data-snno="${esc(t.id)}">✖ Không duyệt – trả lại khách</button><button class="btn okb" data-snok="${esc(t.id)}">✔ Đã kiểm tra – duyệt</button></div>`
+        : `${t.snWarn?.length ? `<div class="sub" style="color:var(--ok)">✔ Kho đã duyệt cảnh báo seri</div>` : ""}<div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`}`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
         <div class="cardbtns"><button class="btn pri" data-cxok="${esc(o.id)}">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" data-cxno="${esc(o.id)}">✖ Không duyệt</button></div>`)).join("")
       + (wait.length ? wait.map(o => odCard(o, `<div class="cardbtns"><button class="btn pri" data-xk="${esc(o.id)}">📦 Xuất kho</button></div>`)).join("")
       : cx.length ? "" : `<div class="empty">Không có đơn chờ xuất.</div>`);
@@ -2263,6 +2331,13 @@
         if (t.exchange || t.action) { await advance(t, "xong", t.exchange ? "Kho đã giao máy mới cho Vận chuyển" : "Kho đã bàn giao cho Vận chuyển"); toast("Đã chuyển Vận chuyển"); }
         else { await advance(t, "cho_kt", "Kho đã nhận hàng – chuyển Kỹ thuật"); toast("Đã chuyển Kỹ thuật"); }
       } catch(err){ b.disabled = false; } });
+    $("#whList").querySelectorAll("[data-snok]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.snok); if (!t) return;
+      openAct({title: "✔ Kho duyệt cảnh báo seri", t, noteLabel: "Kết quả kiểm tra (VD: đúng máy khách, seri đã thu hồi hợp lệ…)", required: true, okText: "✔ Duyệt", okCls: "okb",
+        run: async note => { await advance(t, t.stage, `✔ Kho duyệt cảnh báo seri: ${note}`, {snOk: {at: new Date().toISOString(), by: actor(), note}}); toast("Đã duyệt – tiếp tục xử lý"); }}); });
+    $("#whList").querySelectorAll("[data-snno]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.snno); if (!t) return;
+      openAct({title: "✖ Kho không duyệt – trả lại khách", t, noteLabel: "Lý do không duyệt", required: true, okText: "✖ Không duyệt → Vận chuyển trả khách", okCls: "danger",
+        run: async note => { const extra = {snReject: {at: new Date().toISOString(), by: actor(), reason: note}}; await revertTkStock(t, extra);
+          await advance(t, "kho_tra", `✖ Kho không duyệt (seri trùng): ${note}${t.exchange && t.stockOut ? " · đã hoàn máy mới về kho" : ""}`, extra); toast("Đã chuyển Vận chuyển trả lại khách"); }}); });
     $("#whList").querySelectorAll("[data-cxok]").forEach(b => b.onclick = async () => { const o = orders.find(x => x.id === b.dataset.cxok); if (!o) return; b.disabled = true;
       try { await cancelOrder(o, o.cancelReq?.reason || ""); } catch(e){ b.disabled = false; toast("Lưu thất bại, thử lại"); } });
     $("#whList").querySelectorAll("[data-cxno]").forEach(b => b.onclick = async () => { const o = orders.find(x => x.id === b.dataset.cxno); if (!o) return; b.disabled = true;
@@ -2290,7 +2365,43 @@
     if ($("#whBack")) bindOd($("#whBack"));
   }
   $("#whDay").addEventListener("change", e => { whDay = e.target.value || iso(new Date()); renderWH(); });
-  $("#fileWh").onclick = async () => {
+  // File Excel hàng xuất kho trong ngày: mỗi seri 1 dòng, có hạn bảo hành
+  $("#xlsWh").onclick = async () => {
+    const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned).sort((a,b) => (a.exportedAt||"").localeCompare(b.exportedAt||""));
+    if (!done.length) { toast("Ngày này chưa có đơn xuất kho"); return; }
+    const b = $("#xlsWh"); b.disabled = true;
+    try {
+      toast("Đang tạo file Excel…");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const X = window.XLSX;
+      const head = ["STT", "Ngày xuất", "Giờ xuất", "Mã đơn", "Khách hàng", "Số điện thoại", "Địa chỉ", "Sản phẩm", "Loại", "Số lượng", "Số seri", "Bảo hành (tháng)", "Ngày bắt đầu BH", "Hạn bảo hành đến", "Gửi hàng", "Ghi chú"];
+      const rows = []; let n = 0;
+      done.forEach(o => (o.lines || []).forEach((l, i) => {
+        const sns = snOf(o, i), m = l.gift ? 0 : Number(l.months) || 0, start = o.saleDate || dayOf(o.exportedAt);
+        const until = m && start ? fmt(iso(expiry(start, m))) : "";
+        const ship = `${OSHIP[o.ship?.method] || ""} ${o.ship?.carrier || ""}`.trim().replace(/^🚨\s*/, "");
+        const snNote = !sns.length ? (l.snMode === "anh" ? "Đối chiếu seri bằng ảnh" : l.snMode === "khong" ? "Hàng không seri" : "") : "";
+        const base = [fmt(dayOf(o.exportedAt)), fmtTime(o.exportedAt).slice(0, 5), o.code, o.customer, o.phone || "", o.address || "", l.product, l.gift ? "Hàng tặng" : "Hàng bán"];
+        const tail = [l.gift ? "Tặng" : (m || "Không BH"), m ? fmt(start) : "", until || (l.gift ? "" : "Không bảo hành"), ship];
+        if (sns.length) sns.forEach(sn => rows.push([++n, ...base, 1, sn, ...tail, ""]));
+        else rows.push([++n, ...base, Number(l.qty) || 0, "", ...tail, snNote]);
+      }));
+      const [y, mo, d] = whDay.split("-");
+      const ws = X.utils.aoa_to_sheet([[`${COMPANY} – HÀNG XUẤT KHO NGÀY ${d}/${mo}/${y}`], [`In lúc ${fmtTime(new Date().toISOString())} · ${done.length} đơn · ${rows.reduce((a,r) => a + (Number(r[9]) || 0), 0)} sản phẩm`], [], head, ...rows]);
+      ws["!cols"] = [5, 11, 8, 15, 22, 13, 24, 32, 10, 9, 12, 10, 13, 15, 20, 22].map(w => ({wch: w}));
+      ws["!merges"] = [{s: {r: 0, c: 0}, e: {r: 0, c: head.length - 1}}, {s: {r: 1, c: 0}, e: {r: 1, c: head.length - 1}}];
+      ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: 3, c: 0}, e: {r: 3 + rows.length, c: head.length - 1}})};
+      // trang 2: tổng hợp theo sản phẩm
+      const sum = {}; done.forEach(o => (o.lines || []).forEach(l => { const k = l.product + (l.gift ? " (tặng)" : ""); sum[k] = (sum[k] || 0) + (Number(l.qty) || 0); }));
+      const ws2 = X.utils.aoa_to_sheet([["Sản phẩm", "Tổng số lượng"], ...Object.entries(sum).sort((a,b) => b[1] - a[1]), ["TỔNG", Object.values(sum).reduce((a,v) => a + v, 0)]]);
+      ws2["!cols"] = [{wch: 40}, {wch: 14}];
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Xuất kho"); X.utils.book_append_sheet(wb, ws2, "Tổng hợp");
+      const out = X.write(wb, {bookType: "xlsx", type: "array"});
+      await saveBlob(`Xuat-kho_${whDay}.xlsx`, new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+    finally { b.disabled = false; }
+  };
+  if ($("#fileWh")) $("#fileWh").onclick = async () => {
     const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned);
     const rows = [];
     done.forEach(o => (o.lines||[]).forEach((l,i) => rows.push([o.code, fmtTime(o.exportedAt).slice(0, 5), o.customer, (l.gift ? "🎁 " : "") + l.product, l.qty, l.gift ? "Tặng" : (l.months ? l.months + " th" : "Không"), snOf(o,i).join(", "), `${OSHIP[o.ship?.method]||""} ${o.ship?.carrier||""}`.trim()])));
@@ -2319,6 +2430,9 @@
           <textarea class="sn" data-i="${i}" rows="${Math.min(6, Math.max(2, l.qty))}" placeholder="${Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
           <div class="sub snc" data-i="${i}"></div></div>
           <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
+      <div id="xkApproveW" class="hide" style="margin-top:10px;padding:10px;border:2px solid var(--bad);border-radius:10px">
+        <label style="display:flex;gap:8px;align-items:flex-start;color:var(--bad);font-size:14px;margin:0"><input type="checkbox" id="xkApprove" style="width:auto;margin:3px 0 0"> <span><b>Kho duyệt xuất các seri bị cảnh báo</b> (đã kiểm tra, không phải máy đổi cho khách khác)</span></label>
+        <input id="xkApproveNote" placeholder="Ghi chú kiểm tra (bắt buộc khi duyệt)" style="margin-top:8px"></div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">✅ Xác nhận xuất kho</button></div>`;
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
     // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
@@ -2337,6 +2451,8 @@
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
     const count = () => (o.lines||[]).forEach((l,i) => { const L = snList(i), n = L.length, bad = L.filter(x => !snOk(x)), el = F5.querySelector(`.snc[data-i="${i}"]`);
       el.textContent = `Đã nhập ${n}/${l.qty} seri` + (bad.length ? ` · ⚠️ Sai định dạng (${SN_HINT}): ${bad.join(", ")}` : "");
+      const hits = modes[i] === "khong" ? [] : L.flatMap(sn => exHits(sn)); el.insertAdjacentHTML("beforeend", hitBox(hits));
+      const anyHit = (o.lines || []).some((_, j) => modes[j] !== "khong" && snList(j).some(sn => exHits(sn).length)); $("#xkApproveW").classList.toggle("hide", !anyHit);
       el.style.color = bad.length ? "var(--bad)" : n === l.qty ? "var(--ok)" : (n > l.qty || (l.months && modes[i] === "nhap")) ? "var(--bad)" : ""; });
     const setList = (i, L) => { F5.querySelector(`.sn[data-i="${i}"]`).value = L.join("\n"); sync(); };
     const sync = () => { count(); F5.querySelectorAll(".snpick").forEach(box => { const L = snList(box.dataset.i).map(keySN);
@@ -2370,6 +2486,9 @@
       if (badSn.length) { toast(`Seri sai định dạng: ${badSn.join(", ")} – phải ${SN_HINT}`); throw new Error("x"); }
       const all = serials.flat().map(keySN), dup = all.find((x, k) => all.indexOf(x) !== k);
       if (dup) { toast("Seri bị trùng: " + dup); throw new Error("x"); }
+      const warnSn = serials.flat().filter(sn => exHits(sn).length);
+      if (warnSn.length && !$("#xkApprove").checked) { toast(`⚠️ Seri ${warnSn.join(", ")} từng đổi cho khách – Kho tick “duyệt xuất” hoặc thay seri khác`); $("#xkApproveW").scrollIntoView({block: "center"}); throw new Error("x"); }
+      if (warnSn.length && !$("#xkApproveNote").value.trim()) { toast("Ghi chú kết quả kiểm tra seri cảnh báo"); $("#xkApproveNote").focus(); throw new Error("x"); }
       const gone = serials.flat().map(findStock).filter(x => x && x.status !== "in");
       if (gone.length) { toast(`Seri ${gone[0].serial} đã xuất ở đơn ${gone[0].orderCode || "khác"}`); throw new Error("x"); }
       const now = new Date().toISOString();
@@ -2388,7 +2507,7 @@
         lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
       }
       const nAnh = modes.filter(m => m === "anh").length, nKhong = modes.filter(m => m === "khong").length;
-      await advanceOrder(o, "cho_vc", `Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
+      await advanceOrder(o, "cho_vc", `${warnSn.length ? `⚠️ Kho duyệt xuất seri cảnh báo ${warnSn.join(", ")}: ${$("#xkApproveNote").value.trim()} · ` : ""}Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
       // phần không lấy từ kho seri (hàng không seri, đối chiếu bằng ảnh, seri gõ tay lúc xuất) -> trừ theo số lượng
       // (tính TRƯỚC khi đánh dấu seri đã xuất, để không trừ kho 2 lần)
       const mvOut = (o.lines || []).map((l, i) => { const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
@@ -2498,6 +2617,7 @@
     const n = stockOf(name), cur = linkOf(name);
     $("#detail").innerHTML = `<div class="grab"></div><h2>🏷️ ${esc(name)}</h2>
       <div class="sub">Tồn kho: <b>${n ?? 0}</b>${list.length ? ` (trong đó ${list.length} có seri)` : ""} · đã xuất ${out.length} seri</div>
+      ${findProduct(name)?.lastCost && !hidePrice() ? `<div class="found" style="margin-top:8px">💰 Giá vốn lần nhập gần nhất (${fmt(findProduct(name).lastCost.at)}): <b>${money(findProduct(name).lastCost.unit)}</b>/SP chưa VAT${findProduct(name).lastCost.vatQty ? ` · <b>${money(findProduct(name).lastCost.unitVat)}</b>/SP có VAT ${findProduct(name).lastCost.vatRate}%` : ""}</div>` : ""}
       <label>🔗 Link tham khảo (trang sản phẩm, thông số, hướng dẫn…)</label>
       <div style="display:flex;gap:8px"><input id="pLink" type="url" inputmode="url" value="${esc(cur)}" placeholder="https://…" style="flex:1"><button class="btn sm pri" id="pLinkSave" type="button">Lưu</button></div>
       ${cur ? `<div style="margin-top:8px;display:flex;gap:8px"><a href="${esc(cur)}" target="_blank" rel="noopener" class="btn sm" style="display:inline-block;text-decoration:none">🔗 Mở link</a><button type="button" class="btn sm" data-copy="${esc(cur)}">📋 Copy link</button></div>` : ""}
@@ -2682,9 +2802,9 @@
     } finally { URL.revokeObjectURL(url); }
   }
   // onAdd(ảnh mới thêm) – dùng để tự đọc số seri từ ảnh
-  function photoPicker(box, max, onAdd){
+  function photoPicker(box, max, onAdd, label){
     max = max || 3;
-    box.innerHTML = `<div class="phbar"><label class="btn sm phbtn">📷 Ảnh số seri <span class="sub">(tối đa <b class="phmax">${max}</b>)</span><input type="file" accept="image/*" multiple style="display:none"></label><div class="phthumbs"></div></div><div class="sub phocr"></div>`;
+    box.innerHTML = `<div class="phbar"><label class="btn sm phbtn">${label || "📷 Ảnh số seri"} <span class="sub">(tối đa <b class="phmax">${max}</b>)</span><input type="file" accept="image/*" multiple style="display:none"></label><div class="phthumbs"></div></div><div class="sub phocr"></div>`;
     const list = [], inp = box.querySelector("input"), th = box.querySelector(".phthumbs");
     const draw = () => {
       th.innerHTML = list.map((d, i) => `<span class="pht"><img src="${d}" alt="Ảnh seri ${i + 1}"><button type="button" data-i="${i}">✕</button></span>`).join("");
@@ -2778,6 +2898,26 @@
 
   /* ---------- Nhập hàng mới (nhanh, không cần file) ---------- */
   // Mỗi dòng nhập: 📦 Có sẵn trong kho (SL + tối đa 3 ảnh hoặc dòng seri) | 🆕 Sản phẩm mới (SL, có/không seri, 1–2 ảnh)
+  /* ---------- Giá vốn đợt nhập: chia giá 1 sản phẩm có VAT / không VAT ----------
+     Gọi P = giá 1 SP chưa VAT, n = số lượng, v = số SP có VAT, r = thuế VAT
+     Tổng tiền = P × n + P × r × v  →  P = Tổng ÷ (n + r × v);  SP có VAT = P × (1 + r) */
+  function costCalc(mode, amount, qty, vatQty, vatRate){
+    const a = Number(String(amount || "").replace(/[^\d]/g, "")) || 0, n = Number(qty) || 0;
+    if (!a || n <= 0) return null;
+    const r = Math.max(0, Number(String(vatRate).replace(",", ".")) || 0) / 100, v = Math.min(n, Math.max(0, parseInt(vatQty) || 0));
+    const unit = mode === "unit" ? a : a / (n + r * v), total = mode === "unit" ? a * n + a * r * v : a;
+    return {mode, total: Math.round(total), qty: n, vatQty: v, vatRate: Math.round(r * 1000) / 10, unit: Math.round(unit), unitVat: Math.round(unit * (1 + r)),
+      vatAmt: Math.round(unit * r * v), avg: Math.round(total / n), overVat: (parseInt(vatQty) || 0) > n};
+  }
+  function costHtml(c){
+    if (!c) return "";
+    const noVat = c.qty - c.vatQty;
+    return `<b>Giá 1 SP chưa VAT: ${money(c.unit)}</b>` + (c.vatQty ? `<br><b>Giá 1 SP có VAT ${c.vatRate}%: ${money(c.unitVat)}</b>` : "") +
+      `<div style="margin-top:4px">${c.vatQty ? `• ${c.vatQty} SP có VAT × ${money(c.unitVat)} = ${money(c.unitVat * c.vatQty)}<br>` : ""}${noVat ? `• ${noVat} SP không VAT × ${money(c.unit)} = ${money(c.unit * noVat)}<br>` : ""}` +
+      `${c.vatQty ? `• Tiền thuế VAT: ${money(c.vatAmt)}<br>` : ""}• Tổng đợt nhập: <b>${money(c.total)}</b> · giá vốn trung bình ${money(c.avg)}/SP</div>` +
+      (c.overVat ? `<div style="color:var(--bad);margin-top:4px">⚠️ Số SP có VAT lớn hơn số lượng nhập – đang tính bằng ${c.qty}</div>` : "");
+  }
+  const costLine = c => c && !hidePrice() ? ` · 💰 ${money(c.unit)}/SP${c.vatQty ? ` (${c.vatQty} SP có VAT ${c.vatRate}%: ${money(c.unitVat)})` : ""} · tổng ${money(c.total)}` : "";
   function nhAddRow(){
     $("#nhRows").insertAdjacentHTML("beforeend", `<div class="oline nhrow" data-m="co">
       <button type="button" class="rm" title="Xóa">✕</button>
@@ -2788,8 +2928,24 @@
       <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
         <div class="sub nhsnhint"></div></div>
       <div class="full nhsnbox"><div class="nhsns"></div><button type="button" class="btn sm nhsnadd" style="margin-top:6px">+ Thêm dòng seri</button></div>
+      <div class="full nhcost"><details><summary style="cursor:pointer;font-weight:650;font-size:14px;padding:6px 0">💰 Giá vốn đợt nhập <span class="sub">(tùy chọn – tự chia giá 1 sản phẩm, có / không VAT)</span></summary>
+        <div class="two"><div><label class="nhctl">Tổng tiền đợt nhập (đ) – đã gồm VAT</label><input class="nhct" inputmode="numeric" placeholder="VD: 102.400.000"></div>
+          <div><label>Tính theo</label><select class="nhcm"><option value="total">Tổng tiền cả đợt</option><option value="unit">Giá 1 SP chưa VAT</option></select></div></div>
+        <div class="two"><div><label>Số SP có VAT (hóa đơn)</label><input class="nhcv" type="number" min="0" inputmode="numeric" value="0"></div>
+          <div><label>Thuế VAT (%)</label><input class="nhcr" type="number" min="0" step="0.5" inputmode="decimal" value="8"></div></div>
+        <div class="found nhcres" style="margin-top:8px"></div></details></div>
       <div class="full nhph"></div></div>`);
     const el = $("#nhRows").lastElementChild, $e = q => el.querySelector(q);
+    // ---- giá vốn: tự chia giá 1 sản phẩm ----
+    const drawCost = () => {
+      const q = parseInt($e(".nhq").value) || 0, c = costCalc($e(".nhcm").value, $e(".nhct").value, q, $e(".nhcv").value, $e(".nhcr").value);
+      $e(".nhctl").textContent = $e(".nhcm").value === "unit" ? "Giá 1 SP chưa VAT (đ)" : "Tổng tiền đợt nhập (đ) – đã gồm VAT";
+      $e(".nhcres").innerHTML = costHtml(c);
+      $e(".nhcres").style.display = $e(".nhcres").innerHTML ? "" : "none";
+    };
+    $e(".nhct").addEventListener("input", () => { const v = $e(".nhct"), n = Number(String(v.value).replace(/[^\d]/g, "")) || 0; v.value = v.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); drawCost(); });
+    [".nhcv", ".nhcr", ".nhcm"].forEach(k => { $e(k).addEventListener("input", drawCost); $e(k).addEventListener("change", drawCost); });
+    el._cost = () => costCalc($e(".nhcm").value, $e(".nhct").value, parseInt($e(".nhq").value) || 0, $e(".nhcv").value, $e(".nhcr").value);
     // dòng "Có seri": chụp ảnh tem seri -> tự đọc seri, mỗi seri thêm 1 dòng (số lượng tự đếm)
     const readSn = imgs => autoReadSn($e(".nhph"), imgs, list => {
       const have = new Set(sns().map(keySN)), add = list.filter(s => !have.has(keySN(s)));
@@ -2814,6 +2970,7 @@
       if (n && moi) h = exists ? `<b style="color:var(--warn)">Đã có trong kho – chọn “Có sẵn”</b>` : `<b style="color:var(--ok)">Mới · +${q}</b>`;
       $e(".nhstk").innerHTML = h;
       el.querySelectorAll(".nhsn").forEach(x => { const v = x.value.trim(), st = v && findStock(v); x.style.borderColor = !v ? "" : (!snOk(v) || (st && st.status === "in") || list.filter(y => keySN(y) === keySN(v)).length > 1) ? "var(--bad)" : ""; x.title = st && st.status === "in" ? "Seri đã có trong kho" : ""; });
+      drawCost();   // số lượng đổi -> tính lại giá vốn
     };
     el._upd = upd;
     const addSn = (v, noFocus) => { $e(".nhsns").insertAdjacentHTML("beforeend", `<div style="display:flex;gap:6px;margin-top:6px"><input class="nhsn" inputmode="numeric" maxlength="8" placeholder="Seri 525xxxxx" value="${esc(v || "")}"><button type="button" class="btn sm nhsnrm">✕</button></div>`);
@@ -2838,7 +2995,7 @@
   $("#nhAdd").onclick = () => { nhAddRow(); $("#nhRows").lastElementChild.querySelector(".nhn").focus(); };
   $("#nhGo").onclick = async () => {
     const rows = [...$("#nhRows").children].map(el => { const moi = el.dataset.m === "moi", useSn = !!el._hasSn;
-      return {el, moi, name: el.querySelector(".nhn").value.trim(), qty: parseInt(el.querySelector(".nhq").value) || 0, ph: el.querySelector(".nhph")._photos(),
+      return {el, moi, name: el.querySelector(".nhn").value.trim(), qty: parseInt(el.querySelector(".nhq").value) || 0, ph: el.querySelector(".nhph")._photos(), cost: el._cost ? el._cost() : null,
         sns: useSn ? [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean) : []}; }).filter(r => r.name);
     if (!rows.length) { toast("Hãy chọn sản phẩm cần nhập"); return; }
     for (const r of rows) {
@@ -2846,6 +3003,7 @@
       if (!r.moi && !exists) { toast(`“${r.name}” chưa có trong kho – chọn “Sản phẩm mới”`); return; }
       if (r.moi && exists) { toast(`“${r.name}” đã có trong kho – chọn “Có sẵn trong kho”`); return; }
       if (r.qty <= 0) { toast("Số lượng nhập phải lớn hơn 0"); return; }
+      if (r.cost && r.cost.overVat) { toast(`“${r.name}”: số SP có VAT lớn hơn số lượng nhập`); return; }
       if (r.el._hasSn && !r.sns.length && !r.ph.length) { toast(`“${r.name}”: gõ seri hoặc chụp ảnh tem seri (có ảnh thì không cần gõ) – hoặc chọn “Không có seri”`); return; }
       const bad = r.sns.find(v => !snOk(v)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
       const dup = r.sns.find((v, i) => r.sns.findIndex(y => keySN(y) === keySN(v)) !== i); if (dup) { toast(`Seri ${dup} bị nhập trùng`); return; }
@@ -2857,18 +3015,21 @@
     rows.forEach(r => { const ex = productNames().find(p => norm(p) === norm(r.name)); if (ex) { r.name = ex; return; }
       if (newPr.some(p => norm(p.name) === norm(r.name))) return;
       let id = prId(r.name), k = 2; while (usedIds.has(id)) id = prId(r.name) + "-" + (k++); usedIds.add(id);
-      newPr.push({id, name: r.name, months: 12, noSerial: !r.el._hasSn, createdAt: now, updatedAt: now}); });
+      newPr.push(Object.assign({id, name: r.name, months: 12, noSerial: !r.el._hasSn, createdAt: now, updatedAt: now}, r.cost ? {lastCost: Object.assign({at: now}, r.cost)} : {})); });
     const b = $("#nhGo"); b.disabled = true;
     try {
       if (newPr.length) await putMany("pr", newPr);
+      // sản phẩm đã có: lưu giá vốn lần nhập gần nhất
+      const prCost = rows.filter(r => r.cost && !newPr.some(p => norm(p.name) === norm(r.name)) && findProduct(r.name)).map(r => Object.assign({}, findProduct(r.name), {lastCost: Object.assign({at: now}, r.cost), updatedAt: now}));
+      if (prCost.length) await putMany("pr", prCost);
       for (const r of rows) r.photos = r.ph.length ? await savePhotos(r.ph, {product: r.name, ref}) : [];
       // có seri -> mỗi seri 1 dòng tồn kho; không seri -> cộng theo số lượng
       const stList = rows.flatMap(r => r.sns.map(sn => { const old = findStock(sn), p = findProduct(r.name);
-        return Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: r.name, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor(), photos: r.photos}); }));
+        return Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: r.name, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor(), photos: r.photos}, r.cost ? {unitCost: r.cost.unit, unitCostVat: r.cost.unitVat} : {}); }));
       if (stList.length) await putMany("st", stList);
-      const mv = rows.filter(r => !r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.el._hasSn ? {snByPhoto: true} : {}));
+      const mv = rows.filter(r => !r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.el._hasSn ? {snByPhoto: true} : {}, r.cost ? {cost: r.cost} : {}));
       // dòng có seri: ghi 1 mục lịch sử (qty 0) để hiện trong “Lần nhập gần đây”
-      const log = rows.filter(r => r.sns.length).map(r => ({id: "mv_" + uid(), product: r.name, qty: 0, snQty: r.sns.length, serials: r.sns, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}));
+      const log = rows.filter(r => r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: 0, snQty: r.sns.length, serials: r.sns, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.cost ? {cost: r.cost} : {}));
       if (mv.length + log.length) await putMany("mv", mv.concat(log));
       toast(`Đã nhập kho ${rows.reduce((a,r) => a + r.qty, 0)} cái · ${rows.length} mặt hàng – tồn kho đã cập nhật`);
       $("#nhRows").innerHTML = ""; $("#nhNote").value = ""; nhAddRow();
@@ -2896,7 +3057,7 @@
   };
   function drawNhapHist(){
     const L = moves.filter(m => m.kind === "nhap").sort((a,b) => (b.at||"").localeCompare(a.at||"")).slice(0, 10);
-    $("#nhHist").innerHTML = L.length ? `<div class="sub" style="margin-bottom:4px"><b>Lần nhập gần đây</b></div>` + L.map(m => `<div class="sub">• ${fmtTime(m.at)} – <b>${esc(m.product)}</b> +${m.snQty || m.qty}${m.serials ? ` <span title="${esc(m.serials.join(", "))}">(seri: ${esc(m.serials.slice(0, 3).join(", "))}${m.serials.length > 3 ? "…" : ""})</span>` : ""}${m.ref && m.ref !== "Nhập hàng" ? " · " + esc(String(m.ref).replace(/^Nhập hàng – /, "")) : ""}${m.by ? " · " + esc(m.by) : ""} ${photoBtn(m.photos, "Nhập hàng – " + m.product)}</div>`).join("") : "";
+    $("#nhHist").innerHTML = L.length ? `<div class="sub" style="margin-bottom:4px"><b>Lần nhập gần đây</b></div>` + L.map(m => `<div class="sub">• ${fmtTime(m.at)} – <b>${esc(m.product)}</b> +${m.snQty || m.qty}${m.serials ? ` <span title="${esc(m.serials.join(", "))}">(seri: ${esc(m.serials.slice(0, 3).join(", "))}${m.serials.length > 3 ? "…" : ""})</span>` : ""}${m.ref && m.ref !== "Nhập hàng" ? " · " + esc(String(m.ref).replace(/^Nhập hàng – /, "")) : ""}${m.by ? " · " + esc(m.by) : ""}${costLine(m.cost)} ${photoBtn(m.photos, "Nhập hàng – " + m.product)}</div>`).join("") : "";
   }
 
   /* ---------- Thống kê linh kiện tháo từ máy ---------- */
@@ -3005,6 +3166,243 @@
       foot: ["TỔNG CỘNG", vnd(tot.open), vnd(tot.inn), vnd(tot.out), vnd(tot.adj), vnd(tot.close)], sign: ["Thủ kho", "Kế toán", "Giám đốc"]});
   };
 
+  /* ================= CHI PHÍ CÔNG TY =================
+     Loại chi: nhap (nhập hàng – trả 1 lần / trả một phần, còn nợ NCC), ship (trả ship cho đơn, tính lại khách -> công nợ),
+     dodung (đồ dùng bộ phận, máy móc có bảo hành), luong (lương nhân viên), tranoncc (trả nợ nhà cung cấp), khac (chi khác)
+     Chụp ảnh hay tự điền đều cộng dồn. "Tiền công ty đã chi" = tiền thật sự chi ra trong ngày chi. */
+  const EX_KINDS = {nhap: "📦 Nhập hàng", ship: "🚚 Ship hàng", dodung: "🧰 Đồ dùng bộ phận", luong: "👷 Lương nhân viên", tranoncc: "💳 Trả nợ NCC", khac: "📝 Chi khác"};
+  const EX_LABEL = {nhap: "Nhập hàng", ship: "Ship hàng", dodung: "Đồ dùng bộ phận", luong: "Lương nhân viên", tranoncc: "Trả nợ nhà cung cấp", khac: "Chi khác"};
+  const EX_DEPTS = ["Kỹ thuật", "Kho", "Bán hàng", "Vận chuyển", "Kế toán", "Bảo hành", "Văn phòng / chung"];
+  const EX_OTHER = ["Xăng xe", "Ăn uống / tiếp khách", "Văn phòng phẩm", "Điện nước / Internet", "Chành xe / Bưu điện", "Thuê mặt bằng", "Khác"];
+  const exKind = x => x.kind || "khac";
+  const exAmt = x => Number(x.amount) || 0;
+  // tiền công ty thật sự chi ra
+  const exCash = x => { const k = exKind(x); if (k === "nhap") return Number(x.paid) || 0; if ((k === "ship" || k === "khac") && x.payer === "khach") return 0; return exAmt(x); };
+  const exCat = x => exKind(x) === "khac" ? (x.cat || "Khác") : EX_LABEL[exKind(x)];
+  const exTitle = x => { const k = exKind(x);
+    if (k === "nhap") return `Nhập ${x.qty || ""} ${x.product || ""}${x.supplier ? " – " + x.supplier : ""}`;
+    if (k === "ship") return `Ship đơn ${x.ref || ""}${x.customer ? " – " + x.customer : ""}`;
+    if (k === "dodung") return `${x.item || ""}${Number(x.qty) > 1 ? " × " + x.qty : ""} – BP ${x.dept || ""}`;
+    if (k === "luong") return `Lương ${x.employee || ""}${x.month ? " tháng " + x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}`;
+    if (k === "tranoncc") return `Trả nợ ${x.supplier || "nhà cung cấp"}`;
+    return x.content || "Chi khác"; };
+  const exWho = x => x.supplier || x.customer || x.employee || (x.dept ? "BP " + x.dept : "");
+  const refOf = code => code ? (orders.find(o => o.code === code) || tickets.find(t => t.code === code)) : null;
+  const exFor = code => expenses.filter(x => x.ref === code);
+  const exLine = code => { const L = exFor(code); if (!L.length || hidePrice()) return "";
+    return `<div class="sub" style="margin-top:4px">🧾 Chi phí: ${L.map(x => `${esc(exKind(x) === "ship" ? "Phí ship" : exTitle(x))} <b>${money(exAmt(x))}</b> (${x.payer === "khach" ? "khách trả" : x.charge ? "công ty trả, tính lại khách" : "công ty trả"})`).join(" · ")}</div>`; };
+  function exRange(mode, day){
+    const d = new Date((day || iso(new Date())) + "T00:00:00");
+    if (mode === "day") { const e = new Date(d); e.setDate(d.getDate() + 1); return {s: d, e, label: "Ngày " + fmt(iso(d))}; }
+    if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
+    const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
+  }
+  const exIn = (s, e) => expenses.filter(x => { const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  function exSum(L){
+    const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
+    L.forEach(x => { const c = exCash(x), k = exKind(x);
+      if (c > 0) { const n = exCat(x); cat[n] = cat[n] || {n: 0, amt: 0}; cat[n].n++; cat[n].amt += c; cty += c; nCty++; }
+      if ((k === "ship" || k === "khac") && x.payer === "khach") { kh += exAmt(x); nKh++; }
+      if (k === "nhap") { goods += exAmt(x); goodsDebt += Math.max(0, exAmt(x) - (Number(x.paid) || 0)); }
+      if (k === "ship" && x.charge) shipCharge += exAmt(x); });
+    return {cty, nCty, kh, nKh, cat, goods, goodsDebt, shipCharge};
+  }
+  // nợ nhà cung cấp (từ trước tới nay): tiền hàng chưa trả – các lần trả nợ
+  function supplierDebts(){
+    const m = {};
+    expenses.forEach(x => { const k = exKind(x); if (!x.supplier || (k !== "nhap" && k !== "tranoncc")) return; const key = norm(x.supplier);
+      m[key] = m[key] || {name: x.supplier, goods: 0, paid: 0, debt: 0, last: ""}; const r = m[key];
+      if (k === "nhap") { r.goods += exAmt(x); r.paid += Number(x.paid) || 0; r.debt += exAmt(x) - (Number(x.paid) || 0); }
+      else { r.paid += exAmt(x); r.debt -= exAmt(x); }
+      if ((x.date || "") > r.last) r.last = x.date || ""; });
+    return Object.values(m).sort((a,b) => b.debt - a.debt);
+  }
+  const supDebtOf = name => supplierDebts().find(r => norm(r.name) === norm(name))?.debt || 0;
+  // phí ship tính lại khách -> cộng vào công nợ của đơn / phiếu
+  async function chargeShip(x, amount){
+    const now = new Date().toISOString(), save = (stage, note, extra) => x.lines ? advanceOrder(x, stage, note, extra) : advance(x, stage, note, extra);
+    if (x.stage === "cong_no" && x.pay) {
+      const pay = Object.assign({}, x.pay, {amount: (Number(x.pay.amount) || 0) + amount, gd: boss ? "ok" : (x.pay.gd ? "cho" : x.pay.gd)});
+      await save("cong_no", `🚚 Cộng phí ship ${money(amount)} vào công nợ: ${money(x.pay.amount)} → ${money(pay.amount)}`, {pay});
+      return "đã cộng vào công nợ";
+    }
+    if (x.stage === "da_tt" && x.pay) {
+      const pay = {status: "cong_no", amount, at: now, note: `Phí ship tính lại khách (đã thanh toán trước ${money(x.pay.amount)})`, paidBefore: x.pay, gd: boss ? "ok" : "cho"};
+      await save("cong_no", `🚚 Phí ship ${money(amount)} tính lại khách → chuyển công nợ`, {pay});
+      return "khách đã thanh toán trước – chuyển thành công nợ phí ship";
+    }
+    await save(x.stage, `🚚 Phí ship ${money(amount)} tính lại khách – Kế toán cộng vào khi ghi thanh toán`, {shipCharge: (Number(x.shipCharge) || 0) + amount});
+    return "Kế toán sẽ cộng khi ghi thanh toán";
+  }
+  function drawExpenses(host){
+    if (!host) return;
+    if (!host._built) {
+      host._built = true; host._mode = "month"; host._kind = "nhap"; host._payer = "cty"; host._payMode = "full";
+      host.innerHTML = `<h3>🧾 Chi phí công ty</h3>
+        <div class="sub" style="margin-bottom:6px">Chọn loại chi → điền thông tin (chụp ảnh hay tự điền đều được) → app tự tính và cộng dồn.</div>
+        <details class="exform" open><summary style="cursor:pointer;font-weight:650;padding:4px 0">➕ Ghi khoản chi mới</summary>
+          <div class="seg exkind" style="flex-wrap:wrap;margin-top:6px">${Object.entries(EX_KINDS).map(([k,v]) => `<button type="button" data-k="${k}" style="flex:1 1 30%;min-width:100px;padding:9px 4px;font-size:13px">${v}</button>`).join("")}</div>
+          <div class="exfields"></div>
+          <div class="exph" style="margin-top:8px"></div>
+          <label>Ghi chú</label><input class="exn" placeholder="Tùy chọn">
+          <div class="btns"><button type="button" class="btn pri exgo">💾 Lưu khoản chi</button></div></details>
+        <div class="panel exsupbox hide" style="margin:12px 0 0;padding:10px"><b style="font-size:14px">💳 Nợ nhà cung cấp</b><div class="exsup" style="margin-top:6px"></div></div>
+        <div class="row" style="align-items:center;margin-top:14px;gap:8px"><b style="font-size:14px">📊 Tổng hợp chi phí</b><input type="date" class="exday" style="width:auto;padding:7px 9px;font-size:14px"></div>
+        <div class="seg exseg" style="margin-top:6px"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button></div>
+        <div class="exsum"></div>
+        <input class="exq" type="search" placeholder="Tìm nội dung, mã đơn, khách, NCC, nhân viên…" style="margin-top:8px">
+        <div class="list exlist" style="margin-top:8px"></div>
+        <div class="btns"><button type="button" class="btn exfile">📊 Excel chi phí</button></div>`;
+      const $h = q => host.querySelector(q), money0 = el => Number(String(el?.value || "").replace(/[^\d]/g, "")) || 0;
+      photoPicker($h(".exph"), 3, null, "📷 Chụp ảnh hóa đơn / chi tiêu");
+      $h(".exday").value = iso(new Date());
+      const fmtMoneyInput = el => el.addEventListener("input", () => { const n = money0(el); el.value = el.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); host._calc && host._calc(); });
+      const payerBtns = () => `<label>Ai trả? *</label><div class="choice"><button type="button" class="opt" data-p="cty"><span class="ic">🏢</span>Công ty trả</button><button type="button" class="opt" data-p="khach"><span class="ic">👤</span>Khách trả</button></div>`;
+      const dateF = (lbl) => `<label>${lbl}</label><input class="exd" type="date" value="${iso(new Date())}">`;
+      const buildFields = () => {
+        const k = host._kind, F = $h(".exfields"); host._calc = null;
+        host.querySelectorAll(".exkind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+        if (k === "nhap") F.innerHTML = `<div class="two"><div>${dateF("Ngày nhập *")}</div><div><label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="VD: NCC Hà Nội"></div></div>
+          <div class="two"><div><label>Sản phẩm nhập *</label><input class="expr" list="prodList" autocomplete="off" placeholder="Tên sản phẩm"></div><div><label>Số lượng *</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <div class="two"><div><label>Số SP có VAT (0 = không VAT)</label><input class="exvq" type="number" min="0" inputmode="numeric" value="0"></div><div><label>Thuế VAT (%)</label><input class="exvr" type="number" min="0" step="0.5" value="8"></div></div>
+          <label>Tổng tiền hàng (đ) – đã gồm VAT *</label><input class="exa" inputmode="numeric" placeholder="VD: 102.400.000">
+          <div class="found excost" style="display:none;margin-top:6px"></div>
+          <label>Thanh toán</label><div class="choice"><button type="button" class="opt" data-pm="full"><span class="ic">✅</span>Thanh toán 1 lần (đủ)</button><button type="button" class="opt" data-pm="part"><span class="ic">💳</span>Trả một phần / chưa trả</button></div>
+          <div class="expaidw hide"><label>Đã thanh toán (đ)</label><input class="expaid" inputmode="numeric" placeholder="VD: 50.000.000 (0 nếu chưa trả)"></div>
+          <div class="sub exdebt" style="margin-top:6px"></div>`;
+        else if (k === "ship") F.innerHTML = `<label>Trả ship cho đơn nào? *</label><input class="exr" list="exRefList" autocomplete="off" placeholder="Gõ mã đơn hoặc tên khách">
+          <div class="found exrinfo" style="display:none;margin-top:6px"></div>
+          <div class="two"><div><label>Phí ship (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 50.000"></div><div>${dateF("Ngày trả ship")}</div></div>
+          ${payerBtns()}
+          <label class="exchargew" style="display:flex;gap:8px;align-items:flex-start;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" class="excharge" style="width:auto;margin:3px 0 0"> <span><b>Tính lại phí ship cho khách</b> – tự cộng vào công nợ của khách</span></label>`;
+        else if (k === "dodung") F.innerHTML = `<div class="two"><div><label>Bộ phận *</label><select class="exdept">${EX_DEPTS.map(d => `<option>${d}</option>`).join("")}</select></div><div>${dateF("Ngày mua *")}</div></div>
+          <div class="two"><div><label>Tên đồ dùng *</label><input class="exitem" placeholder="VD: Máy hàn, mỏ hàn, kệ kho…"></div><div><label>Số lượng</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <label>Chi phí (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 1.500.000">
+          <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" class="exmach" style="width:auto;margin:0"> Là máy móc / thiết bị</label>
+          <div class="exwarw hide"><label>Bảo hành</label><select class="exwm"><option value="0">Không bảo hành</option>${[3,6,12,18,24,36].map(m => `<option value="${m}" ${m === 12 ? "selected" : ""}>${m} tháng</option>`).join("")}</select><div class="sub exwu" style="margin-top:4px"></div></div>`;
+        else if (k === "luong") F.innerHTML = `<label>Tên nhân viên *</label><input class="exemp" list="exEmpList" autocomplete="off" placeholder="VD: Lê Ngọc Danh">
+          <div class="two"><div><label>Lương tháng</label><input class="exmon" type="month" value="${iso(new Date()).slice(0, 7)}"></div><div>${dateF("Ngày trả lương")}</div></div>
+          <label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 8.000.000">`;
+        else if (k === "tranoncc") F.innerHTML = `<label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="Chọn nhà cung cấp">
+          <div class="sub exsupdebt" style="margin-top:4px"></div>
+          <div class="two"><div><label>Số tiền trả (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 20.000.000"></div><div>${dateF("Ngày trả")}</div></div>
+          <div class="sub exdebt" style="margin-top:6px"></div>`;
+        else F.innerHTML = `<label>Nội dung chi *</label><input class="exc" placeholder="VD: Đổ xăng xe giao hàng, tiếp khách…">
+          <div class="two"><div><label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 200.000"></div><div>${dateF("Ngày chi")}</div></div>
+          <label>Loại chi</label><select class="excat">${EX_OTHER.map(c => `<option>${c}</option>`).join("")}</select>${payerBtns()}`;
+        host.querySelectorAll(".exfields .exa, .exfields .expaid").forEach(fmtMoneyInput);
+        const syncP = () => { host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.classList.toggle("sel", o.dataset.p === host._payer));
+          const cw = $h(".exchargew"); if (cw) { cw.style.display = host._payer === "cty" ? "flex" : "none"; if (host._payer !== "cty") $h(".excharge").checked = false; } };
+        host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.onclick = () => { host._payer = o.dataset.p; syncP(); }); syncP();
+        if (k === "nhap") {
+          host._calc = () => { const qty = parseInt($h(".exqty").value) || 0, total = money0($h(".exa")), c = costCalc("total", total, qty, $h(".exvq").value, $h(".exvr").value);
+            $h(".excost").innerHTML = costHtml(c); $h(".excost").style.display = c ? "" : "none";
+            host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.classList.toggle("sel", o.dataset.pm === host._payMode));
+            $h(".expaidw").classList.toggle("hide", host._payMode !== "part");
+            const paid = host._payMode === "full" ? total : Math.min(total, money0($h(".expaid"))), debt = total - paid;
+            $h(".exdebt").innerHTML = total ? `Đã thanh toán: <b>${money(paid)}</b> · Còn nợ nhà cung cấp: <b style="color:${debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(debt)}</b>` : "";
+            const sup = $h(".exsupn").value.trim(); if (sup && supDebtOf(sup)) $h(".exdebt").innerHTML += `<br>Nợ cũ với ${esc(sup)}: ${money(supDebtOf(sup))} → sau đợt này: <b>${money(supDebtOf(sup) + debt)}</b>`; };
+          host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.onclick = () => { host._payMode = o.dataset.pm; host._calc(); if (host._payMode === "part") $h(".expaid").focus(); });
+          [".exqty", ".exvq", ".exvr", ".exsupn"].forEach(s => $h(s).addEventListener("input", host._calc));
+        }
+        if (k === "ship") $h(".exr").addEventListener("input", () => { const r = refOf($h(".exr").value.trim()), box = $h(".exrinfo");
+          box.style.display = r ? "" : "none";
+          box.innerHTML = r ? `🛒 <b>${esc(r.code)}</b> · Ngày mua: <b>${fmt(r.saleDate || r.createdAt)}</b> · Khách: <b>${esc(r.customer)}</b>${r.phone ? " · " + esc(r.phone) : ""}<br>${esc(r.lines ? orderSummary(r) : r.product)} · ${esc((r.lines ? OSTAGES : STAGES)[r.stage]?.label || "")}${r.pay ? ` · ${PAY[r.pay.status]} ${money(r.pay.amount)}` : ""}` : ""; });
+        if (k === "dodung") { const w = () => { const on = $h(".exmach").checked, m = Number($h(".exwm").value); $h(".exwarw").classList.toggle("hide", !on);
+            $h(".exwu").textContent = on && m ? `Bảo hành đến ${fmt(iso(addMonths(new Date(($h(".exd").value || iso(new Date())) + "T00:00:00"), m)))}` : ""; };
+          [".exmach", ".exwm", ".exd"].forEach(s => $h(s).addEventListener("change", w)); w(); }
+        if (k === "tranoncc") { host._calc = () => { const sup = $h(".exsupn").value.trim(), d = sup ? supDebtOf(sup) : 0, a = money0($h(".exa"));
+            $h(".exsupdebt").innerHTML = sup ? `Đang nợ ${esc(sup)}: <b style="color:var(--bad)">${money(d)}</b>` : "";
+            $h(".exdebt").innerHTML = sup && a ? `Sau khi trả còn nợ: <b>${money(d - a)}</b>${d - a < 0 ? " (trả dư)" : ""}` : ""; };
+          $h(".exsupn").addEventListener("input", host._calc); }
+        host._calc && host._calc();
+      };
+      host.querySelectorAll(".exkind button").forEach(b => b.onclick = () => { host._kind = b.dataset.k; host._payer = "cty"; buildFields(); });
+      buildFields();
+      host.querySelectorAll(".exseg button").forEach(b => b.onclick = () => { host._mode = b.dataset.m; drawExpenses(host); });
+      $h(".exday").addEventListener("change", () => drawExpenses(host));
+      $h(".exq").addEventListener("input", () => drawExpenses(host));
+      $h(".exgo").onclick = async () => {
+        const k = host._kind, v = s => ($h(s)?.value || "").trim(), amount = money0($h(".exa")), date = v(".exd") || iso(new Date());
+        const rec = {id: "ex_" + uid(), kind: k, date, amount, note: v(".exn"), by: actor(), at: new Date().toISOString()};
+        const need = (cond, msg, sel) => { if (!cond) { toast(msg); if (sel) $h(sel)?.focus(); throw new Error("x"); } };
+        let shipTarget = null;
+        try {
+          need(amount > 0, "Nhập số tiền", ".exa");
+          if (k === "nhap") { const qty = parseInt(v(".exqty")) || 0, c = costCalc("total", amount, qty, v(".exvq"), v(".exvr"));
+            need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
+            const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
+            Object.assign(rec, {supplier: v(".exsupn"), product: v(".expr"), qty, vatQty: c.vatQty, vatRate: c.vatRate, unit: c.unit, unitVat: c.unitVat, paid, debt: amount - paid, payMode: host._payMode}); }
+          else if (k === "ship") { shipTarget = refOf(v(".exr")); need(shipTarget, "Chọn đơn cần trả ship (gõ đúng mã đơn)", ".exr");
+            Object.assign(rec, {ref: shipTarget.code, customer: shipTarget.customer, saleDate: shipTarget.saleDate || (shipTarget.createdAt || "").slice(0, 10), payer: host._payer, charge: host._payer === "cty" && !!$h(".excharge")?.checked}); }
+          else if (k === "dodung") { need(v(".exitem"), "Nhập tên đồ dùng", ".exitem"); const mach = $h(".exmach").checked, wm = mach ? Number(v(".exwm")) : 0;
+            Object.assign(rec, {dept: v(".exdept"), item: v(".exitem"), qty: parseInt(v(".exqty")) || 1, machine: mach, wMonths: wm, wUntil: wm ? iso(addMonths(new Date(date + "T00:00:00"), wm)) : ""}); }
+          else if (k === "luong") { need(v(".exemp"), "Nhập tên nhân viên", ".exemp"); Object.assign(rec, {employee: v(".exemp"), month: v(".exmon")}); }
+          else if (k === "tranoncc") { need(v(".exsupn"), "Chọn nhà cung cấp", ".exsupn"); Object.assign(rec, {supplier: v(".exsupn")}); }
+          else { need(v(".exc"), "Nhập nội dung chi", ".exc"); Object.assign(rec, {content: v(".exc"), cat: v(".excat"), payer: host._payer}); }
+        } catch(e){ return; }
+        const b = $h(".exgo"); b.disabled = true;
+        try {
+          const ph = $h(".exph")._photos();
+          rec.photos = ph.length ? await savePhotos(ph, {product: "Chi phí", ref: exTitle(rec)}) : [];
+          await put("ex", rec);
+          let extra = "";
+          if (rec.charge && shipTarget) extra = " · " + await chargeShip(shipTarget, amount);
+          toast(`Đã lưu: ${exTitle(rec)} – ${money(amount)}${extra}`);
+          buildFields(); $h(".exn").value = ""; $h(".exph")._clear();
+        } catch(e){} finally { b.disabled = false; }
+      };
+      $h(".exfile").onclick = () => {
+        const {s, e, label} = exRange(host._mode, $h(".exday").value), L = exIn(s, e).sort((a,b) => (a.date || "").localeCompare(b.date || "") || (a.at || "").localeCompare(b.at || "")), S = exSum(L), sup = supplierDebts();
+        exportSheets(`Chi-phi_${{day: "ngay", week: "tuan", month: "thang"}[host._mode]}_${iso(s)}`, "Chi phí công ty", label, [
+          {name: "Chi phí", pre: [["Tiền công ty đã chi (đ)", S.cty], ["Khách tự trả (đ)", S.kh], ["Giá trị hàng nhập (đ)", S.goods], ["Còn nợ NCC từ hàng nhập kỳ này (đ)", S.goodsDebt], ["Phí ship tính lại khách (đ)", S.shipCharge]],
+            head: ["Ngày", "Loại chi", "Nội dung", "NCC / Khách / NV / Bộ phận", "Mã đơn", "Sản phẩm / đồ dùng", "SL", "Có VAT", "Tổng giá trị (đ)", "Công ty đã chi (đ)", "Còn nợ NCC (đ)", "Ai trả", "Tính lại khách", "Bảo hành", "Người ghi", "Ghi chú", "Có ảnh"],
+            rows: L.map(x => { const k = exKind(x); return [fmt(x.date), exCat(x), exTitle(x), exWho(x), x.ref || "", x.product || x.item || "", Number(x.qty) || "", k === "nhap" ? (x.vatQty ? `${x.vatQty} SP (${x.vatRate}%)` : "Không") : "", exAmt(x), exCash(x), k === "nhap" ? Math.max(0, exAmt(x) - (Number(x.paid) || 0)) : "",
+              x.payer === "khach" ? "Khách trả" : "Công ty", x.charge ? "Có" : "", x.machine ? (x.wMonths ? `${x.wMonths} tháng (đến ${fmt(x.wUntil)})` : "Không BH") : "", x.by || "", x.note || "", (x.photos || []).length ? "Có" : ""]; }),
+            foot: ["", "TỔNG", "", "", "", "", "", "", L.reduce((a,x) => a + exAmt(x), 0), S.cty, S.goodsDebt]},
+          {name: "Theo loại chi", head: ["Loại chi", "Số khoản", "Công ty đã chi (đ)"], rows: Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [k, v.n, v.amt]), foot: ["TỔNG", S.nCty, S.cty]},
+          {name: "Nợ nhà cung cấp", head: ["Nhà cung cấp", "Tổng tiền hàng (đ)", "Đã trả (đ)", "Còn nợ (đ)", "Lần gần nhất"], rows: sup.map(r => [r.name, r.goods, r.paid, r.debt, fmt(r.last)]), foot: ["TỔNG", sup.reduce((a,r) => a + r.goods, 0), sup.reduce((a,r) => a + r.paid, 0), sup.reduce((a,r) => a + r.debt, 0), ""]}]);
+      };
+    }
+    const $h = q => host.querySelector(q);
+    host.querySelectorAll(".exseg button").forEach(b => b.classList.toggle("on", b.dataset.m === host._mode));
+    const {s, e, label} = exRange(host._mode, $h(".exday").value), L0 = exIn(s, e), S = exSum(L0);
+    const tdR = exRange("day", iso(new Date())), td = exSum(exIn(tdR.s, tdR.e));
+    $h(".exsum").innerHTML = `<div class="sub" style="margin:6px 0"><b>${label}</b></div>
+      <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+        <div class="stat c-bad"><b style="font-size:15px">${money(S.cty)}</b><span>🏢 Tiền công ty đã chi (${S.nCty} khoản)</span></div>
+        <div class="stat"><b style="font-size:15px">${money(td.cty)}</b><span>Hôm nay đã chi</span></div>
+        ${S.goods ? `<div class="stat c-info"><b style="font-size:15px">${money(S.goods)}</b><span>📦 Giá trị hàng nhập</span></div><div class="stat c-warn"><b style="font-size:15px">${money(S.goodsDebt)}</b><span>Còn nợ NCC (hàng nhập kỳ này)</span></div>` : ""}
+        ${S.kh ? `<div class="stat c-info"><b style="font-size:15px">${money(S.kh)}</b><span>👤 Khách tự trả (${S.nKh})</span></div>` : ""}
+        ${S.shipCharge ? `<div class="stat c-ok"><b style="font-size:15px">${money(S.shipCharge)}</b><span>🚚 Phí ship tính lại khách</span></div>` : ""}</div>
+      ${Object.keys(S.cat).length ? `<table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Công ty đã chi theo loại</th><th>Số khoản</th><th style="width:110px">Số tiền</th></tr>${Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : ""}`;
+    const sup = supplierDebts().filter(r => Math.round(r.debt) !== 0);
+    $h(".exsupbox").classList.toggle("hide", !sup.length);
+    $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b></td></tr>`).join("")}</table>` : "";
+    const q = norm($h(".exq").value);
+    let L = L0.slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
+    if (q) L = L.filter(x => norm([exTitle(x), exWho(x), x.ref, x.product, x.item, x.note, x.by, exCat(x)].join(" ")).includes(q));
+    const canDel = boss || role === "ac";
+    $h(".exlist").innerHTML = L.length ? L.slice(0, 60).map(x => { const k = exKind(x), c = exCash(x);
+      const detail = k === "nhap" ? `${x.vatQty ? `${x.vatQty}/${x.qty} SP có VAT ${x.vatRate}% · ` : "Không VAT · "}${money(x.unit)}/SP${x.vatQty ? ` (có VAT ${money(x.unitVat)})` : ""}<br>Tổng ${money(exAmt(x))} · đã trả <b>${money(x.paid)}</b>${exAmt(x) - x.paid > 0 ? ` · <b style="color:var(--bad)">còn nợ ${money(exAmt(x) - x.paid)}</b>` : " · đã thanh toán đủ"}`
+        : k === "ship" ? `Ngày mua ${fmt(x.saleDate)}${x.charge ? " · <b style='color:var(--ok)'>tính lại khách (cộng công nợ)</b>" : ""}`
+        : k === "dodung" ? `${x.machine ? (x.wMonths ? `🛡️ BH ${x.wMonths} tháng – đến ${fmt(x.wUntil)}` : "Máy móc · không bảo hành") : "Đồ dùng"}`
+        : k === "luong" ? `Lương tháng ${x.month ? x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}` : k === "khac" ? esc(x.cat || "") : "";
+      return `<div class="item" style="cursor:default"><div class="row"><div><div class="pname"><span class="tag ${k === "nhap" ? "vc" : k === "ship" ? "bh" : "sc"}">${esc(EX_LABEL[k])}</span>${esc(exTitle(x))}</div>
+        <div class="sub">${fmt(x.date)}${x.by ? " · " + esc(x.by) : ""}</div><div class="sub">${detail}</div>${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
+        <div style="text-align:right"><b style="color:${c ? "var(--bad)" : "var(--info)"}">${money(c || exAmt(x))}</b><div class="sub">${c ? (k === "nhap" && c < exAmt(x) ? "đã chi" : "công ty chi") : "khách trả"}</div></div></div>
+        <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + exTitle(x))}${canDel ? `<button type="button" class="btn sm danger" data-exdel="${esc(x.id)}" style="margin-left:auto">🗑 Xóa</button>` : ""}</div></div>`; }).join("")
+      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có khoản chi trong kỳ."}</div>`;
+    host.querySelectorAll("[data-exdel]").forEach(b => b.onclick = async () => { const x = expenses.find(y => y.id === b.dataset.exdel); if (!x) return;
+      if (!confirm(`Xóa khoản chi “${exTitle(x)}” – ${money(exAmt(x))}?${x.charge ? "\n(Phí ship đã cộng vào công nợ khách sẽ KHÔNG tự trừ lại – nhờ Kế toán sửa chi phí đơn đó)" : ""}`)) return;
+      try { await delDoc("ex", x.id); toast("Đã xóa khoản chi"); } catch(e){} });
+    // danh sách gợi ý
+    const dlist = (id, vals) => { let d = document.getElementById(id); if (!d) { d = document.createElement("datalist"); d.id = id; document.body.appendChild(d); } d.innerHTML = vals.join(""); };
+    dlist("exSupList", supplierDebts().map(r => `<option value="${esc(r.name)}" label="Còn nợ ${esc(money(r.debt))}">`));
+    dlist("exEmpList", [...new Set(expenses.filter(x => x.employee).map(x => x.employee))].map(v => `<option value="${esc(v)}">`));
+    dlist("exRefList", [...orders, ...tickets].filter(x => x.stage !== "huy").sort((a,b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || "")).slice(0, 120).map(x => `<option value="${esc(x.code)}" label="${esc(x.customer)} · ${esc(fmt(x.saleDate || x.createdAt))}">`));
+  }
+
   /* ================= KẾ TOÁN ================= */
   let acMonth = null;
   // ---- tuổi nợ & nhắc thu (quá 3 ngày, nhắc lại mỗi 3 ngày; không reo liên tục) ----
@@ -3061,7 +3459,7 @@
           if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
           pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
-    drawDebt(); drawWeekDebt();
+    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc"));
     $("#acMonth").value = acMonth;
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
@@ -3105,6 +3503,7 @@
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
       <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
+      ${!edit && t.shipCharge && !t.shipChargeDone ? `<div class="reason">🚚 Phí ship tính lại khách: <b>${money(t.shipCharge)}</b> – nhớ cộng vào số tiền thanh toán / công nợ.</div>` : ""}
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
       ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
@@ -3163,21 +3562,138 @@
       const reqOk = req && ((payStatus === "da_tt" && pay.amount === Number(req.amount)) || (payStatus === "cong_no" && pay.amount === Math.max(0, debt0 - Number(req.amount))));
       Object.assign(pay, boss ? {gd: "ok", gdAt: pay.editedAt || pay.at, gdBy: "Giám đốc"} : reqOk ? {gd: "ok", gdAt: pay.at, gdBy: "Giám đốc (đã báo khách trả)"} : {gd: "cho"});
       if (req) note += ` (theo Giám đốc báo khách trả ${money(req.amount)})`;
-      if (isOd) await advanceOrder(t, payStatus, note, {pay, payReq: null}); else await advance(t, payStatus, note, {pay, payReq: null});
+      const shipDone = !edit && t.shipCharge && !t.shipChargeDone ? {shipChargeDone: true} : {};
+      if (isOd) await advanceOrder(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone)); else await advance(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone));
       if (!boss && !reqOk) pushTo("gd", `👔 Giám đốc duyệt ${PAY[payStatus].toLowerCase()}: ${t.code} – ${t.customer}`, `${money(pay.amount)}${edit ? " (Kế toán đã sửa)" : ""}`, t.id);
       toast(edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
     }};
     open("actBg");
   }
   // ---- Thống kê công nợ theo tuần (Thứ 2 → Chủ nhật) ----
+  /* ---------- BÁO CÁO TUẦN CHO GIÁM ĐỐC: công nợ, bán hàng, hàng xuất nhiều, khách mua nhiều, khách nợ lâu ---------- */
+  let gwTab = "debt", gwMode = "week";
+  function gwRange(){
+    const day = $("#gwDate").value || iso(new Date());
+    if (gwMode === "month") { const d = new Date(day + "T00:00:00"), s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`, key: iso(s).slice(0, 7)}; }
+    const r = weekRange(day); return Object.assign(r, {key: iso(r.s)});
+  }
+  function gdWeekData(){
+    const range = gwRange(), {s, e, label} = range, day = $("#gwDate").value || iso(new Date());
+    const inW = v => { if (!v) return false; const t = new Date(String(v).length <= 10 ? v + "T12:00:00" : v); return t >= s && t < e; };
+    const all = [...tickets, ...orders];
+    // 1. công nợ
+    const debt = weekDebt(all, day, range);
+    // 2. bán hàng (theo ngày bán, bỏ đơn đã hủy)
+    const sold = orders.filter(o => o.stage !== "huy" && inW(o.saleDate));
+    const qty = (o, gift) => (o.lines || []).filter(l => !!l.gift === gift).reduce((a,l) => a + (Number(l.qty) || 0), 0);
+    const val = o => o.pay ? Number(o.pay.amount) || 0 : 0;
+    const days = []; for (let d = new Date(s); d < e; d.setDate(d.getDate() + 1)) { const k = iso(d), L = sold.filter(o => o.saleDate === k);
+      days.push([["CN","T2","T3","T4","T5","T6","T7"][d.getDay()] + " " + fmt(k).slice(0, 5), L.length, L.reduce((a,o) => a + qty(o, false), 0), L.reduce((a,o) => a + qty(o, true), 0), L.reduce((a,o) => a + val(o), 0)]); }
+    const sale = {orders: sold.length, qty: sold.reduce((a,o) => a + qty(o, false), 0), gift: sold.reduce((a,o) => a + qty(o, true), 0), value: sold.reduce((a,o) => a + val(o), 0), noPay: sold.filter(o => !o.pay).length, days};
+    // 3. hàng xuất nhiều nhất (theo ngày xuất kho, bỏ hàng đã trả lại kho)
+    const out = orders.filter(o => o.exportedAt && inW(o.exportedAt) && !o.cancel?.returned), pm = {};
+    out.forEach(o => (o.lines || []).forEach(l => { const k = norm(l.product); pm[k] = pm[k] || {name: l.product, qty: 0, gift: 0, orders: new Set(), cus: new Set()}; const r = pm[k];
+      l.gift ? r.gift += Number(l.qty) || 0 : r.qty += Number(l.qty) || 0; r.orders.add(o.code); r.cus.add(o.customer); }));
+    const top = Object.values(pm).map(r => ({name: r.name, qty: r.qty, gift: r.gift, total: r.qty + r.gift, orders: r.orders.size, cus: r.cus.size})).sort((a,b) => b.qty - a.qty || b.total - a.total);
+    // 4. khách mua nhiều nhất (đơn bán trong tuần)
+    const cm = {};
+    sold.forEach(o => { const k = norm(o.customer); cm[k] = cm[k] || {name: o.customer, phone: o.phone || "", orders: 0, qty: 0, value: 0}; const r = cm[k]; r.orders++; r.qty += qty(o, false); r.value += val(o); if (!r.phone && o.phone) r.phone = o.phone; });
+    const cus = Object.values(cm).sort((a,b) => b.qty - a.qty || b.value - a.value || b.orders - a.orders);
+    // 5. khách nợ lâu nhất (công nợ đang còn, tính đến hôm nay)
+    const om = {};
+    debtNow().forEach(x => { const k = norm(x.customer); om[k] = om[k] || {name: x.customer, phone: x.phone || "", n: 0, amt: 0, oldest: 0, since: "", codes: []}; const r = om[k];
+      r.n++; r.amt += Number(x.pay?.amount) || 0; r.codes.push(x.code); const a = debtAge(x); if (a >= r.oldest) { r.oldest = a; r.since = debtStart(x); } if (!r.phone && x.phone) r.phone = x.phone; });
+    const old = Object.values(om).sort((a,b) => b.oldest - a.oldest || b.amt - a.amt);
+    const exL = exIn(s, e), exS = exSum(exL);
+    return {label, debt, sale, top, cus, old, key: range.key, exL, exS};
+  }
+  const miniTable = (head, rows, numFrom = 1) => rows.length ? `<table class="ptable"><tr>${head.map((h, j) => `<th style="${j ? "" : "text-align:left;width:auto"}">${esc(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map((v, j) => `<td>${j === 0 ? v : `<b>${typeof v === "number" ? v.toLocaleString("vi-VN") : esc(v)}</b>`}</td>`).join("")}</tr>`).join("")}</table>` : `<div class="empty">Không có dữ liệu trong kỳ.</div>`;
+  function drawGdWeek(){
+    if (!$("#gwDate").value) $("#gwDate").value = iso(new Date());
+    const D = gdWeekData(), M = gwMode === "month", P = M ? "tháng" : "tuần";
+    $("#gwTitle").textContent = M ? "📊 Báo cáo tháng" : "📊 Báo cáo tuần";
+    $("#gwMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === gwMode));
+    $("#gwLabel").innerHTML = `<b>${D.label}</b> ${M ? "(chọn 1 ngày bất kỳ trong tháng)" : "(Thứ 2 → Chủ nhật)"}`;
+    $("#gwSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === gwTab));
+    let h = "";
+    if (gwTab === "debt") { const {arose, collected, openEnd, sum, byCus} = D.debt;
+      h = `<div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">
+        <div class="stat c-warn"><b style="font-size:15px">${money(sum(arose))}</b><span>Nợ mới trong ${P} (${arose.length})</span></div>
+        <div class="stat c-ok"><b style="font-size:15px">${money(sum(collected))}</b><span>Đã thu nợ trong ${P} (${collected.length})</span></div>
+        <div class="stat c-bad"><b style="font-size:15px">${money(sum(openEnd))}</b><span>Còn nợ cuối ${P} (${openEnd.length})</span></div></div>
+        <h4 style="margin:8px 0 6px;font-size:14px">Còn nợ cuối ${P} theo khách</h4>` + miniTable(["Khách hàng", "Số phiếu", "Còn nợ (đ)"], Object.entries(byCus).sort((a,b) => b[1].amt - a[1].amt).slice(0, 10).map(([k,v]) => [esc(k), v.n, v.amt]));
+    } else if (gwTab === "sale") { const S = D.sale;
+      h = `<div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px">
+        <div class="stat c-info oditem"><b>${S.orders}</b><span>Đơn bán trong ${P}</span></div>
+        <div class="stat c-ok oditem"><b>${S.qty.toLocaleString("vi-VN")}</b><span>Số lượng hàng bán</span></div>
+        <div class="stat oditem"><b>${S.gift.toLocaleString("vi-VN")}</b><span>🎁 Hàng tặng</span></div>
+        <div class="stat c-ok oditem"><b style="font-size:15px">${money(S.value)}</b><span>Giá trị đã ghi nhận (Kế toán)${S.noPay ? ` · ${S.noPay} đơn chưa ghi` : ""}</span></div></div>
+        <h4 style="margin:8px 0 6px;font-size:14px">Theo từng ngày</h4>` + miniTable(["Ngày", "Số đơn", "SL bán", "Tặng", "Giá trị (đ)"], S.days.map(r => [esc(r[0]), r[1], r[2], r[3], r[4]]));
+    } else if (gwTab === "top") {
+      h = `<div class="sub" style="margin-bottom:6px">Theo ngày xuất kho · không tính hàng khách trả lại</div>` + miniTable(["#  Sản phẩm", "SL bán", "Tặng", "Số đơn"], D.top.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}`, r.qty, r.gift, r.orders]));
+    } else if (gwTab === "cus") {
+      h = `<div class="sub" style="margin-bottom:6px">Theo đơn bán trong ${P} (ngày bán)</div>` + miniTable(["#  Khách hàng", "Số đơn", "SL mua", "Giá trị (đ)"], D.cus.slice(0, 15).map((r, i) => [`${i < 3 ? ["🥇","🥈","🥉"][i] : i + 1 + "."} ${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}`, r.orders, r.qty, r.value]));
+    } else if (gwTab === "exp") { const E = D.exS;
+      h = `<div class="stats" style="grid-template-columns:repeat(2,1fr);margin-bottom:10px">
+        <div class="stat c-bad"><b style="font-size:15px">${money(E.cty)}</b><span>🏢 Tiền công ty đã chi (${E.nCty} khoản)</span></div>
+        <div class="stat c-info"><b style="font-size:15px">${money(E.goods)}</b><span>📦 Giá trị hàng nhập</span></div>
+        <div class="stat c-warn"><b style="font-size:15px">${money(supplierDebts().reduce((a,r) => a + r.debt, 0))}</b><span>💳 Đang nợ nhà cung cấp</span></div>
+        <div class="stat c-ok"><b style="font-size:15px">${money(E.shipCharge)}</b><span>🚚 Phí ship tính lại khách</span></div></div>` +
+        miniTable(["Công ty đã chi theo loại", "Số khoản", "Số tiền (đ)"], Object.entries(E.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [esc(k), v.n, v.amt]));
+    } else {
+      h = `<div class="sub" style="margin-bottom:6px">Công nợ đang còn, tính đến hôm nay · xếp theo số ngày nợ lâu nhất</div>` + miniTable(["Khách hàng", "Nợ lâu nhất", "Số phiếu", "Còn nợ (đ)"], D.old.slice(0, 15).map(r => [`${esc(r.name)}${r.phone ? ` <span class="sub">${esc(r.phone)}</span>` : ""}<div class="sub">${esc(r.codes.join(", "))}</div>`, `${r.oldest} ngày${r.oldest >= DEBT_DAYS ? " ⏰" : ""}`, r.n, r.amt]));
+    }
+    $("#gwBody").innerHTML = h;
+  }
+  $("#gwDate").addEventListener("change", drawGdWeek);
+  $("#gwSeg").querySelectorAll("button").forEach(b => b.onclick = () => { gwTab = b.dataset.k; drawGdWeek(); });
+  $("#gwMode").querySelectorAll("button").forEach(b => b.onclick = () => { gwMode = b.dataset.m; drawGdWeek(); });
+  // file Excel nhiều trang
+  async function exportSheets(file, title, period, sheets){
+    if (pdfBusy) return; pdfBusy = true;
+    try {
+      toast("Đang tạo file Excel…");
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, wb = X.utils.book_new();
+      sheets.forEach(sh => {
+        const aoa = [[COMPANY + " – " + title.toUpperCase() + " – " + sh.name.toUpperCase()], [period], [`Ngày in: ${fmtTime(new Date().toISOString())} · Người in: ${role ? actor() : ""}`], ...(sh.pre || []), [], sh.head, ...(sh.rows.length ? sh.rows : [["Không có dữ liệu"]]), ...(sh.foot ? [sh.foot] : [])];
+        const ws = X.utils.aoa_to_sheet(aoa), hr = aoa.indexOf(sh.head);
+        Object.keys(ws).forEach(k => { if (k[0] !== "!" && typeof ws[k].v === "number" && Math.abs(ws[k].v) >= 1000) ws[k].z = "#,##0"; });
+        ws["!cols"] = colWidths(aoa); ws["!merges"] = [0, 1, 2].map(r => ({s: {r, c: 0}, e: {r, c: Math.max(1, sh.head.length - 1)}}));
+        if (sh.rows.length) ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: hr, c: 0}, e: {r: hr + sh.rows.length, c: sh.head.length - 1}})};
+        X.utils.book_append_sheet(wb, ws, sheetName(sh.name));
+      });
+      await saveBlob(file + ".xlsx", new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+    finally { pdfBusy = false; }
+  }
+  $("#gwFile").onclick = () => {
+    const D = gdWeekData(), {arose, collected, openEnd, sum, byCus} = D.debt, S = D.sale, M = gwMode === "month", P = M ? "tháng" : "tuần";
+    const drow = (x, kind) => [kind, x.lines ? "Đơn bán" : TYPE[x.type], x.code, x.customer, x.phone || "", x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), kind === "Đã thu" ? fmt(x.pay?.paidDate) : "", kind === "Đã thu" ? "" : debtAge(x), Number(x.pay?.amount) || 0];
+    exportSheets(`Bao-cao-${M ? "thang" : "tuan"}_${D.key}`, M ? "Báo cáo tháng" : "Báo cáo tuần", D.label, [
+      {name: "Công nợ", pre: [[`Nợ mới trong ${P} (đ)`, sum(arose)], [`Đã thu nợ trong ${P} (đ)`, sum(collected)], [`Còn nợ cuối ${P} (đ)`, sum(openEnd)], ["Khách còn nợ", Object.keys(byCus).length]],
+        head: ["Loại", "Nhóm", "Mã", "Khách hàng", "SĐT", "Hàng", "Ngày ghi nợ", "Ngày thu", "Số ngày nợ", "Số tiền (đ)"],
+        rows: arose.map(x => drow(x, "Nợ mới")).concat(collected.map(x => drow(x, "Đã thu"))).concat(openEnd.map(x => drow(x, "Còn nợ")))},
+      {name: "Bán hàng", pre: [["Số đơn bán", S.orders], ["Số lượng hàng bán", S.qty], ["Hàng tặng", S.gift], ["Giá trị đã ghi nhận (đ)", S.value], ["Đơn chưa ghi thanh toán", S.noPay]],
+        head: ["Ngày", "Số đơn", "SL bán", "Tặng", "Giá trị (đ)"], rows: S.days, foot: ["TỔNG", S.orders, S.qty, S.gift, S.value]},
+      {name: "Hàng xuất nhiều nhất", head: ["Hạng", "Sản phẩm", "SL bán", "Tặng", "Tổng xuất", "Số đơn", "Số khách"], rows: D.top.map((r, i) => [i + 1, r.name, r.qty, r.gift, r.total, r.orders, r.cus])},
+      {name: "Khách mua nhiều nhất", head: ["Hạng", "Khách hàng", "SĐT", "Số đơn", "SL mua", "Giá trị (đ)"], rows: D.cus.map((r, i) => [i + 1, r.name, r.phone, r.orders, r.qty, r.value])},
+      {name: "Chi phí", pre: [["Tiền công ty đã chi (đ)", D.exS.cty], ["Giá trị hàng nhập (đ)", D.exS.goods], ["Phí ship tính lại khách (đ)", D.exS.shipCharge]].concat(Object.entries(D.exS.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [`  ${k} (đ)`, v.amt])),
+        head: ["Ngày", "Loại chi", "Nội dung", "NCC / Khách / NV / Bộ phận", "Mã đơn", "Tổng giá trị (đ)", "Công ty đã chi (đ)", "Còn nợ NCC (đ)"],
+        rows: D.exL.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).map(x => [fmt(x.date), exCat(x), exTitle(x), exWho(x), x.ref || "", exAmt(x), exCash(x), exKind(x) === "nhap" ? Math.max(0, exAmt(x) - (Number(x.paid) || 0)) : ""]),
+        foot: ["", "TỔNG", "", "", "", D.exL.reduce((a,x) => a + exAmt(x), 0), D.exS.cty, D.exS.goodsDebt]},
+      {name: "Khách nợ lâu nhất", head: ["Hạng", "Khách hàng", "SĐT", "Nợ lâu nhất (ngày)", "Nợ từ ngày", "Số phiếu", "Mã phiếu", "Còn nợ (đ)"], rows: D.old.map((r, i) => [i + 1, r.name, r.phone, r.oldest, fmt(r.since), r.n, r.codes.join(", "), r.amt]),
+        foot: ["", "TỔNG", "", "", "", D.old.reduce((a,r) => a + r.n, 0), "", D.old.reduce((a,r) => a + r.amt, 0)]}]);
+  };
   function weekRange(day){
     const d0 = day || $("#dwDate").value || iso(new Date()), d = new Date(d0 + "T00:00:00");
     const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7);
     const last = new Date(e); last.setDate(e.getDate() - 1);
     return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(last))}`};
   }
-  function weekDebt(list, day){
-    const {s, e, label} = weekRange(day), L = list || acPick();
+  function weekDebt(list, day, range){
+    const {s, e, label} = range || weekRange(day), L = list || acPick();
     const inW = v => { if (!v) return false; const t = new Date(String(v).length <= 10 ? v + "T12:00:00" : v); return t >= s && t < e; };
     const arose = L.filter(x => debtStart(x) && inW(debtStart(x)));
     const collected = L.filter(x => x.stage === "da_tt" && x.pay?.debtSince && inW(x.pay.paidDate));
@@ -3200,7 +3716,7 @@
         ${rows.map(([k,v]) => `<tr><td>${esc(k)}${v.oldest >= DEBT_DAYS ? ` <span class="sub" style="color:var(--bad)">⏰ ${v.oldest} ngày</span>` : ""}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : `<div class="sub" style="margin-top:8px">Không có công nợ trong tuần này.</div>`}`;
   }
   $("#dwDate").addEventListener("change", drawWeekDebt);
-  // File PDF công nợ trong tuần (mẫu báo cáo chung): list = phiếu/đơn cần tính, day = 1 ngày bất kỳ trong tuần
+  // File Excel công nợ trong tuần (mẫu báo cáo chung): list = phiếu/đơn cần tính, day = 1 ngày bất kỳ trong tuần
   function weekDebtPdf(list, day, groupLabel, tag){
     const {label, arose, collected, openEnd, sum, byCus} = weekDebt(list, day), {s: ws} = weekRange(day);
     const gdTxt = x => x.pay?.gd === "ok" ? "Đã duyệt" : x.pay?.gd === "cho" ? "Chờ duyệt" : x.pay?.gd === "tra" ? "Xem lại" : "";
@@ -3232,124 +3748,105 @@
       rows, foot: ["TỔNG CỘNG", "", "", "", "", "", "", vnd(total)]});
   }
 
-  /* ---------- MẪU BÁO CÁO PDF dùng chung cho mọi file trích xuất ---------- */
+  /* ---------- MẪU BÁO CÁO EXCEL dùng chung cho mọi file trích xuất ---------- */
   const COMPANY = "QUANG ANH AUDIO";
-  // o = {file, title, period, head:[{t, r:canh-phải, w:độ-rộng}], rows:[[...]], foot:[...], summary:[[nhãn, giá trị]], extra: html, sign:[...], landscape}
+  const XLSX_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  // "1.234.567" / "-12" -> số (chỉ dùng cho cột số tiền / số lượng)
+  const toNum = v => { if (typeof v === "number") return v; const t = String(v ?? "").trim(); return /^-?\d{1,3}(\.\d{3})+$|^-?\d+$/.test(t) ? Number(t.replace(/\./g, "")) : v; };
+  const sheetName = t => String(t || "Báo cáo").replace(/[\\\/\?\*\[\]:]/g, " ").slice(0, 31);
+  const colWidths = aoa => { const w = []; aoa.forEach((r, i) => i > 4 || r.length > 2 ? r.forEach((v, j) => { const n = String(v ?? "").length; w[j] = Math.min(50, Math.max(w[j] || 6, n + 2)); }) : 0); return w.map(x => ({wch: x || 8})); };
+  let pdfBusy = false;   // (tên cũ) – đang tạo file
+  // o = {file, title, period, head:[{t, r:cột-số}], rows:[[...]], foot:[...], summary:[[nhãn, giá trị]], extra:{title, head, rows}, sign:[...]}
   async function exportReportPdf(o){
     if (pdfBusy) return; pdfBusy = true;
-    const stage = $("#pdfStage"), keep = stage.getAttribute("style") || "";
     try {
-      toast("Đang tạo PDF…");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-      const L = !!o.landscape, W = L ? 1123 : 794, H = L ? 794 : 1123, LIM = H - 70;
-      stage.setAttribute("style", `width:${W}px;padding:34px 40px;font-size:${L ? 11 : 12}px;line-height:1.4`);
-      const printed = fmtTime(new Date().toISOString());
-      const head1 = `<div class="rph"><div><div class="rpco">${COMPANY}</div><div class="sub2">Phần mềm quản lý bảo hành</div></div><div class="rpr">Ngày in: ${printed}<br>Người in: ${esc(role ? actor() : "")}</div></div>
-        <div class="rpt1">${esc(o.title)}</div>${o.period ? `<div class="rpp">${esc(o.period)}</div>` : ""}
-        ${o.summary && o.summary.length ? `<div class="rpsum">${o.summary.map(([k,v]) => `<div><b>${v}</b><span>${esc(k)}</span></div>`).join("")}</div>` : ""}`;
-      const headN = `<div class="rph rph2"><div class="rpco">${COMPANY}</div><div class="rpr">${esc(o.title)}${o.period ? " · " + esc(o.period) : ""}</div></div>`;
-      const thead = `<thead><tr><th style="width:28px">#</th>${o.head.map(h => `<th style="${h.w ? "width:" + h.w + "px;" : ""}${h.r ? "text-align:right" : ""}">${esc(h.t)}</th>`).join("")}</tr></thead>`;
-      const rowH = (r, i) => `<tr><td class="c">${i + 1}</td>${r.map((v, j) => `<td style="${o.head[j]?.r ? "text-align:right;white-space:nowrap" : ""}">${v == null ? "" : esc(String(v))}</td>`).join("")}</tr>`;
-      const footH = o.foot ? `<tfoot><tr><td></td>${o.foot.map((v, j) => `<td style="${o.head[j]?.r ? "text-align:right;white-space:nowrap" : ""}"><b>${v == null ? "" : esc(String(v))}</b></td>`).join("")}</tr></tfoot>` : "";
-      const signs = o.sign || ["Người lập biểu", "Kế toán", "Giám đốc"];
-      const tail = `${o.extra || ""}<div class="rpsign">${signs.map(x => `<div><b>${esc(x)}</b><i>(Ký, ghi rõ họ tên)</i></div>`).join("")}</div>`;
-      // chia trang theo chiều cao thực tế
-      const pages = []; let i = 0;
-      do {
-        stage.innerHTML = `${pages.length ? headN : head1}<table class="rptab">${thead}<tbody></tbody></table>`;
-        const tb = stage.querySelector("tbody"); let added = 0;
-        while (i < o.rows.length) { tb.insertAdjacentHTML("beforeend", rowH(o.rows[i], i)); if (stage.scrollHeight > LIM && added) { tb.lastElementChild.remove(); break; } i++; added++; }
-        if (!o.rows.length) tb.innerHTML = `<tr><td colspan="${o.head.length + 1}" class="c">Không có dữ liệu trong kỳ</td></tr>`;
-        if (i >= o.rows.length) {
-          stage.querySelector("table").insertAdjacentHTML("beforeend", footH);
-          stage.insertAdjacentHTML("beforeend", tail);
-          if (stage.scrollHeight > LIM && added) {   // phần tổng + ký tên sang trang mới
-            stage.querySelector("tfoot")?.remove(); stage.querySelectorAll(".rpsign, .rpextra").forEach(x => x.remove());
-            pages.push(stage.innerHTML);
-            stage.innerHTML = `${headN}${o.foot ? `<table class="rptab">${thead}${footH}</table>` : ""}${tail}`;
-          }
-        }
-        pages.push(stage.innerHTML);
-      } while (i < o.rows.length);
-      const pdf = new window.jspdf.jsPDF({orientation: L ? "l" : "p", unit: "mm", format: "a4"});
-      const PW = L ? 297 : 210, PH = L ? 210 : 297;
-      for (let k = 0; k < pages.length; k++) {
-        stage.style.height = H + "px"; stage.style.position = "fixed"; stage.style.left = "-10000px"; stage.style.background = "#fff"; stage.style.color = "#111";
-        stage.innerHTML = pages[k] + `<div class="rpfoot">${COMPANY} · ${esc(o.title)} · Trang ${k + 1}/${pages.length}</div>`;
-        const canvas = await window.html2canvas(stage, {scale: 2, backgroundColor: "#ffffff", width: W, height: H});
-        if (k) pdf.addPage();
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, PW, PH);
+      toast("Đang tạo file Excel…");
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, N = o.head.length + 1;
+      const isNum = j => !!o.head[j]?.r;
+      const aoa = [[COMPANY + " – " + String(o.title || "").toUpperCase()], [o.period || ""], [`Ngày in: ${fmtTime(new Date().toISOString())} · Người in: ${role ? actor() : ""}`]];
+      (o.summary || []).forEach(([k, v]) => aoa.push([k, toNum(String(v).replace(/\s*đ$/, ""))]));
+      aoa.push([]);
+      const headRow = aoa.length;
+      aoa.push(["STT", ...o.head.map(h => h.t)]);
+      if (!o.rows.length) aoa.push(["", "Không có dữ liệu trong kỳ"]);
+      o.rows.forEach((r, i) => aoa.push([i + 1, ...r.map((v, j) => isNum(j) ? toNum(v) : (v ?? ""))]));
+      const lastData = aoa.length - 1;
+      if (o.foot) aoa.push(["", ...o.foot.map((v, j) => isNum(j) ? toNum(v) : (v ?? ""))]);
+      const ws = X.utils.aoa_to_sheet(aoa);
+      // định dạng số có dấu chấm nghìn
+      for (let r = headRow + 1; r < aoa.length; r++) for (let c = 1; c < N; c++) { const cell = ws[X.utils.encode_cell({r, c})]; if (cell && typeof cell.v === "number" && isNum(c - 1)) cell.z = "#,##0"; }
+      for (let r = 3; r < headRow; r++) { const cell = ws[X.utils.encode_cell({r, c: 1})]; if (cell && typeof cell.v === "number") cell.z = "#,##0"; }
+      ws["!cols"] = colWidths(aoa);
+      ws["!merges"] = [0, 1, 2].map(r => ({s: {r, c: 0}, e: {r, c: Math.max(1, N - 1)}}));
+      if (o.rows.length) ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: headRow, c: 0}, e: {r: lastData, c: N - 1}})};
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, sheetName(o.title));
+      const ex = o.extra && o.extra.rows && o.extra.rows.length ? o.extra : null;
+      if (ex) {
+        const a2 = [[ex.title], [], ex.head, ...ex.rows.map(r => r.map((v, j) => j ? toNum(v) : v))];
+        const w2 = X.utils.aoa_to_sheet(a2); w2["!cols"] = colWidths(a2);
+        for (let r = 3; r < a2.length; r++) for (let c = 1; c < ex.head.length; c++) { const cell = w2[X.utils.encode_cell({r, c})]; if (cell && typeof cell.v === "number") cell.z = "#,##0"; }
+        X.utils.book_append_sheet(wb, w2, sheetName(ex.title));
       }
-      stage.innerHTML = "";
-      await saveBlob(o.file + ".pdf", pdf.output("blob"), "Đã lưu file PDF");
-    } catch(e){ toast("Không tạo được PDF, kiểm tra mạng và thử lại"); }
-    finally { stage.setAttribute("style", keep); stage.innerHTML = ""; pdfBusy = false; }
+      const out = X.write(wb, {bookType: "xlsx", type: "array"});
+      await saveBlob(o.file + ".xlsx", new Blob([out], {type: XLSX_MIME}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+    finally { pdfBusy = false; }
   }
   const vnd = n => (Number(n) || 0).toLocaleString("vi-VN");
-  const extraTable = (title, head, rows) => rows.length ? `<div class="rpextra"><h4>${esc(title)}</h4><table class="rptab"><thead><tr>${head.map((h, j) => `<th${j ? ' style="text-align:right"' : ""}>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((v, j) => `<td${j ? ' style="text-align:right"' : ""}>${esc(String(v))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : "";
+  // bảng phụ (trang thứ 2 trong file Excel)
+  const extraTable = (title, head, rows) => rows.length ? {title, head, rows} : null;
 
-  /* ---------- Xuất PDF ---------- */
+  /* ---------- Tải thư viện ---------- */
   const libs = {};
   function loadScript(src){
     return libs[src] || (libs[src] = new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => { delete libs[src]; no(new Error("load")); }; document.head.appendChild(s); }));
   }
-  function pdfHtml(t){
-    const rows = (pairs) => `<table>${pairs.filter(p => p[1]).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</table>`;
-    const s = t.ship || {};
-    return `<h1>PHIẾU GIAO TRẢ HÀNG ${t.type === "bh" ? "BẢO HÀNH" : "SỬA CHỮA"}</h1>
-      <p class="c">Mã phiếu: <b>${esc(t.code)}</b> · Ngày in: ${fmtTime(new Date().toISOString())}</p>
-      <h2>Khách hàng & sản phẩm</h2>
-      ${rows([["Khách hàng", esc(t.customer)],["Số điện thoại", esc(t.phone)],["Sản phẩm", esc(t.product)],["Số seri", esc(t.serial)],
-        ["Loại", TYPE[t.type]],["Thời hạn bảo hành", t.type === "bh" && t.purchaseDate ? `Mua ${fmt(t.purchaseDate)}, ${t.months} tháng (lúc nhận: ${esc(t.warrantyText)})` : ""],
-        ["Ngày tiếp nhận", fmt(t.createdAt)],["Lỗi khách báo", esc(t.issue)]])}
-      <h2>Kết quả xử lý</h2>
-      ${rows([["Tình trạng", t.ktFail ? "Kỹ thuật không sửa được – trả lại khách" : t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"],["Lý do không sửa được", t.ktFail ? esc(t.ktFail.reason) : ""],["Phương án", t.action ? ACTION[t.action] : ""],
-        ["Số seri cũ", t.exchange ? esc(t.exchange.oldSerial) : ""],["Số seri mới đổi", t.exchange ? `<b>${esc(t.exchange.newSerial)}</b>` : ""],
-        ["Bảo hành tiếp đến", t.exchange ? `<b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(bảo hành mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}` : ""],
-        ["Linh kiện thay", esc(t.parts)],["Kỹ thuật viên", esc(t.tech)],["Ghi chú kỹ thuật", esc(t.techNote)]])}
-      <h2>Vận chuyển trả khách</h2>
-      ${rows([["Hình thức", SHIP[s.method] || ""],[s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", esc(s.carrier)],[isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", esc(s.carrierPhone)],
-        [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", esc(s.tracking)],["Ngày trả lại khách", `<b>${fmt(s.date)}</b>`],["Ghi chú", esc(s.note)]])}
-      ${t.pay && !hidePrice() ? `<h2>Thanh toán</h2>${rows([["Tình trạng", `<b>${PAY[t.pay.status]}</b>`],["Số tiền", `<b>${money(t.pay.amount)}</b>`],["Hình thức", esc(t.pay.method)],["Ngày thanh toán", t.pay.paidDate ? fmt(t.pay.paidDate) : ""],["Ghi chú", esc(t.pay.note)]])}` : ""}
-      <h2>Quá trình xử lý</h2>
-      ${rows((t.history||[]).map(h => [fmtTime(h.at), `<b>${esc(STAGES[h.stage]?.label || h.stage)}</b> – ${esc(h.by)}${h.note ? "<br>" + esc(noteView(h.note)) : ""}`]))}
-      <div class="sig"><div><b>Bộ phận bảo hành</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Bên vận chuyển</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Khách hàng</b><i>(Ký, ghi rõ họ tên)</i></div></div>`;
+  /* ---------- Phiếu giao trả / phiếu giao hàng: file Excel ---------- */
+  function slipRows(t){
+    const R = [], sec = (title, pairs) => { const L = pairs.filter(p => p[1] !== "" && p[1] != null); if (L.length) { R.push([]); R.push([title]); L.forEach(p => R.push(p)); } };
+    const s = t.ship || {}, sv = (k) => [s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", s.carrier || ""];
+    const shipPairs = ok => [["Hình thức", (SHIP[s.method] || "").replace(/^🚨\s*/, "")], sv(), [isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", s.carrierPhone || ""], [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", s.tracking || ""], [ok, s.date ? fmt(s.date) : ""], ["Ghi chú", s.note || ""]];
+    const payPairs = p => p && !hidePrice() ? [["Tình trạng", PAY[p.status] || ""], ["Số tiền (đ)", Number(p.amount) || 0], ["Hình thức", p.method || ""], ["Ngày thanh toán", p.paidDate ? fmt(p.paidDate) : ""], ["Ghi chú", p.note || ""]] : [];
+    if (t.lines) {
+      R.push([COMPANY + " – PHIẾU GIAO HÀNG"], [`Mã đơn: ${t.code} · Ngày bán: ${fmt(t.saleDate)} · Ngày in: ${fmtTime(new Date().toISOString())}`]);
+      sec("KHÁCH HÀNG", [["Khách hàng", t.customer], ["Số điện thoại", t.phone || ""], ["Địa chỉ", t.address || ""], ["Ghi chú", t.note || ""]]);
+      R.push([], ["HÀNG HÓA"], ["Sản phẩm", "Số lượng", "Loại", "Bảo hành (tháng)", "Hạn bảo hành đến", "Số seri"]);
+      (t.lines || []).forEach((l, i) => { const m = l.gift ? 0 : Number(l.months) || 0;
+        R.push([l.product, Number(l.qty) || 0, l.gift ? "Hàng tặng" : "Hàng bán", l.gift ? "Tặng" : (m || "Không BH"), m && t.saleDate ? fmt(iso(expiry(t.saleDate, m))) : "", snOf(t, i).join(", ") || (l.snMode === "anh" ? "Đối chiếu bằng ảnh" : "")]); });
+      sec("VẬN CHUYỂN", shipPairs("Ngày gửi hàng"));
+      sec("THANH TOÁN", payPairs(t.pay));
+      R.push([], ["Bán hàng / Kho", "Bên vận chuyển", "Khách hàng"], ["(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)"]);
+      return R;
+    }
+    R.push([`${COMPANY} – PHIẾU GIAO TRẢ HÀNG ${t.type === "bh" ? "BẢO HÀNH" : "SỬA CHỮA"}`], [`Mã phiếu: ${t.code} · Ngày in: ${fmtTime(new Date().toISOString())}`]);
+    sec("KHÁCH HÀNG & SẢN PHẨM", [["Khách hàng", t.customer], ["Số điện thoại", t.phone || ""], ["Sản phẩm", t.product], ["Số seri", t.serial], ["Loại", TYPE[t.type]],
+      ["Thời hạn bảo hành", t.type === "bh" && t.purchaseDate ? `Mua ${fmt(t.purchaseDate)}, ${t.months} tháng (lúc nhận: ${t.warrantyText || ""})` : ""], ["Ngày tiếp nhận", fmt(t.createdAt)], ["Lỗi khách báo", t.issue || ""]]);
+    sec("KẾT QUẢ XỬ LÝ", [["Tình trạng", t.ktFail ? "Kỹ thuật không sửa được – trả lại khách" : t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"], ["Lý do không sửa được", t.ktFail ? t.ktFail.reason : ""], ["Phương án", t.action ? ACTION[t.action] : ""],
+      ["Số seri cũ", t.exchange ? t.exchange.oldSerial : ""], ["Số seri mới đổi", t.exchange ? t.exchange.newSerial : ""],
+      ["Bảo hành tiếp đến", t.exchange ? `${fmt(t.exchange.until)} ${t.exchange.mode === "new" ? `(bảo hành mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}` : ""],
+      ["Linh kiện thay", t.parts || ""], ["Kỹ thuật viên", t.tech || ""], ["Ghi chú kỹ thuật", t.techNote || ""]]);
+    sec("VẬN CHUYỂN TRẢ KHÁCH", shipPairs("Ngày trả lại khách"));
+    sec("THANH TOÁN", payPairs(t.pay));
+    R.push([], ["QUÁ TRÌNH XỬ LÝ"], ["Thời gian", "Giai đoạn", "Người thực hiện", "Ghi chú"]);
+    (t.history || []).forEach(h => R.push([fmtTime(h.at), STAGES[h.stage]?.label || h.stage, h.by || "", noteView(h.note || "")]));
+    R.push([], ["Bộ phận bảo hành", "Bên vận chuyển", "Khách hàng"], ["(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)", "(Ký, ghi rõ họ tên)"]);
+    return R;
   }
-  function pdfHtmlOrder(o){
-    const rows = (pairs) => `<table>${pairs.filter(p => p[1]).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join("")}</table>`;
-    const s = o.ship || {};
-    return `<h1>PHIẾU GIAO HÀNG</h1>
-      <p class="c">Mã đơn: <b>${esc(o.code)}</b> · Ngày bán: ${fmt(o.saleDate)} · Ngày in: ${fmtTime(new Date().toISOString())}</p>
-      <h2>Khách hàng</h2>
-      ${rows([["Khách hàng", esc(o.customer)],["Số điện thoại", esc(o.phone)],["Địa chỉ", esc(o.address)],["Ghi chú", esc(o.note)]])}
-      <h2>Hàng hóa</h2>
-      <table><tr><td style="background:#0f766e;color:#fff">Sản phẩm</td><td style="background:#0f766e;color:#fff;width:auto">SL · Bảo hành · Số seri</td></tr>
-        ${(o.lines||[]).map((l,i) => `<tr><td>${l.gift ? "🎁 Hàng tặng: " : ""}${esc(l.product)}</td><td><b>${l.qty}</b> · ${l.gift ? "Tặng kèm" : l.months ? l.months + " tháng" : "Không BH"}${snOf(o,i).length ? "<br>SN: " + snOf(o,i).map(esc).join(", ") : ""}</td></tr>`).join("")}</table>
-      <h2>Vận chuyển</h2>
-      ${rows([["Hình thức", SHIP[s.method] || ""],[s.method === "chanh" ? "Tên chành xe" : isGrab(s.method) ? "Tài xế / biển số" : "Bưu cục", esc(s.carrier)],[isGrab(s.method) ? "SĐT tài xế" : "SĐT chành xe", esc(s.carrierPhone)],
-        [isGrab(s.method) ? "Mã chuyến Grab" : "Mã vận đơn", esc(s.tracking)],["Ngày gửi hàng", s.date ? `<b>${fmt(s.date)}</b>` : ""],["Ghi chú", esc(s.note)]])}
-      ${o.pay && !hidePrice() ? `<h2>Thanh toán</h2>${rows([["Tình trạng", `<b>${PAY[o.pay.status]}</b>`],["Số tiền", `<b>${money(o.pay.amount)}</b>`],["Hình thức", esc(o.pay.method)],["Ngày thanh toán", o.pay.paidDate ? fmt(o.pay.paidDate) : ""]])}` : ""}
-      <div class="sig"><div><b>Bán hàng / Kho</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Bên vận chuyển</b><i>(Ký, ghi rõ họ tên)</i></div><div><b>Khách hàng</b><i>(Ký, ghi rõ họ tên)</i></div></div>`;
-  }
-  let pdfBusy = false;
-  async function exportPdf(t){
+  async function exportPdf(t){   // (tên cũ) – nay xuất file Excel
     if (!t || pdfBusy) return; pdfBusy = true;
     try {
-      toast("Đang tạo PDF…");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
-      const stage = $("#pdfStage"); stage.innerHTML = t.lines ? pdfHtmlOrder(t) : pdfHtml(t);
-      const canvas = await window.html2canvas(stage, {scale: 2, backgroundColor: "#ffffff"});
-      stage.innerHTML = "";
-      const pdf = new window.jspdf.jsPDF({unit: "mm", format: "a4"});
-      const W = 210, H = 297, imgH = canvas.height * W / canvas.width;
-      const img = canvas.toDataURL("image/jpeg", 0.92);
-      let y = 0; pdf.addImage(img, "JPEG", 0, 0, W, imgH);
-      while (imgH + y > H + 1) { y -= H; pdf.addPage(); pdf.addImage(img, "JPEG", 0, y, W, imgH); }
-      const blob = pdf.output("blob"), name = t.lines ? `Phieu-giao-hang_${t.code}.pdf` : `Phieu-giao-tra_${t.code}_${keySN(t.serial)}.pdf`;
-      await saveBlob(name, blob, "Đã lưu file PDF");
-    } catch(e){ toast("Không tạo được PDF, kiểm tra mạng và thử lại"); }
+      toast("Đang tạo file Excel…");
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, aoa = slipRows(t), ws = X.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = t.lines ? [{wch: 34}, {wch: 12}, {wch: 12}, {wch: 16}, {wch: 17}, {wch: 40}] : [{wch: 22}, {wch: 48}, {wch: 20}, {wch: 40}];
+      ws["!merges"] = [0, 1].map(r => ({s: {r, c: 0}, e: {r, c: t.lines ? 5 : 3}}));
+      Object.keys(ws).forEach(k => { if (k[0] !== "!" && typeof ws[k].v === "number" && ws[k].v >= 1000) ws[k].z = "#,##0"; });
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, t.lines ? "Phiếu giao hàng" : "Phiếu giao trả");
+      const name = t.lines ? `Phieu-giao-hang_${t.code}.xlsx` : `Phieu-giao-tra_${t.code}_${keySN(t.serial)}.xlsx`;
+      await saveBlob(name, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu file Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
     finally { pdfBusy = false; }
   }
 
