@@ -556,6 +556,8 @@
     cho_kho:  {label:"Chờ Kho nhận hàng",                  cls:"b-warn", to:"wh"},
     xong:     {label:"Đã xử lý xong – chờ vận chuyển",     cls:"b-info", to:"vc"},
     tra_lai:  {label:"GĐ không duyệt – chờ vận chuyển trả",cls:"b-bad",  to:"vc"},
+    kt_tra:   {label:"Kỹ thuật không sửa được – chờ vận chuyển trả", cls:"b-bad", to:"vc"},
+    huy:      {label:"Đã hủy phiếu",                       cls:"b-bad",  to:null},
     da_giao:  {label:"Đã gửi trả khách",                   cls:"b-ok",   to:null},
     cho_tt:   {label:"Đã gửi trả – chờ kế toán",           cls:"b-info", to:"ac"},
     cong_no:  {label:"Công nợ",                            cls:"b-warn", to:null},
@@ -583,7 +585,7 @@
     list.forEach(t => partsOf(t).forEach(p => { const k = norm(p.name); (acc[k] = acc[k] || {name: p.name, qty: 0, n: 0}); acc[k].qty += p.qty; acc[k].n++; }));
     return Object.values(acc).sort((a,b) => b.qty - a.qty);
   }
-  const WAIT_VC = ["xong","tra_lai"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt"];   // CLOSED = đã trả hàng cho khách
+  const WAIT_VC = ["xong","tra_lai","kt_tra"], CLOSED = ["da_giao","da_tra","cho_tt","cong_no","da_tt","huy"];   // CLOSED = đã trả hàng cho khách
   const PAY = {cong_no:"Công nợ", da_tt:"Đã thanh toán"};
   const OSTAGES = {
     cho_xk:  {label:"Chờ xuất kho",                 cls:"b-warn", to:"wh"},
@@ -1128,9 +1130,13 @@
       </dl>
       <h3 style="font-size:15px;margin:10px 0 4px">Quá trình xử lý</h3>
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
+      ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Không sửa được – trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
+      ${t.stage === "huy" && t.cancel ? `<div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">❌ Đã hủy phiếu – ${esc(t.cancel.by)} · ${fmtTime(t.cancel.at)}<br>Lý do: ${esc(t.cancel.reason)}</div>` : ""}
       <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
     if (canEditPay(t)) $("#dPayEdit").onclick = () => { close("detailBg"); detailId = null; openPay(t.id, null, true); };
+    if (canKtFail(t)) $("#dKtFail").onclick = () => { close("detailBg"); detailId = null; openKtFail(t.id); };
+    if (canCancelTk(t)) $("#dCancelTk").onclick = () => { close("detailBg"); detailId = null; openCancelTk(t.id); };
     if (canReportPaid(t)) $("#dPaidReq").onclick = () => { close("detailBg"); detailId = null; openPaidReq(t.id); };
     open("detailBg");
   }
@@ -1405,7 +1411,7 @@
 
     // thống kê
     const ym = iso(new Date()).slice(0,7);
-    const inM = tickets.filter(t => (t.createdAt||"").startsWith(ym));
+    const inM = tickets.filter(t => (t.createdAt||"").startsWith(ym) && t.stage !== "huy");
     const c = k => tickets.filter(t => t.stage === k).length;
     const openT = tickets.filter(t => !CLOSED.includes(t.stage));
     const late = openT.filter(t => daysSince(t.createdAt) > LATE_DAYS).sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
@@ -1438,8 +1444,8 @@
   }
   /* ---------- Báo cáo tháng ---------- */
   const inMonth = (t, ym) => (t.createdAt || "").startsWith(ym);
-  const isDone = t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action;
-  const isReturned = t => t.stage === "tra_lai" || (CLOSED.includes(t.stage) && !t.action);
+  const isDone = t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.stage !== "huy" && !t.ktFail;
+  const isReturned = t => t.stage !== "huy" && !t.ktFail && (t.stage === "tra_lai" || (CLOSED.includes(t.stage) && !t.action));
   function partsTable(list, title, cls){
     const ps = sumParts(list.filter(t => t.parts));
     return `<h4 style="margin:14px 0 6px;font-size:14px"><span class="tag ${cls}">${title}</span>Linh kiện đã thay (${ps.reduce((a,p) => a + p.qty, 0)} cái)</h4>` +
@@ -1448,7 +1454,7 @@
   }
   function monthReport(){
     gdMonth = gdMonth || iso(new Date()).slice(0,7);
-    const m = tickets.filter(t => inMonth(t, gdMonth)), bh = m.filter(t => t.type === "bh"), sc = m.filter(t => t.type === "sc");
+    const m = tickets.filter(t => inMonth(t, gdMonth) && t.stage !== "huy"), bh = m.filter(t => t.type === "bh"), sc = m.filter(t => t.type === "sc");
     const [y, mo] = gdMonth.split("-");
     return `<div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">📅 Báo cáo tháng ${mo}/${y}</h3>
         <input type="month" id="gdMonth" value="${gdMonth}" style="width:auto;padding:7px 9px;font-size:14px"></div>
@@ -1509,8 +1515,49 @@
     catch(e){ toast("Trình duyệt không cho sao chép"); }
   }
 
+  /* ---------- Hủy phiếu nhập nhầm / Kỹ thuật không sửa được ---------- */
+  // phiếu chưa trả khách: Bảo hành (người tạo) hoặc Giám đốc được hủy
+  const canCancelTk = t => !!t && !CLOSED.includes(t.stage) && (boss || role === "bh");
+  const canKtFail = t => !!t && ["cho_kt", "dang_sua"].includes(t.stage) && (boss || role === "kt");
+  const hasStockUsed = t => { const a = t.stockApplied || {}; return Object.keys(a.kho || {}).length + (a.thao || []).filter(e => e.deducted).length + Object.keys(a.ngoai || {}).length > 0; };
+  // hoàn lại kho: linh kiện đã trừ, máy mới đã giao khi đổi mới
+  async function revertTkStock(t, extra){
+    if (hasStockUsed(t)) extra.stockApplied = await applyPartsStock(t, []);
+    if (t.exchange && t.stockOut) {
+      const now = new Date().toISOString(), sx = findStock(t.exchange.newSerial);
+      if (sx && sx.status === "out" && sx.orderCode === t.code) { const c = Object.assign({}, sx, {status: "in", returnedAt: now, returnNote: `Hủy phiếu ${t.code}`}); delete c.orderCode; delete c.outAt; delete c.customer; await put("st", c); }
+      else await put("mv", {id: "mv_" + uid(), product: t.exchange.newProduct || t.product, qty: 1, at: now, kind: "doimoi_tra", ref: t.code, note: `Hủy phiếu – trả máy đổi SN ${t.exchange.newSerial}`});
+      extra.stockOut = false;
+    }
+  }
+  const stockNote = t => hasStockUsed(t) || (t.exchange && t.stockOut)
+    ? `<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" id="tkBack" checked style="width:auto;margin:0"> Hoàn lại kho ${t.exchange && t.stockOut ? "máy mới đã đổi" : ""}${hasStockUsed(t) ? (t.exchange && t.stockOut ? " và " : "") + "linh kiện đã trừ (" + esc(t.parts || "") + ")" : ""}</label>` : "";
+  function openCancelTk(id){
+    const t = tickets.find(x => x.id === id); if (!t) return;
+    openAct({title: "❌ Hủy phiếu", t, noteLabel: "Lý do hủy (VD: bấm dư, nhập nhầm, khách không gửi nữa…)", required: true, okText: "❌ Xác nhận hủy phiếu", okCls: "danger",
+      run: async note => {
+        const extra = {cancel: {at: new Date().toISOString(), by: actor(), reason: note, prevStage: t.stage}};
+        if ($("#tkBack")?.checked) await revertTkStock(t, extra);
+        await advance(t, "huy", `Hủy phiếu – Lý do: ${note}${$("#tkBack")?.checked ? " · đã hoàn lại kho" : ""}`, extra);
+        toast(`Đã hủy phiếu ${t.code}`);
+      }});
+    $("#actForm .btns").insertAdjacentHTML("beforebegin", `<div class="sub" style="margin-top:8px">Phiếu đã hủy không còn trong danh sách chờ xử lý, không tính vào báo cáo.</div>${stockNote(t)}`);
+  }
+  function openKtFail(id){
+    const t = tickets.find(x => x.id === id); if (!t) return;
+    openAct({title: "↩ Không sửa được – trả lại khách", t, noteLabel: "Lý do không sửa được (VD: hết linh kiện, hỏng nặng…)", required: true, okText: "↩ Chuyển Vận chuyển trả khách", okCls: "danger",
+      run: async note => {
+        const extra = {ktFail: {at: new Date().toISOString(), by: actor(), reason: note}, tech: t.tech || (() => { try { return localStorage.getItem("bh_tech") || ""; } catch(e){ return ""; } })()};
+        if ($("#tkBack")?.checked) await revertTkStock(t, extra);
+        await advance(t, "kt_tra", `Kỹ thuật không sửa được – Lý do: ${note}${$("#tkBack")?.checked ? " · đã hoàn linh kiện về kho" : ""}`, extra);
+        toast("Đã chuyển Vận chuyển trả lại khách");
+      },
+      after: () => goTo("vc", `Kỹ thuật không sửa được: ${t.product} (SN ${t.serial}). Vận chuyển nhập mật mã để trả lại khách.`)});
+    $("#actForm .btns").insertAdjacentHTML("beforebegin", stockNote(t));
+  }
+
   /* ================= KỸ THUẬT ================= */
-  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi"]];
+  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
@@ -1518,10 +1565,12 @@
     const rows = tickets.filter(f).sort((a,b) => ktFilter==="xong" ? (b.updatedAt||"").localeCompare(a.updatedAt||"") : (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t,
         t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
-      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>` : "")).join("")
+      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>` : "")
+      + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Không sửa được – trả lại khách</button></div>` : "")).join("")
       : `<div class="empty">Không có việc nào.</div>`;
     bindCards($("#ktList"));
     $("#ktList").querySelectorAll("[data-job]").forEach(b => b.onclick = () => openJob(b.dataset.job));
+    $("#ktList").querySelectorAll("[data-ktfail]").forEach(b => b.onclick = () => openKtFail(b.dataset.ktfail));
     $("#ktList").querySelectorAll("[data-fin]").forEach(b => b.onclick = () => {
       const t = tickets.find(x => x.id === b.dataset.fin);
       openAct({title:"Hoàn tất – chuyển Vận chuyển", t, noteLabel:"Kết quả xử lý (tùy chọn)", okText:"✓ Hoàn tất", okCls:"okb",
@@ -1733,7 +1782,9 @@
   function renderVC(){
     const wait = tickets.filter(t => WAIT_VC.includes(t.stage)).sort((a,b) => (a.updatedAt||"").localeCompare(b.updatedAt||""));
     $("#vcCnt").textContent = wait.length ? `(${wait.length})` : "";
-    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "tra_lai"
+    $("#vcList").innerHTML = wait.length ? wait.map(t => tkCard(t, t.stage === "kt_tra"
+        ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Kỹ thuật không sửa được – trả lại khách${t.ktFail?.reason ? ". Lý do: " + esc(t.ktFail.reason) : ""}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
+        : t.stage === "tra_lai"
         ? `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Giám đốc không duyệt sửa – trả nguyên trạng cho khách${(() => { const h = (t.history||[]).filter(h => h.stage === "tra_lai").pop(); return h && h.note ? ". Lý do: " + esc(h.note) : ""; })()}</div><div class="cardbtns"><button class="btn danger" data-ship="${esc(t.id)}">↩️ Trả lại khách</button></div>`
         : `<div class="cardbtns"><button class="btn pri" data-ship="${esc(t.id)}">🚚 Gửi trả khách</button></div>`)).join("")
       : `<div class="empty">Không có hàng chờ gửi.</div>`;
@@ -3164,7 +3215,7 @@
         ["Loại", TYPE[t.type]],["Thời hạn bảo hành", t.type === "bh" && t.purchaseDate ? `Mua ${fmt(t.purchaseDate)}, ${t.months} tháng (lúc nhận: ${esc(t.warrantyText)})` : ""],
         ["Ngày tiếp nhận", fmt(t.createdAt)],["Lỗi khách báo", esc(t.issue)]])}
       <h2>Kết quả xử lý</h2>
-      ${rows([["Tình trạng", t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"],["Phương án", t.action ? ACTION[t.action] : ""],
+      ${rows([["Tình trạng", t.ktFail ? "Kỹ thuật không sửa được – trả lại khách" : t.action ? "Đã xử lý" : "Giám đốc không duyệt sửa – trả lại khách"],["Lý do không sửa được", t.ktFail ? esc(t.ktFail.reason) : ""],["Phương án", t.action ? ACTION[t.action] : ""],
         ["Số seri cũ", t.exchange ? esc(t.exchange.oldSerial) : ""],["Số seri mới đổi", t.exchange ? `<b>${esc(t.exchange.newSerial)}</b>` : ""],
         ["Bảo hành tiếp đến", t.exchange ? `<b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(bảo hành mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}` : ""],
         ["Linh kiện thay", esc(t.parts)],["Kỹ thuật viên", esc(t.tech)],["Ghi chú kỹ thuật", esc(t.techNote)]])}
