@@ -360,6 +360,7 @@
         <div class="row" style="align-items:center;margin-top:12px;gap:8px"><b style="font-size:14px">📊 Công nợ trong tuần</b><input type="date" id="gdWkDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="sub" style="margin-top:4px">Chọn 1 ngày bất kỳ trong tuần (Thứ 2 → Chủ nhật): nợ mới, đã thu, còn nợ cuối tuần theo từng khách.</div>
         <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📄 Lưu file PDF công nợ tuần</button></div></div>
+      <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
       <div id="gdStats"></div>
     </section>
 
@@ -557,6 +558,7 @@
     xong:     {label:"Đã xử lý xong – chờ vận chuyển",     cls:"b-info", to:"vc"},
     tra_lai:  {label:"GĐ không duyệt – chờ vận chuyển trả",cls:"b-bad",  to:"vc"},
     kt_tra:   {label:"Kỹ thuật không sửa được – chờ vận chuyển trả", cls:"b-bad", to:"vc"},
+    cho_lk:   {label:"Chờ linh kiện về",                   cls:"b-warn", to:null},
     huy:      {label:"Đã hủy phiếu",                       cls:"b-bad",  to:null},
     da_giao:  {label:"Đã gửi trả khách",                   cls:"b-ok",   to:null},
     cho_tt:   {label:"Đã gửi trả – chờ kế toán",           cls:"b-info", to:"ac"},
@@ -937,7 +939,7 @@
   function pendingFor(r){
     switch (r) {
       case "gd": return [...tickets.filter(t => t.stage === "cho_gd"), ...gdPayWait()];
-      case "kt": return tickets.filter(t => t.stage === "cho_kt");
+      case "kt": return tickets.filter(t => t.stage === "cho_kt" || (t.stage === "cho_lk" && lkDays(t) <= 0));
       case "vc": return [...orders.filter(o => o.stage === "cho_vc"), ...tickets.filter(t => WAIT_VC.includes(t.stage))];
       case "ac": return [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra" || hasPayReq(x));
       case "wh": return [...orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy"), ...tickets.filter(t => t.stage === "cho_kho")];
@@ -980,6 +982,15 @@
     }
     // Giám đốc: không còn việc chờ duyệt nhưng vẫn còn công nợ treo -> thanh nhắc (vàng, không reo chuông)
     const debts = active && !total && !day.length && boss ? debtNow() : [];
+    const lks = active && !total && !day.length && boss ? lkWaitList() : [];
+    if (lks.length) {
+      const late = lks.filter(t => lkDays(t) < 0).length, f = lks[0];
+      const dsum = debts.reduce((a,x) => a + (Number(x.pay?.amount) || 0), 0);
+      bar.textContent = `🔩 ${lks.length} máy Kỹ thuật chờ linh kiện${late ? ` (⚠️ ${late} quá hẹn)` : ""}: ${f.product} – ${f.waitParts?.part || ""}, ${lkWhen(f)}${lks.length > 1 ? ` (+${lks.length - 1})` : ""}${debts.length ? ` · 📒 Công nợ còn treo ${money(dsum)}` : ""}. Bấm để xem`;
+      bar.dataset.to = "gd"; bar.dataset.scroll = "gdLkBox";
+      document.body.classList.add("hasgap"); bar.classList.toggle("calm", true); bar.classList.remove("hide");
+      return 0;
+    }
     if (debts.length) {
       const sum = debts.reduce((a,x) => a + (Number(x.pay?.amount) || 0), 0), cus = new Set(debts.map(x => x.customer)).size;
       const td = iso(new Date()), newToday = debts.filter(x => debtStart(x) && iso(new Date(debtStart(x))) === td).length, late = debts.filter(x => debtAge(x) >= DEBT_DAYS).length;
@@ -1094,6 +1105,7 @@
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
+      ${lkLine(t)}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(t)}
@@ -1130,11 +1142,13 @@
       </dl>
       <h3 style="font-size:15px;margin:10px 0 4px">Quá trình xử lý</h3>
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
-      ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Không sửa được – trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
+      ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canWaitLk(t) ? `<button class="btn" id="dLkWait">⏳ Chờ linh kiện</button>` : ""}${t.stage === "cho_lk" && canKtFail(t) ? `<button class="btn okb" id="dLkOk">✅ Linh kiện đã về</button>` : ""}${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Không sửa được – trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
       ${t.stage === "huy" && t.cancel ? `<div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">❌ Đã hủy phiếu – ${esc(t.cancel.by)} · ${fmtTime(t.cancel.at)}<br>Lý do: ${esc(t.cancel.reason)}</div>` : ""}
       <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
     if (canEditPay(t)) $("#dPayEdit").onclick = () => { close("detailBg"); detailId = null; openPay(t.id, null, true); };
+    if (canWaitLk(t)) $("#dLkWait").onclick = () => { close("detailBg"); detailId = null; openWaitLk(t.id); };
+    if (t.stage === "cho_lk" && canKtFail(t)) $("#dLkOk").onclick = () => { close("detailBg"); detailId = null; openLkArrived(t.id); };
     if (canKtFail(t)) $("#dKtFail").onclick = () => { close("detailBg"); detailId = null; openKtFail(t.id); };
     if (canCancelTk(t)) $("#dCancelTk").onclick = () => { close("detailBg"); detailId = null; openCancelTk(t.id); };
     if (canReportPaid(t)) $("#dPaidReq").onclick = () => { close("detailBg"); detailId = null; openPaidReq(t.id); };
@@ -1387,7 +1401,16 @@
       rows: D.slice().sort((a,b) => (a.customer||"").localeCompare(b.customer||"", "vi") || debtAge(b) - debtAge(a)).map(x => [x.customer, x.phone || "", x.code, x.lines ? "Đơn bán" : TYPE[x.type], x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), debtAge(x), x.pay?.gd === "ok" ? "Đã duyệt" : x.pay?.gd === "tra" ? "Xem lại" : x.pay?.gd === "cho" ? "Chờ duyệt" : "", vnd(x.pay?.amount)]),
       foot: ["TỔNG CỘNG", "", "", "", "", "", "", "", vnd(total)], sign: ["Kế toán", "Giám đốc", ""]});
   }
+  function drawGdLk(){
+    const L = lkWaitList();
+    $("#gdLkBox").classList.toggle("hide", !L.length);
+    $("#gdLkBox").classList.toggle("latebox", L.some(t => lkDays(t) < 0));
+    $("#gdLkCnt").textContent = L.length ? `(${L.length})` : "";
+    $("#gdLkList").innerHTML = L.map(t => tkCard(t)).join("");
+    bindCards($("#gdLkList"));
+  }
   function renderGD(){
+    drawGdLk();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
@@ -1518,7 +1541,7 @@
   /* ---------- Hủy phiếu nhập nhầm / Kỹ thuật không sửa được ---------- */
   // phiếu chưa trả khách: Bảo hành (người tạo) hoặc Giám đốc được hủy
   const canCancelTk = t => !!t && !CLOSED.includes(t.stage) && (boss || role === "bh");
-  const canKtFail = t => !!t && ["cho_kt", "dang_sua"].includes(t.stage) && (boss || role === "kt");
+  const canKtFail = t => !!t && ["cho_kt", "dang_sua", "cho_lk"].includes(t.stage) && (boss || role === "kt");
   const hasStockUsed = t => { const a = t.stockApplied || {}; return Object.keys(a.kho || {}).length + (a.thao || []).filter(e => e.deducted).length + Object.keys(a.ngoai || {}).length > 0; };
   // hoàn lại kho: linh kiện đã trừ, máy mới đã giao khi đổi mới
   async function revertTkStock(t, extra){
@@ -1556,21 +1579,70 @@
     $("#actForm .btns").insertAdjacentHTML("beforebegin", stockNote(t));
   }
 
+  /* ---------- Chờ linh kiện (hàng đặt xa, vài ngày mới về) ---------- */
+  const canWaitLk = t => !!t && ["cho_kt", "dang_sua"].includes(t.stage) && (boss || role === "kt");
+  const lkDays = t => t.waitParts?.eta ? Math.round((new Date(t.waitParts.eta + "T00:00:00") - today()) / 86400000) : 99;   // số ngày còn lại tới ngày dự kiến (âm = quá hẹn)
+  const lkWhen = t => { const d = lkDays(t); return d > 0 ? `còn ${d} ngày` : d === 0 ? "dự kiến về hôm nay" : `⚠️ quá hẹn ${-d} ngày`; };
+  function lkLine(t){
+    if (t.stage !== "cho_lk" || !t.waitParts) return "";
+    const w = t.waitParts, late = lkDays(t) < 0;
+    return `<div class="sub" style="margin-top:4px;color:${late ? "var(--bad)" : "var(--warn)"}">⏳ Chờ linh kiện: <b>${esc(w.part)}</b>${w.from ? " · từ " + esc(w.from) : ""} · dự kiến về <b>${fmt(w.eta)}</b> (${lkWhen(t)}) · chờ từ ${fmt(w.at)}</div>`;
+  }
+  const lkWaitList = () => tickets.filter(t => t.stage === "cho_lk").sort((a,b) => lkDays(a) - lkDays(b));
+  function openWaitLk(id){
+    const t = tickets.find(x => x.id === id); if (!t) return;
+    const eta0 = new Date(today()); eta0.setDate(eta0.getDate() + 3);
+    const F = $("#actForm");
+    F.innerHTML = `<div class="grab"></div><h2>⏳ Chờ linh kiện</h2>
+      <div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
+      <div class="sub">Lỗi: ${esc(t.issue)}</div>
+      <label>Linh kiện cần chờ *</label><input name="part" value="${esc(t.parts || "")}" placeholder="VD: Kính cảm ứng 10 inch">
+      <label>Đặt từ đâu / nhà cung cấp</label><input name="from" placeholder="VD: NCC Hà Nội, hàng Trung Quốc…">
+      <label>Ngày dự kiến linh kiện về *</label><input name="eta" type="date" value="${iso(eta0)}">
+      <label>Ghi chú</label><textarea name="note"></textarea>
+      <div class="sub" style="margin-top:6px">Máy chuyển sang “Chờ linh kiện”: Giám đốc thấy trên thanh thông báo; đến ngày dự kiến app nhắc Kỹ thuật kiểm tra.</div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">⏳ Chuyển chờ linh kiện</button></div>`;
+    actCtx = {run: async () => {
+      const part = F.part.value.trim(), eta = F.eta.value;
+      if (!part) { toast("Nhập linh kiện cần chờ"); F.part.focus(); throw new Error("x"); }
+      if (!eta) { toast("Chọn ngày dự kiến về"); throw new Error("x"); }
+      const waitParts = {part, from: F.from.value.trim(), eta, note: F.note.value.trim(), at: new Date().toISOString(), by: actor(), prevStage: t.stage};
+      await advance(t, "cho_lk", `Chờ linh kiện: ${part}${waitParts.from ? " (từ " + waitParts.from + ")" : ""} – dự kiến về ${fmt(eta)}${waitParts.note ? " – " + waitParts.note : ""}`, {waitParts});
+      pushTo("gd", `⏳ Kỹ thuật chờ linh kiện: ${t.product}`, `${part} – dự kiến về ${fmt(eta)} · ${t.customer}`, t.id);
+      toast("Đã chuyển chờ linh kiện – Giám đốc đã được báo");
+    }};
+    open("actBg"); setTimeout(() => F.part.focus(), 250);
+  }
+  function openLkArrived(id){
+    const t = tickets.find(x => x.id === id); if (!t || t.stage !== "cho_lk") return;
+    const back = t.waitParts?.prevStage === "dang_sua" && t.action ? "dang_sua" : "cho_kt";
+    openAct({title: "✅ Linh kiện đã về – tiếp tục sửa", t, noteLabel: "Ghi chú (tùy chọn)", okText: back === "dang_sua" ? "🔧 Tiếp tục sửa" : "🔧 Chuyển Chờ xử lý", okCls: "okb",
+      run: async note => {
+        const w = t.waitParts || {}, lkLog = (t.lkLog || []).concat([Object.assign({}, w, {doneAt: new Date().toISOString(), doneBy: actor()})]);
+        await advance(t, back, `Linh kiện đã về: ${w.part || ""}${note ? " – " + note : ""}`, {waitParts: null, lkLog});
+        toast("Đã chuyển tiếp tục sửa");
+      }});
+  }
+
   /* ================= KỸ THUẬT ================= */
-  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
+  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
     const f = KTF.find(x => x[0] === ktFilter)[2];
     const rows = tickets.filter(f).sort((a,b) => ktFilter==="xong" ? (b.updatedAt||"").localeCompare(a.updatedAt||"") : (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t,
-        t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
-      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>` : "")
-      + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Không sửa được – trả lại khách</button></div>` : "")).join("")
+        (t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
+      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
+      : t.stage==="cho_lk" ? `<div class="cardbtns"><button class="btn okb" data-lkok="${esc(t.id)}">✅ Linh kiện đã về – tiếp tục sửa</button></div>` : "")
+      + (canWaitLk(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn" data-lkwait="${esc(t.id)}">⏳ Chờ linh kiện</button></div>` : "")
+      + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Không sửa được – trả lại khách</button></div>` : ""))).join("")
       : `<div class="empty">Không có việc nào.</div>`;
     bindCards($("#ktList"));
     $("#ktList").querySelectorAll("[data-job]").forEach(b => b.onclick = () => openJob(b.dataset.job));
     $("#ktList").querySelectorAll("[data-ktfail]").forEach(b => b.onclick = () => openKtFail(b.dataset.ktfail));
+    $("#ktList").querySelectorAll("[data-lkwait]").forEach(b => b.onclick = () => openWaitLk(b.dataset.lkwait));
+    $("#ktList").querySelectorAll("[data-lkok]").forEach(b => b.onclick = () => openLkArrived(b.dataset.lkok));
     $("#ktList").querySelectorAll("[data-fin]").forEach(b => b.onclick = () => {
       const t = tickets.find(x => x.id === b.dataset.fin);
       openAct({title:"Hoàn tất – chuyển Vận chuyển", t, noteLabel:"Kết quả xử lý (tùy chọn)", okText:"✓ Hoàn tất", okCls:"okb",
