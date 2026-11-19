@@ -432,7 +432,7 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="ls">📜 Lịch sử</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
@@ -467,6 +467,14 @@
         <div class="two hide" id="rpTwo"><div><label style="margin-top:6px">Từ ngày</label><input type="date" id="rpFrom"></div><div><label style="margin-top:6px">Đến ngày</label><input type="date" id="rpTo"></div></div>
         <div id="rpBody" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
+      <div class="panel" data-w="ls"><h3>📜 Lịch sử nhập – xuất kho</h3>
+        <div class="sub" style="margin-bottom:8px">Mỗi lần nhập (lô) và xuất: thời gian, bán cho ai, đơn nào, seri, <b>xuất từ lô nhập ngày nào</b>. Hàng có seri: đúng lô của seri; hàng không seri: tính “nhập trước – xuất trước”. Chọn 1 sản phẩm để xem bảng các lô nhập và tồn sau mỗi lần.</div>
+        <div class="two"><div><label style="margin-top:0">Sản phẩm</label><input id="lsP" list="prodList" placeholder="Tất cả sản phẩm" autocomplete="off"></div>
+          <div><label style="margin-top:0">Loại</label><select id="lsT"><option value="">Nhập & xuất</option><option value="in">Chỉ nhập</option><option value="out">Chỉ xuất</option></select></div></div>
+        <div class="two"><div><label>Từ ngày</label><input type="date" id="lsFrom"></div><div><label>Đến ngày</label><input type="date" id="lsTo"></div></div>
+        <div class="row" style="margin-top:8px;gap:8px"><input id="lsQ" type="search" placeholder="Tìm khách hàng, seri, mã đơn, NCC…" autocomplete="off" style="flex:1"><button type="button" class="btn sm" id="lsAll">Toàn bộ thời gian</button></div>
+        <div id="lsBody"></div>
+        <div class="btns"><button class="btn" id="lsFile" type="button">📊 Excel lịch sử kho</button></div></div>
       <div class="panel" data-w="doi"><h3>🔄 Hàng đổi cho khách <span class="sub" id="dxCnt"></span></h3>
         <div class="sub" style="margin-bottom:8px">Máy đổi mới bảo hành: <b>seri cũ</b> (máy thu hồi) → <b>seri mới</b> (máy giao khách). Nhập trùng các seri này ở bất kỳ đâu, hệ thống sẽ cảnh báo và chuyển Kho duyệt.</div>
         <input id="dxQ" type="search" placeholder="Tìm seri cũ / mới, khách hàng, sản phẩm, mã phiếu…" autocomplete="off">
@@ -2271,6 +2279,92 @@
   }
   $("#saQ").addEventListener("input", drawSaList);
 
+  /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
+  // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
+  const MV_KIND = {nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành",
+    doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
+  const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
+  function buildLedgers(){
+    const g = new Map(), get = (name) => { const k = norm(name); if (!g.has(k)) g.set(k, {name, mv: [], st: []}); return g.get(k); };
+    moves.forEach(m => { if (m.ext || m.kind === "seed" || !Number(m.qty) || !m.product) return; get(m.product).mv.push(m); });
+    stock.forEach(x => { if (x.product) get(x.product).st.push(x); });
+    const out = [];
+    g.forEach(({name, mv, st}) => {
+      const lots = [], ev = [], lotOf = new Map();   // seri -> lô (không gắn vào dữ liệu gốc)
+      // lô có seri: gom theo thời điểm nhập + nguồn
+      const sl = new Map();
+      st.forEach(x => { const at = x.importedAt || ""; const k = at.slice(0, 16) + "|" + (x.ref || x.file || ""); if (!sl.has(k)) sl.set(k, {id: "S" + k, at, ref: x.ref || (x.file ? "File " + x.file : (at ? "" : "Tồn đầu (chưa rõ ngày nhập)")), by: x.by || "", serials: [], qty: 0, out: [], sn: true, cost: x.unitCost ? {unit: x.unitCost, unitVat: x.unitCostVat} : null});
+        const L = sl.get(k); L.serials.push(x.serial); L.qty++; lotOf.set(x, L); });
+      sl.forEach(L => lots.push(L));
+      // lô không seri: các phiếu cộng kho
+      mv.filter(m => Number(m.qty) > 0).forEach(m => lots.push({id: m.id, at: m.at || "", ref: m.kind === "kiemke" ? "Kiểm kê: " + (m.ref || "") : (m.ref || ""), kind: m.kind, by: m.by || "", qty: Number(m.qty), out: [], sn: false, cost: m.cost || null, note: m.note || ""}));
+      lots.sort((a,b) => (a.at || "").localeCompare(b.at || ""));
+      lots.forEach(L => { L.left = L.qty; ev.push({at: L.at, dir: "in", name, qty: L.qty, kind: L.sn ? "Nhập hàng (có seri)" : (MV_KIND[L.kind] || "Nhập"), lot: L, ref: L.ref, by: L.by, serials: L.serials || [], cost: L.cost}); });
+      // xuất có seri
+      st.filter(x => x.status !== "in" && x.outAt).forEach(x => { const d = refDoc(x.orderCode), L = lotOf.get(x);
+        const e = {at: x.outAt, dir: "out", name, qty: 1, kind: x.status === "thao" ? "Tháo linh kiện từ máy" : d && !d.lines ? "Xuất đổi bảo hành" : "Xuất bán", code: x.orderCode || "", customer: x.customer || d?.customer || "", serials: [x.serial], alloc: L ? [{lot: L, qty: 1}] : []};
+        if (L) { L.left--; L.out.push(e); } ev.push(e); });
+      // xuất không seri: trừ dần vào lô cũ nhất còn hàng (FIFO)
+      const qLots = lots.filter(L => !L.sn);
+      mv.filter(m => Number(m.qty) < 0).sort((a,b) => (a.at || "").localeCompare(b.at || "")).forEach(m => {
+        let need = -Number(m.qty); const d = refDoc(m.ref), alloc = [];
+        for (const L of qLots) { if (need <= 0) break; if (L.left <= 0) continue; const take = Math.min(L.left, need); L.left -= take; need -= take; alloc.push({lot: L, qty: take}); }
+        const e = {at: m.at || "", dir: "out", name, qty: -Number(m.qty), kind: MV_KIND[m.kind] || "Xuất", code: String(m.ref || "").split(" · ")[0], customer: d?.customer || "", serials: [], alloc, short: need, note: m.note || ""};
+        alloc.forEach(a => a.lot.out.push(Object.assign({}, e, {qty: a.qty}))); ev.push(e); });
+      // tồn sau mỗi lần
+      ev.sort((a,b) => (a.at || "").localeCompare(b.at || "") || (a.dir === "in" ? -1 : 1));
+      let bal = 0; ev.forEach(e => { bal += e.dir === "in" ? e.qty : -e.qty; e.bal = bal; });
+      out.push({name, lots, ev});
+    });
+    return out;
+  }
+  const lotName = L => L ? `Lô ${fmtTime(L.at) || "chưa rõ ngày"}${L.ref ? " · " + String(L.ref).replace(/^Nhập hàng – /, "") : ""}` : "";
+  const allocText = e => e.alloc?.length ? e.alloc.map(a => `${a.qty} từ lô ${fmt(a.lot.at) || "?"}${a.lot.ref ? " (" + String(a.lot.ref).replace(/^Nhập hàng – /, "").slice(0, 30) + ")" : ""}`).join(" + ") + (e.short > 0 ? ` + ${e.short} không rõ lô` : "") : (e.short > 0 ? "không rõ lô (kho ghi thiếu)" : "");
+  function ledgerView(){
+    const p = $("#lsP").value.trim(), t = $("#lsT").value, q = norm($("#lsQ").value);
+    const from = $("#lsFrom").value ? new Date($("#lsFrom").value + "T00:00:00") : null, to = $("#lsTo").value ? new Date($("#lsTo").value + "T23:59:59") : null;
+    let led = buildLedgers(); if (p) led = led.filter(x => norm(x.name) === norm(p));
+    const ev = led.flatMap(x => x.ev).filter(e => (!t || e.dir === t) && (!from || new Date(e.at) >= from) && (!to || new Date(e.at) <= to)
+      && (!q || norm([e.name, e.customer, e.code, e.ref, (e.serials || []).join(" "), e.kind, e.by, e.note].join(" ")).includes(q))).sort((a,b) => (b.at || "").localeCompare(a.at || ""));
+    return {led, ev, p};
+  }
+  const lsOpen = new Set();   // các lô đang mở chi tiết (giữ khi vẽ lại)
+  function drawLedger(){
+    if (!$("#lsFrom").value && !$("#lsFrom").dataset.all) { const d = new Date(today()); d.setDate(d.getDate() - 30); $("#lsFrom").value = iso(d); }
+    const {led, ev, p} = ledgerView(), one = p && led.length === 1 ? led[0] : null;
+    const tin = ev.filter(e => e.dir === "in").reduce((a,e) => a + e.qty, 0), tout = ev.filter(e => e.dir === "out").reduce((a,e) => a + e.qty, 0);
+    let h = `<div class="stats" style="grid-template-columns:repeat(3,1fr);margin:8px 0"><div class="stat c-info"><b>${tin.toLocaleString("vi-VN")}</b><span>Nhập (${ev.filter(e => e.dir === "in").length} lần)</span></div>
+      <div class="stat c-warn"><b>${tout.toLocaleString("vi-VN")}</b><span>Xuất (${ev.filter(e => e.dir === "out").length} lần)</span></div><div class="stat c-ok"><b>${one ? (one.ev.at(-1)?.bal ?? 0) : led.length}</b><span>${one ? "Tồn hiện tại" : "Mặt hàng có phát sinh"}</span></div></div>`;
+    if (one) {
+      h += `<h4 style="margin:10px 0 6px;font-size:14px">📦 Các lô nhập – ${esc(one.name)}</h4>` + (one.lots.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Lô nhập</th><th>Nhập</th><th>Đã xuất</th><th>Còn</th></tr>${one.lots.slice().reverse().map(L => `<tr class="lsrow" data-l="${esc(L.id)}" style="cursor:pointer"><td>${esc(lotName(L))}${L.sn ? ` <span class="sub">(seri)</span>` : ""}${L.cost && !hidePrice() ? `<div class="sub">💰 ${money(L.cost.unit)}/SP${L.cost.vatQty ? ` · có VAT ${money(L.cost.unitVat)}` : ""}</div>` : ""}<div class="sub">▸ bấm xem đã xuất cho ai (${L.out.length})</div></td><td>${L.qty}</td><td>${L.qty - L.left}</td><td><b style="color:${L.left > 0 ? "var(--ok)" : "var(--muted)"}">${L.left}</b></td></tr>
+        <tr class="lsdet ${lsOpen.has(L.id) ? "" : "hide"}" data-l="${esc(L.id)}"><td colspan="4" style="text-align:left">${L.out.length ? L.out.slice().sort((a,b) => (a.at || "").localeCompare(b.at || "")).map(e => `<div class="sub">• ${fmtTime(e.at)} – <b>${e.qty}</b> · ${esc(e.kind)}${e.customer ? " · 👤 <b>" + esc(e.customer) + "</b>" : ""}${e.code ? " · " + esc(e.code) : ""}${e.serials?.length ? " · SN " + esc(e.serials.join(", ")) : ""}</div>`).join("") : `<div class="sub">Chưa xuất</div>`}${L.serials?.length ? `<div class="sub" style="margin-top:4px">Seri trong lô: ${esc(L.serials.join(", "))}</div>` : ""}</td></tr>`).join("")}</table>` : `<div class="empty">Chưa có lô nhập.</div>`);
+    }
+    h += `<h4 style="margin:12px 0 6px;font-size:14px">🕒 Dòng thời gian (${ev.length})</h4>` + (ev.length ? ev.slice(0, 200).map(e => `<div class="item" style="cursor:default;border-left:4px solid ${e.dir === "in" ? "var(--info)" : "var(--warn)"}"><div class="row"><div>
+        <div class="pname">${e.dir === "in" ? "⬇️" : "⬆️"} ${esc(e.kind)} · ${esc(e.name)}</div>
+        <div class="sub">${fmtTime(e.at) || "chưa rõ ngày"}${e.by ? " · " + esc(e.by) : ""}</div>
+        ${e.dir === "in" ? `${e.ref ? `<div class="sub">📝 ${esc(String(e.ref).replace(/^Nhập hàng – /, ""))}</div>` : ""}${e.cost && !hidePrice() ? `<div class="sub">💰 ${money(e.cost.unit)}/SP${e.cost.vatQty ? ` (có VAT ${money(e.cost.unitVat)})` : ""}</div>` : ""}`
+          : `${e.customer ? `<div class="sub">👤 <b>${esc(e.customer)}</b>${e.code ? " · " + esc(e.code) : ""}</div>` : e.code ? `<div class="sub">${esc(e.code)}</div>` : ""}<div class="sub">📦 ${esc(allocText(e))}</div>`}
+        ${e.serials?.length ? `<div class="sub">SN ${esc(e.serials.slice(0, 6).join(", "))}${e.serials.length > 6 ? "…" : ""}</div>` : ""}</div>
+        <div style="text-align:right"><b style="font-size:16px;color:${e.dir === "in" ? "var(--info)" : "var(--warn)"}">${e.dir === "in" ? "+" : "−"}${e.qty}</b>${p ? `<div class="sub">tồn ${e.bal}</div>` : ""}</div></div></div>`).join("") + (ev.length > 200 ? `<div class="sub">Đang hiện 200/${ev.length} – lọc thêm hoặc tải Excel để xem đủ.</div>` : "")
+      : `<div class="empty">Không có phát sinh trong khoảng đã chọn.</div>`);
+    $("#lsBody").innerHTML = h;
+    $("#lsBody").querySelectorAll(".lsrow").forEach(tr => tr.onclick = () => { const id = tr.dataset.l; lsOpen.has(id) ? lsOpen.delete(id) : lsOpen.add(id);
+      $("#lsBody").querySelector(`.lsdet[data-l="${CSS.escape(id)}"]`).classList.toggle("hide", !lsOpen.has(id)); });
+  }
+  ["lsP", "lsQ"].forEach(id => $("#" + id).addEventListener("input", drawLedger));
+  ["lsT", "lsFrom", "lsTo"].forEach(id => $("#" + id).addEventListener("change", drawLedger));   // ô sản phẩm / tìm kiếm đã vẽ lại khi gõ
+  $("#lsFrom").addEventListener("change", () => { if ($("#lsFrom").value) delete $("#lsFrom").dataset.all; });
+  $("#lsAll").onclick = () => { $("#lsFrom").value = ""; $("#lsFrom").dataset.all = "1"; $("#lsTo").value = ""; drawLedger(); };
+  $("#lsFile").onclick = () => {
+    const {led, ev, p} = ledgerView(), E = ev.slice().reverse();
+    const lots = led.flatMap(x => x.lots.map(L => [x.name, fmtTime(L.at), String(L.ref || "").replace(/^Nhập hàng – /, ""), L.sn ? "Có seri" : "Không seri", L.qty, L.qty - L.left, L.left, L.cost ? L.cost.unit : "",
+      L.out.map(e => `${fmt(e.at)} ${e.customer || e.kind}${e.code ? " (" + e.code + ")" : ""} x${e.qty}`).join("; ")]));
+    exportSheets(`Lich-su-kho_${p ? prId(p).slice(2, 30) + "_" : ""}${iso(new Date())}`, "Lịch sử kho", `${p || "Tất cả sản phẩm"} · ${$("#lsFrom").value ? fmt($("#lsFrom").value) : "từ đầu"} – ${$("#lsTo").value ? fmt($("#lsTo").value) : "nay"}`, [
+      {name: "Nhập – xuất", head: ["Thời gian", "Nhập / Xuất", "Loại", "Sản phẩm", "Số lượng", "Khách hàng", "Mã đơn / phiếu", "Số seri", "Lô nhập (xuất từ lô nào)", "Nguồn / ghi chú", "Giá vốn 1 SP (đ)", "Người làm"].concat(p ? ["Tồn sau"] : []),
+        rows: E.map(e => [fmtTime(e.at), e.dir === "in" ? "Nhập" : "Xuất", e.kind, e.name, e.qty, e.customer || "", e.code || "", (e.serials || []).join(", "), e.dir === "out" ? allocText(e) : lotName(e.lot), e.dir === "in" ? String(e.ref || "").replace(/^Nhập hàng – /, "") : (e.note || ""), e.cost && !hidePrice() ? e.cost.unit : "", e.by || ""].concat(p ? [e.bal] : []))},
+      {name: "Các lô nhập", head: ["Sản phẩm", "Lô nhập ngày", "Nguồn / ghi chú", "Loại", "SL nhập", "Đã xuất", "Còn lại", "Giá vốn 1 SP (đ)", "Đã xuất cho"], rows: lots}]);
+  };
+
   /* ================= HÀNG ĐỔI CHO KHÁCH & CẢNH BÁO SERI TRÙNG ================= */
   const exDate = t => t.exchange?.at || t.createdAt;
   const exchanges = () => tickets.filter(t => t.exchange && t.stage !== "huy").sort((a,b) => (exDate(b) || "").localeCompare(exDate(a) || ""));
@@ -2311,7 +2405,7 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt(); drawExchanges();
+    drawThao(); drawExt(); drawExchanges(); if (whTab === "ls") drawLedger();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
