@@ -988,7 +988,9 @@
   }
 
   // sổ bảo hành: bản ghi của app trước, sau đó dữ liệu nhập từ file thống kê
-  function findReg(sn){ const k = keySN(sn); return k ? (reg.find(r => keySN(r.serial) === k) || riIdx.get(k) || null) : null; }
+  function findReg(sn){ const k0 = keySN(sn); if (!k0) return null;
+    const one = k => reg.find(r => keySN(r.serial) === k) || riIdx.get(k) || null;
+    return one(k0) || (/^\d{5}$/.test(k0) ? one("525" + k0) : null); }   // gõ 5 số cuối (23622) cũng tìm ra 52523622
   function push(t, stage, note, extra){
     const c = JSON.parse(JSON.stringify(t));
     Object.assign(c, extra || {});
@@ -1548,25 +1550,36 @@
     const months = v => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths; if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? opt.emptyMonths : n; };
     // đầu / máy karaoke các loại: luôn bảo hành 12 tháng kể từ ngày mua (VV ở cột THỜI GIAN = mã kích hoạt vĩnh viễn)
     const isKara = p => /dau karaoke|may karaoke/.test(norm(p));
-    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, text: 0, split: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
+    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, text: 0, split: 0, multi: 0, multiSn: 0, fixed: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
     // ô SERI có thể ghi chú ("Không chụp", "Anh Hậu giao thẳng", "52525843 - BH 6 tháng"…):
     // có chữ tiếng Việt / ít hơn 3 chữ số -> chỉ lấy các seri chuẩn 525xxxxx tìm thấy, không có thì bỏ qua
     const VN = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+    // 1 ô có thể nhiều seri: "23622,23412,23487" = 3 sản phẩm → 52523622, 52523412, 52523487 (5 số → thêm 525 ở đầu)
+    // số 6 chữ số trong ngoặc / sau dấu "/" (VD 21603(223576)) là mã, không phải seri → ghi chú
     const snOfCell = v => { const raw = String(v ?? "").trim(); if (!raw) return [];
-      if (VN.test(raw) || (raw.match(/\d/g) || []).length < 3) { const f = raw.replace(/\s+/g, "").match(/525\d{5}/g); return f ? [...new Set(f)].map(x => ({s: x, split: true})) : [{s: "", text: true}]; }
-      return [{s: raw.replace(/\s+/g, "").toUpperCase()}]; };
+      const multi = /[,;\/()\n]/.test(raw) || /\d\s+\d{5}/.test(raw) || VN.test(raw) || (/\d+\D+\d+/.test(raw.replace(/\s+/g, "")) && /^\d[\d\s,;\/()\-]*$/.test(raw));
+      if (!multi) { const one = raw.replace(/\s+/g, "").toUpperCase(); return [{s: /^\d{5}$/.test(one) ? "525" + one : one, fixed: /^\d{5}$/.test(one)}]; }
+      const nums = (raw.match(/\d[\d ]*\d|\d/g) || []).map(x => x.replace(/\s+/g, "")), out = [], codes = [];
+      nums.forEach(n => { if (n.length === 5) out.push({s: "525" + n, fixed: true}); else if (n.length === 8 && n.startsWith("525")) out.push({s: n}); else if (n.length === 6) codes.push(n);
+        else if (n.length >= 7 && !VN.test(raw)) out.push({s: n}); else if (/525\d{5}/.test(n)) out.push({s: n.match(/525\d{5}/)[0]}); });
+      if (!out.length && !VN.test(raw) && !/[,;()\n]/.test(raw)) return [{s: raw.replace(/\s+/g, "").toUpperCase()}];
+      if (!out.length) return [{s: "", text: true}];
+      const seen = new Set(), L = out.filter(x => !seen.has(x.s) && seen.add(x.s));
+      return L.map(x => Object.assign(x, {split: true, many: L.length, codes})); };
     rows.slice(hi + 1).forEach(r => {
       if (!r.some(c => String(c).trim())) return; stat.rows++;
       const cells = snOfCell(r[C.sn]); if (!cells.length) { stat.empty++; return; }
       if (cells[0].text) { stat.text++; return; }
       if (cells[0].split) stat.split++;
-      cells.forEach(({s}) => {
+      if (cells.length > 1) { stat.multi++; stat.multiSn += cells.length; }
+      stat.fixed += cells.filter(x => x.fixed).length;
+      cells.forEach(({s, codes}) => {
       if (opt.skipShort && s.length < 5) { stat.short++; return; }
       stat.withSn++;
       const d = xlDate(r[C.date]), type = String(r[C.note] ?? "").trim(), bh = String(r[C.bh] ?? "").trim();
       if (d) { if (!stat.minD || d < stat.minD) stat.minD = d; if (d > stat.maxD) stat.maxD = d; }
       const row = {d, type, c: String(r[C.cus] ?? "").replace(/\s+/g, " ").trim(), k: String(r[C.code] ?? "").trim(), p: String(r[C.prod] ?? "").replace(/\s+/g, " ").trim(), md: String(r[C.model] ?? "").trim(),
-        m: months(r[C.bh]), bh, act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
+        m: months(r[C.bh]), bh, codes: (codes || []).join(", "), act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
         nd: xlDate((C.nd2 >= 0 && r[C.nd2] && r[C.ns2] ? r[C.nd2] : "") || (C.nd1 >= 0 && r[C.nd1]) || (C.nd2 >= 0 && r[C.nd2]) || "")};
       if (!g.has(s)) g.set(s, []); g.get(s).push(row);
       });
@@ -1577,7 +1590,7 @@
       L.sort((a,b) => (a.d || "").localeCompare(b.d || ""));
       const sale = L.filter(x => SALE_RE.test(norm(x.type))), main = (sale.length ? sale : L).at(-1), ex = L.filter(x => x.ns).at(-1);
       if (/^525\d{5}$/.test(s)) stat.std++; else stat.other++;
-      let m = main.m, n = main.type.replace(/\s+/g, " ").trim();
+      let m = main.m, n = main.type.replace(/\s+/g, " ").trim() + (main.codes ? ` · mã ${main.codes}` : "");
       if (parseInt(main.bh) === 1) { m = 1; n += " · Hàng đổi bảo hành (1 tháng)"; stat.doi1++; if (isKara(main.p) && L.some(x => x.act)) n += " · Mã kích hoạt: vĩnh viễn"; }   // ghi 1 tháng = hàng đổi bảo hành → giữ nguyên
       else if (opt.kara12 && isKara(main.p)) { m = 12; stat.kara++; if (L.some(x => x.act)) { n += " · Mã kích hoạt: vĩnh viễn"; stat.act++; } }
       else if (main.bh && isNaN(parseInt(main.bh))) n += ` (BH: ${main.bh})`;
@@ -1625,7 +1638,7 @@
       $("#riPrev").innerHTML = `<table class="ptable"><tr><th style="text-align:left;width:auto">Nội dung</th><th style="width:90px">Số lượng</th></tr>
         <tr><td>Dòng dữ liệu</td><td>${S.rows.toLocaleString("vi-VN")}</td></tr><tr><td>Dòng có seri</td><td>${S.withSn.toLocaleString("vi-VN")}</td></tr>
         <tr><td>Dòng không có seri (bỏ qua)</td><td>${S.empty.toLocaleString("vi-VN")}</td></tr>
-        ${S.text ? `<tr><td>Ô SERI ghi chú, không phải seri (bỏ qua – VD “Không chụp”)</td><td>${S.text}</td></tr>` : ""}${S.split ? `<tr><td>Ô SERI có ghi chú – đã tách lấy seri 525…</td><td>${S.split}</td></tr>` : ""}${S.short ? `<tr><td>Seri quá ngắn (bỏ qua)</td><td>${S.short}</td></tr>` : ""}
+        ${S.text ? `<tr><td>Ô SERI ghi chú, không phải seri (bỏ qua – VD “Không chụp”)</td><td>${S.text}</td></tr>` : ""}${S.multi ? `<tr><td>Ô ghi nhiều seri (VD “23622,23412,…”) → tách từng sản phẩm</td><td>${S.multi} ô → ${S.multiSn.toLocaleString("vi-VN")} seri</td></tr>` : ""}${S.fixed ? `<tr><td>Seri 5 số → thêm 525 ở đầu (VD 23622 → 52523622)</td><td>${S.fixed.toLocaleString("vi-VN")}</td></tr>` : ""}${S.short ? `<tr><td>Seri quá ngắn (bỏ qua)</td><td>${S.short}</td></tr>` : ""}
         <tr><td><b>Seri khác nhau sẽ nhập</b></td><td><b>${res.recs.length.toLocaleString("vi-VN")}</b></td></tr>
         <tr><td>· đúng chuẩn công ty (525 + 5 số)</td><td>${S.std.toLocaleString("vi-VN")}</td></tr><tr><td>· seri hãng khác / dạng khác</td><td>${S.other.toLocaleString("vi-VN")}</td></tr>
         <tr><td>· seri có nhiều dòng (lấy lần bán gần nhất)</td><td>${S.dupSn.toLocaleString("vi-VN")}</td></tr><tr><td>· có đổi hàng</td><td>${S.ex}</td></tr>
