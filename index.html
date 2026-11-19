@@ -152,6 +152,13 @@
   .stat.late{background:var(--bad)!important;animation:pulse 1.6s infinite} .stat.late b,.stat.late span{color:#fff!important}
   @keyframes pulse{50%{opacity:.75}}
   .empty{text-align:center;color:var(--muted);padding:22px 10px;font-size:14px}
+  .snrow{display:flex;gap:8px;align-items:stretch}.snrow input{flex:1;min-width:0}
+  .scanbtn{flex:none;border:2px solid var(--brand);background:var(--brand);color:#fff;border-radius:12px;padding:0 14px;font-weight:700;font-size:15px;cursor:pointer;white-space:nowrap}
+  .scanbox{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-top:8px}
+  .scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+  .scanbox .aim{position:absolute;left:8%;right:8%;top:32%;bottom:32%;border:3px solid #22c55e;border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+  .scanbox .aim::after{content:"";position:absolute;left:4%;right:4%;top:50%;height:2px;background:#ef4444;animation:scanline 1.6s ease-in-out infinite alternate}
+  @keyframes scanline{from{transform:translateY(-34px)}to{transform:translateY(34px)}}
   .ccppl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
   .ccp{position:relative;border:2px solid var(--line);background:var(--bg);border-radius:12px;padding:14px 6px;text-align:center;cursor:pointer;color:var(--ink);font-weight:700;font-size:17px}
   .ccp small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -312,7 +319,7 @@
         <label>Tên khách hàng *</label><input name="customer" required>
         <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
-        <label>Số seri *</label><input name="serial" required placeholder="525xxxxx – nhập seri để chọn Bảo hành / Sửa chữa">
+        <label>Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
         <div class="sub" id="snWarn" style="color:var(--warn);margin-top:4px"></div>
         <div id="foundBox"></div>
 
@@ -577,6 +584,7 @@
 </div>
 
 <div class="sheet-bg" id="actBg"><form class="sheet" id="actForm"></form></div>
+<div class="sheet-bg" id="scanBg"><div class="sheet" id="scanSheet"></div></div>
 <div class="sheet-bg" id="detailBg"><div class="sheet" id="detail"></div></div>
 <div class="sheet-bg" id="notiBg"><div class="sheet" id="notiSheet"></div></div>
 <datalist id="partsList"></datalist>
@@ -1481,9 +1489,10 @@
   function drawWLookup(host){
     if (!host || host._built) return; host._built = true;
     host.innerHTML = `<h3>🔍 Tra cứu bảo hành</h3><div class="sub" style="margin-bottom:6px">Gõ số seri → còn / hết bảo hành, còn bao nhiêu ngày (tính theo <b>ngày bán</b>).</div>
-      <input class="wlq" type="search" inputmode="text" placeholder="Nhập số seri máy khách mang tới" autocomplete="off"><div class="wlr" style="margin-top:8px"></div>`;
+      <div class="snrow"><input class="wlq" type="search" inputmode="text" placeholder="Quét hoặc gõ số seri máy khách mang tới" autocomplete="off"><button type="button" class="scanbtn" data-scanwl="1" aria-label="Quét mã seri bằng camera">📷 Quét</button></div><div class="wlr" style="margin-top:8px"></div>`;
     const q = host.querySelector(".wlq"), r = host.querySelector(".wlr");
     q.addEventListener("input", () => { const v = q.value.trim(); r.innerHTML = v.length >= 4 ? wResultHtml(v) : ""; });
+    host.querySelector("[data-scanwl]").onclick = () => openScanner(sn => { q.value = sn; q.dispatchEvent(new Event("input", {bubbles: true})); });
   }
 
   function renderBH(){
@@ -3338,6 +3347,60 @@
     st.textContent = sns.length ? `✔ Đọc được ${sns.length} seri (theo ${how})${n < sns.length ? ` – ${sns.length - n} seri đã có sẵn` : ""} – kiểm tra lại cho đúng với ảnh`
       : "Không đọc được seri – chụp gần, rõ, đủ sáng (thấy rõ mã vạch) rồi thử lại, hoặc gõ tay";
   }
+  /* ---------- 📷 QUÉT SERI BẰNG CAMERA (điện thoại): đưa tem / mã vạch vào khung → tự đọc, tự điền ----------
+     Đọc mã vạch liên tục (BarcodeDetector có sẵn trên Android / zxing cho iPhone); tem không có mã vạch → bấm "Đọc chữ số" */
+  let scanStream = null, scanTimer = null, scanBusy = false;
+  function stopScan(){ clearTimeout(scanTimer); scanTimer = null; if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; } }
+  // chọn seri từ chữ đọc được: ưu tiên seri đúng quy định 525xxxxx, không có thì lấy mã số/chữ 5–20 ký tự
+  function pickSn(text){ const sn = snFromText(text); if (sn.length) return sn[0];
+    const raw = String(text || "").trim().replace(/\s+/g, ""); return /^[A-Za-z0-9\-]{5,20}$/.test(raw) ? raw.toUpperCase() : ""; }
+  async function openScanner(onSn){
+    const S = $("#scanSheet");
+    S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📷 Quét số seri</h2><div class="sub">Đưa <b>mã vạch / tem seri</b> vào giữa khung xanh, giữ yên 1–2 giây – app tự đọc và điền.</div>
+      <div class="scanbox"><video playsinline muted autoplay></video><div class="aim"></div></div>
+      <div class="sub scst" style="margin-top:8px">Đang mở camera…</div>
+      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn scocr">🔢 Tem không có mã vạch – đọc chữ số</button><button type="button" class="btn sctorch hide">🔦 Đèn</button>
+        <label class="btn" style="text-align:center">🖼️ Chọn / chụp ảnh<input type="file" accept="image/*" capture="environment" class="scfile" hidden></label></div>
+      <div class="btns"><button type="button" class="btn scclose">Đóng</button></div>`;
+    const v = S.querySelector("video"), st = S.querySelector(".scst"), say = (t, c) => { st.textContent = t; st.style.color = c || ""; };
+    open("scanBg"); let done = false;
+    const finish = sn => { if (done) return; done = true; stopScan(); close("scanBg"); try { navigator.vibrate?.(150); } catch(e){} toast(`✔ Đã quét seri ${sn}`); onSn(sn); };
+    S.querySelector(".scclose").onclick = () => { stopScan(); close("scanBg"); };
+    const grab = () => { const c = document.createElement("canvas"), w = v.videoWidth, h = v.videoHeight; if (!w) return null;
+      // cắt vùng khung xanh (giữa ảnh) cho đọc nhanh và chính xác hơn
+      const x = Math.round(w * .04), y = Math.round(h * .22), cw = w - 2 * x, ch = h - 2 * y; c.width = cw; c.height = ch; c.getContext("2d").drawImage(v, x, y, cw, ch, 0, 0, cw, ch); return c; };
+    const blobOf = c => new Promise(ok => c.toBlob(ok, "image/jpeg", .92));
+    let det = null;
+    try { if ("BarcodeDetector" in window) { const f = await BarcodeDetector.getSupportedFormats(); if (f.length) det = new BarcodeDetector({formats: f.filter(x => ["code_128", "code_39", "code_93", "codabar", "itf", "ean_13", "ean_8", "qr_code", "data_matrix", "upc_a"].includes(x))}); } } catch(e){ det = null; }
+    const readFrame = async () => { const c = grab(); if (!c) return "";
+      if (det) { try { const r = await det.detect(c); for (const x of r) { const sn = pickSn(x.rawValue); if (sn) return sn; } } catch(e){} }
+      try { await loadScript(BC.lib); const Z = window.ZXingWASM; if (!bcReady) { Z.setZXingModuleOverrides({locateFile: p => BC.dir + p}); bcReady = true; }
+        const r = await Z.readBarcodesFromImageFile(await blobOf(c), {tryHarder: true, maxNumberOfSymbols: 4, formats: ["Code128", "Code39", "Code93", "Codabar", "ITF", "EAN-13", "EAN-8", "QRCode", "DataMatrix"]});
+        for (const x of r.filter(x => x.isValid)) { const sn = pickSn(x.text); if (sn) return sn; } } catch(e){}
+      return ""; };
+    const loop = async () => { if (done || !scanStream || !$("#scanBg").classList.contains("show")) { if (!done) stopScan(); return; }
+      if (!scanBusy) { scanBusy = true; try { const sn = await readFrame(); if (sn) { finish(sn); return; } } finally { scanBusy = false; } }
+      scanTimer = setTimeout(loop, 350); };
+    // đọc chữ số trên tem (OCR) từ khung hình hiện tại
+    S.querySelector(".scocr").onclick = async () => { const c = grab(); if (!c) { say("Camera chưa sẵn sàng", "var(--warn)"); return; }
+      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const sns = await ocrSerials([c.toDataURL("image/jpeg", .92)]); if (sns.length) finish(sns[0]); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
+      catch(e){ say("Không tải được bộ đọc chữ số (cần mạng)", "var(--bad)"); } };
+    // chụp ảnh bằng ứng dụng camera (khi trình duyệt không mở được camera trực tiếp)
+    S.querySelector(".scfile").onchange = async e => { const f = e.target.files[0]; if (!f) return; say("🔎 Đang đọc ảnh…");
+      let sns = []; try { sns = await barcodeSerials([f]); } catch(err){} if (!sns.length) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); try { sns = await ocrSerials([await compressImg(f)]); } catch(err){} }
+      if (sns.length) finish(sns[0]); else say("Không đọc được seri từ ảnh – chụp gần, rõ hơn, hoặc gõ tay", "var(--warn)"); };
+    if (!navigator.mediaDevices?.getUserMedia) { say("Trình duyệt không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); return; }
+    try { scanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false});
+      if (!$("#scanBg").classList.contains("show")) { stopScan(); return; }
+      v.srcObject = scanStream; await v.play().catch(() => {});
+      say(det ? "Đang quét… giữ mã vạch trong khung xanh" : "Đang quét… (lần đầu tải bộ đọc mã vạch, cần mạng)");
+      const tr = scanStream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
+      if (cap.torch) { const tb = S.querySelector(".sctorch"); tb.classList.remove("hide"); let on = false; tb.onclick = () => { on = !on; tr.applyConstraints({advanced: [{torch: on}]}).catch(() => {}); }; }
+      loop();
+    } catch(e){ say(e && e.name === "NotAllowedError" ? "Chưa cho phép dùng camera – bấm vào biểu tượng ổ khóa trên thanh địa chỉ → cho phép Camera, hoặc bấm “Chọn / chụp ảnh”" : "Không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); }
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("[data-scan]"); if (!b) return; e.preventDefault();
+    const inp = document.querySelector(b.dataset.scan); if (inp) openScanner(sn => { inp.value = sn; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dispatchEvent(new Event("change", {bubbles: true})); }); });
   async function savePhotos(list, meta){
     const ids = [], now = new Date().toISOString();
     for (const d of list) { const id = "ph_" + uid(); await put("ph", Object.assign({id, data: d, at: now}, meta || {})); ids.push(id); }
