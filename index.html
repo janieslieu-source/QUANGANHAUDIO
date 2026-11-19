@@ -460,7 +460,9 @@
         <div class="btns"><button type="submit" class="btn pri" id="saleOk">✅ Xác nhận đơn</button></div>
       </form>
       <div class="panel"><h3>📋 Đơn hàng gần đây</h3>
-        <div style="margin-bottom:10px"><input id="saQ" type="search" placeholder="Tìm khách, SĐT, mã đơn, sản phẩm…" autocomplete="off"></div>
+        <div style="margin-bottom:6px"><input id="saQ" type="search" placeholder="Tìm theo tên khách, SĐT, mã đơn, sản phẩm…" autocomplete="off" list="saCusList"><datalist id="saCusList"></datalist></div>
+        <div class="two" style="margin-bottom:6px"><div><label style="margin-top:0">Từ ngày bán</label><input id="saFrom" type="date"></div><div><label style="margin-top:0">Đến ngày</label><input id="saTo" type="date"></div></div>
+        <div id="saSum"></div>
         <div class="list" id="saList"></div></div>
     </section>
 
@@ -2738,16 +2740,37 @@
     $("#carrierList").innerHTML = [...cs].map(c => `<option value="${esc(c)}">`).join("");
     drawSaList();
   }
+  // giá trị đơn = tổng tiền (nếu có tạm ứng) hoặc số tiền Kế toán ghi
+  const odVal = o => o.pay ? Number(o.pay.total ?? o.pay.amount) || 0 : 0;
   function drawSaList(){
-    const q = norm($("#saQ").value);
+    const q = norm($("#saQ").value), f = $("#saFrom").value, t = $("#saTo").value;
+    $("#saCusList").innerHTML = [...new Set(orders.map(o => o.customer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")).slice(0, 500).map(c => `<option value="${esc(c)}">`).join("");
     let rows = orders.slice();
     if (q) rows = rows.filter(o => norm([o.code,o.customer,o.phone,orderSummary(o),snAll(o).join(" ")].join(" ")).includes(q));
+    if (f) rows = rows.filter(o => (o.saleDate || "") >= f); if (t) rows = rows.filter(o => (o.saleDate || "") <= t);
     rows.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
-    rows = rows.slice(0, 30);
+    // tìm theo khách / khoảng ngày → tổng doanh số
+    const live = rows.filter(o => o.stage !== "huy");
+    if ((q || f || t) && !hidePrice()) {
+      const val = live.reduce((a, o) => a + odVal(o), 0), debt = live.filter(o => o.stage === "cong_no").reduce((a, o) => a + (Number(o.pay?.amount) || 0), 0), qn = live.reduce((a, o) => a + (o.lines || []).filter(l => !l.gift).reduce((b, l) => b + (Number(l.qty) || 0), 0), 0);
+      const noPay = live.filter(o => !o.pay).length, cus = new Set(live.map(o => norm(o.customer))).size;
+      $("#saSum").innerHTML = `<div class="stats" style="grid-template-columns:repeat(3,1fr);margin:6px 0 10px"><div class="stat c-ok"><b>${money(val)}</b><span>Doanh số</span></div><div class="stat"><b>${live.length}</b><span>Đơn (${qn} SP)</span></div><div class="stat ${debt ? "c-bad" : ""}"><b>${money(debt)}</b><span>Còn nợ</span></div></div>
+        <div class="sub" style="margin:-4px 0 8px">${cus === 1 && live[0] ? `Khách <b>${esc(live[0].customer)}</b>` : `${cus} khách`}${f || t ? ` · ngày bán ${f ? fmt(f) : "…"} – ${t ? fmt(t) : "nay"}` : " · mọi thời gian"}${noPay ? ` · ${noPay} đơn chưa ghi tiền (chưa tính)` : ""}${rows.length - live.length ? ` · ${rows.length - live.length} đơn đã hủy (không tính)` : ""}
+        · <button type="button" class="link" id="saXls" style="padding:0">📊 Xuất Excel</button></div>`;
+      $("#saXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX;
+        const aoa = [[COMPANY], [`DOANH SỐ ${cus === 1 && live[0] ? "KHÁCH: " + String(live[0].customer).toUpperCase() : q ? "TÌM: " + $("#saQ").value.trim().toUpperCase() : "BÁN HÀNG"}`], [f || t ? `Ngày bán ${f ? fmt(f) : "…"} – ${t ? fmt(t) : fmt(iso(new Date()))}` : "Mọi thời gian"], [],
+          ["STT", "Ngày bán", "Mã đơn", "Khách hàng", "SĐT", "Sản phẩm", "SL", "Thanh toán", "Giá trị đơn (đ)", "Còn nợ (đ)"],
+          ...live.map((o, i) => [i + 1, fmt(o.saleDate), o.code, o.customer, o.phone || "", orderSummary(o), (o.lines || []).filter(l => !l.gift).reduce((b, l) => b + (Number(l.qty) || 0), 0), o.pay ? PAY[o.pay.status] : "Chưa ghi", odVal(o), o.stage === "cong_no" ? Number(o.pay?.amount) || 0 : 0]),
+          [], ["", "", "", "TỔNG", "", "", qn, "", val, debt]];
+        const ws = X.utils.aoa_to_sheet(aoa); ws["!cols"] = [{wch: 5}, {wch: 11}, {wch: 15}, {wch: 24}, {wch: 12}, {wch: 40}, {wch: 5}, {wch: 14}, {wch: 15}, {wch: 14}];
+        const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Doanh so");
+        await saveBlob(`Doanh-so_${(q ? $("#saQ").value.trim() : "ban-hang").replace(/[^\p{L}\d]+/gu, "-")}.xlsx`, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu file doanh số"); } catch(e){ toast("Không tạo được file Excel"); } };
+    } else $("#saSum").innerHTML = "";
+    rows = rows.slice(0, q || f || t ? 100 : 30);
     $("#saList").innerHTML = rows.length ? rows.map(o => odCard(o)).join("") : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có đơn hàng."}</div>`;
     bindOd($("#saList"));
   }
-  $("#saQ").addEventListener("input", drawSaList);
+  $("#saQ").addEventListener("input", drawSaList); ["#saFrom", "#saTo"].forEach(k => $(k).addEventListener("change", drawSaList));
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
@@ -4653,7 +4676,7 @@
     // 2. bán hàng (theo ngày bán, bỏ đơn đã hủy)
     const sold = orders.filter(o => o.stage !== "huy" && inW(o.saleDate));
     const qty = (o, gift) => (o.lines || []).filter(l => !!l.gift === gift).reduce((a,l) => a + (Number(l.qty) || 0), 0);
-    const val = o => o.pay ? Number(o.pay.amount) || 0 : 0;
+    const val = o => o.pay ? Number(o.pay.total ?? o.pay.amount) || 0 : 0;
     const days = []; for (let d = new Date(s); d < e; d.setDate(d.getDate() + 1)) { const k = iso(d), L = sold.filter(o => o.saleDate === k);
       days.push([["CN","T2","T3","T4","T5","T6","T7"][d.getDay()] + " " + fmt(k).slice(0, 5), L.length, L.reduce((a,o) => a + qty(o, false), 0), L.reduce((a,o) => a + qty(o, true), 0), L.reduce((a,o) => a + val(o), 0)]); }
     const sale = {orders: sold.length, qty: sold.reduce((a,o) => a + qty(o, false), 0), gift: sold.reduce((a,o) => a + qty(o, true), 0), value: sold.reduce((a,o) => a + val(o), 0), noPay: sold.filter(o => !o.pay).length, days};
