@@ -4216,20 +4216,66 @@
             style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:#dcfce7;color:#16a34a;" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${r.src === "nv" && r.c === "X" ? "✔" : CC_SHOW[r.c] || ""}</td>`; }).join("")}
           <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
         : `<div class="empty">Chưa có nhân viên.</div>`}
-      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Excel bảng chấm công</button><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
+      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Xuất Excel bảng chấm công</button><label class="btn" style="text-align:center">📥 Nhập lại Excel đã sửa<input type="file" id="ccXlsIn" accept=".xlsx,.xls" hidden></label><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
       <div class="sub" id="ccLocTxt"></div>`;
     const cfg = expenses.find(x => x.id === "cc_cfg");
     $("#ccLocTxt").textContent = cfg?.lat ? `Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}). Phạm vi chấm công: ${ccRadius()} m – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.` : "Chưa đặt vị trí công ty.";
     $("#ccMonth").onchange = e => { ccYm = e.target.value || iso(new Date()).slice(0, 7); drawCC(); };
-    const saveCodes = async (mut, nv) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
-      mut(doc.codes); doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
-    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => { const nv = td.dataset.nv, d = td.dataset.d, cur = ccSheet(ccYm)?.codes?.[nv]?.[d] || "";
-      const next = CC_CODES[(CC_CODES.indexOf(cur) + 1) % CC_CODES.length]; saveCodes(c => { c[nv] = c[nv] || {}; if (next) c[nv][d] = next; else delete c[nv][d]; }, nv); });
+    const saveCodes = async (mut, nv, noteFor, dayFor) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
+      mut(doc.codes); if (noteFor !== undefined && dayFor) { doc.notes = doc.notes || {}; doc.notes[nv] = doc.notes[nv] || {}; if (noteFor) doc.notes[nv][dayFor] = noteFor; else delete doc.notes[nv][dayFor]; }
+      doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
+    // chạm vào ô → mở bảng CHỈNH SỬA (xem thông tin, chọn lại, bấm Lưu) – tránh lỡ tay đổi ngày
+    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => openCCEdit(td.dataset.nv, Number(td.dataset.d)));
+    const openCCEdit = (nv, d) => { const e = emps.find(x => x.id === nv); if (!e) return;
+      const ds = `${ccYm}-${String(d).padStart(2, "0")}`, man = ccSheet(ccYm)?.codes?.[nv]?.[d] || "", note = ccSheet(ccYm)?.notes?.[nv]?.[d] || "";
+      const lg = expenses.find(x => x.kind === "cclog" && x.nvId === nv && x.date === ds), cur = ccCode(ccYm, nv, d);
+      const F = $("#actForm"); let pick = man;
+      const OPTS = [["X", "✅ Cả ngày"], ["H", "½ Nửa ngày"], ["P", "🌴 Nghỉ phép (có lương)"], ["L", "🎌 Nghỉ lễ (có lương)"], ["R", "👪 Việc riêng (có lương)"], ["K", "⛔ Nghỉ không lương"], ["", lg?.in ? "↩️ Theo nhân viên tự chấm" : "⬜ Để trống (chưa chấm)"]];
+      F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✏️ Chỉnh sửa chấm công</h2>
+        <div class="sub"><b style="color:var(--ink);font-size:16px">${esc(e.name)}</b> · ${["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"][new Date(ds).getDay()]} ${fmt(ds)}</div>
+        <div class="found" style="margin-top:10px"><b>Thông tin hiện tại:</b> ${cur.c ? `<b>${esc(CC_LABEL[cur.c] || cur.c)}</b> ${cur.src === "kt" ? "(Kế toán chấm)" : "(nhân viên tự chấm)"}` : "Chưa chấm"}
+          ${lg?.in ? `<br>🕘 Nhân viên tự chấm: vào <b>${tm(lg.in)}</b>${lg.out ? ` · tan <b>${tm(lg.out)}</b> · làm <b>${hm(ccMin(lg))}</b> (= ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ)` : " · chưa tan ca"}${lg.inLoc?.dist != null ? ` · cách công ty ${lg.inLoc.dist} m` : ""}` : "<br>Nhân viên không tự chấm ngày này"}
+          ${ccSheet(ccYm)?.by && man ? `<br><span class="sub">Sửa lần cuối: ${esc(ccSheet(ccYm).by)}${ccSheet(ccYm).updatedAt ? " · " + fmtTime(ccSheet(ccYm).updatedAt) : ""}</span>` : ""}</div>
+        <label>Chọn lại</label><div class="opts ccopts" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${OPTS.map(([k, t]) => `<button type="button" class="opt ${k === pick ? "sel" : ""}" data-cc="${k}" style="padding:12px 6px;font-size:14px">${t}</button>`).join("")}</div>
+        <label>Ghi chú <span class="sub">(không bắt buộc)</span></label><input name="ccnote" value="${esc(note)}" placeholder="VD: quên chấm, đi công trình, nghỉ ốm…" autocomplete="off">
+        <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu</button></div>`;
+      F.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { pick = b.dataset.cc; F.querySelectorAll("[data-cc]").forEach(x => x.classList.toggle("sel", x === b)); });
+      actCtx = {run: async () => { const nt = F.ccnote.value.trim();
+        await saveCodes(c => { c[nv] = c[nv] || {}; if (pick) c[nv][d] = pick; else delete c[nv][d]; }, nv, nt, d);
+      }, after: () => toast(`Đã lưu chấm công ${ccShort(e.name)} ngày ${fmt(ds)}`)};
+      open("actBg"); };
     host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
+      if (!confirm(`Chấm X (cả ngày) cho tất cả ngày thường còn trống của ${emps.find(x => x.id === nv)?.name || ""} trong tháng?`)) return;
       saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }, nv); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
     $("#ccLoc").onclick = () => { if (!navigator.geolocation) { toast("Máy không hỗ trợ định vị"); return; }
       navigator.geolocation.getCurrentPosition(async p => { await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, updatedAt: new Date().toISOString()})); toast("Đã lưu vị trí công ty"); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
+    // nhập lại file Excel bảng chấm công đã sửa (đúng mẫu file xuất ra): chỉ ghi những ô khác với hiện tại
+    $("#ccXlsIn").onchange = async ev => { const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+      try { await loadScript(XLSX_URL); const X = window.XLSX, wb = X.read(await f.arrayBuffer(), {type: "array"}), rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: false, defval: ""});
+        const title = rows.slice(0, 4).flat().join(" "), mt = title.match(/THÁNG\s*(\d{1,2})\s*\/\s*(\d{4})/i), ym = mt ? `${mt[2]}-${mt[1].padStart(2, "0")}` : ccYm;
+        const hi = rows.findIndex(r => norm(r[1]) === norm("Họ và tên")); if (hi < 0) { toast("File không đúng mẫu bảng chấm công (thiếu cột “Họ và tên”)"); return; }
+        const head = rows[hi], days = head.map((h, c) => /^\d{1,2}$/.test(String(h).trim()) ? [c, Number(h)] : null).filter(Boolean), people = ccPeople();
+        const MAP = {"X": "X", "✔": "X", "V": "X", "1": "X", "½": "H", "1/2": "H", "0.5": "H", "0,5": "H", "H": "H", "P": "P", "L": "L", "R": "R", "K": "K", "": ""};
+        const changes = [], miss = [], bad = [];
+        rows.slice(hi + 1).forEach(r => { const nm = String(r[1] || "").trim(); if (!nm || /người chấm|giám đốc/i.test(nm)) return;
+          const e = people.find(x => norm(x.name) === norm(nm)) || people.find(x => norm(ccShort(x.name)) === norm(nm)); if (!e) { miss.push(nm); return; }
+          days.forEach(([c, d]) => { const raw = String(r[c] ?? "").trim().toUpperCase(), code = MAP[raw]; if (code === undefined) { bad.push(`${nm} ngày ${d}: “${r[c]}”`); return; }
+            if (code !== ccCode(ym, e.id, d).c) changes.push({e, d, code}); }); });
+        const F = $("#actForm"), [yy, mm] = ym.split("-");
+        F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📥 Nhập lại bảng chấm công tháng ${mm}/${yy}</h2>
+          <div class="found" style="margin-top:8px">${changes.length ? `Có <b>${changes.length}</b> ô thay đổi so với hiện tại:` : "Không có ô nào thay đổi so với hiện tại."}
+            ${changes.slice(0, 40).map(x => `<div style="font-size:13px">• ${esc(ccShort(x.e.name))} – ngày ${x.d}: <b>${esc(CC_SHOW[ccCode(ym, x.e.id, x.d).c] || "trống")}</b> → <b>${esc(CC_SHOW[x.code] || "trống")}</b></div>`).join("")}${changes.length > 40 ? `<div class="sub">… và ${changes.length - 40} ô khác</div>` : ""}</div>
+          ${miss.length ? `<div class="sub" style="color:var(--warn);margin-top:6px">⚠️ Không nhận ra tên: ${miss.map(esc).join(", ")} – bỏ qua</div>` : ""}
+          ${bad.length ? `<div class="sub" style="color:var(--warn);margin-top:6px">⚠️ Ký hiệu lạ (bỏ qua): ${bad.slice(0, 8).map(esc).join("; ")}${bad.length > 8 ? "…" : ""} – chỉ dùng X, ½, P, L, R, K hoặc để trống</div>` : ""}
+          <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button>${changes.length ? `<button type="submit" class="btn pri">💾 Lưu ${changes.length} thay đổi</button>` : ""}</div>`;
+        actCtx = {run: async () => { if (!changes.length) return;
+          const doc = JSON.parse(JSON.stringify(ccSheet(ym) || {id: "cc_" + ym, kind: "chamcong", month: ym, date: ym + "-01", amount: 0, codes: {}}));
+          for (const x of changes) { await ccEnsure(x.e); doc.codes[x.e.id] = doc.codes[x.e.id] || {}; if (x.code) doc.codes[x.e.id][x.d] = x.code; else delete doc.codes[x.e.id][x.d]; }
+          doc.updatedAt = new Date().toISOString(); doc.by = actor() + " (nhập Excel)"; await put("ex", doc); ccYm = ym; plDraft = null; drawCC(); drawPayroll();
+        }, after: () => toast(`Đã cập nhật ${changes.length} ô chấm công từ file Excel`)};
+        open("actBg");
+      } catch(e){ toast("Không đọc được file Excel"); } };
     $("#ccXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX;
       const head = ["STT", "Họ và tên", ...Array.from({length: n}, (_, i) => String(i + 1)), "Ngày công", "Tổng giờ làm", "Nghỉ có lương (L,P,R)", "Nghỉ không lương"];
       const rows = emps.map((e, i) => { const s = ccSummary(ccYm, e.id); return [i + 1, e.name, ...Array.from({length: n}, (_, d) => CC_SHOW[ccCode(ccYm, e.id, d + 1).c] || ""), s.work, hDec(s.mins), s.leave, s.unpaid]; });
