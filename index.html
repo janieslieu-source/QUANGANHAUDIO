@@ -353,8 +353,15 @@
         </div>
       </form>
 
+      <div class="panel wlook" id="wlBh"></div>
       <div class="panel"><h3>⏳ Đang xử lý</h3><div class="list" id="trackList"></div></div>
       <div class="panel"><div class="row"><h3>✅ Đã trả khách</h3></div><div class="list" id="doneList"></div></div>
+      <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành từ file Excel</h3>
+        <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
+        <div class="btns" style="margin-top:0"><label class="btn pri" for="riFile" style="text-align:center">📥 Chọn file Excel để nhập</label></div>
+        <input type="file" id="riFile" accept=".xlsx,.xls,.csv" style="display:none">
+        <div class="sub" id="riProg" style="margin-top:6px"></div>
+        <div id="riList" class="list" style="margin-top:10px"></div></div>
     </section>
 
     <!-- ===== GIÁM ĐỐC ===== -->
@@ -376,6 +383,14 @@
         <div id="gwBody"></div>
         <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
+      <div class="panel" id="bkBox"><h3>💾 Sao lưu & khôi phục dữ liệu</h3>
+        <div class="sub" id="bkLast" style="margin-bottom:8px"></div>
+        <div class="sub" style="margin-bottom:8px">Tải về <b>1 file</b> chứa toàn bộ dữ liệu (sổ bảo hành, phiếu BH/SC, đơn bán, tồn kho, sản phẩm, lịch sử nhập xuất, chi phí). Nên sao lưu <b>mỗi tuần</b> và cất lên Google Drive / USB.</div>
+        <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin:0 0 8px"><input type="checkbox" id="bkPh" style="width:auto;margin:0"> Kèm ảnh (seri, hóa đơn) – file sẽ lớn hơn</label>
+        <div class="btns" style="margin-top:0"><button class="btn pri" id="bkGo" type="button">💾 Sao lưu toàn bộ dữ liệu</button></div>
+        <div class="btns"><label class="btn" for="bkFile" style="text-align:center">♻️ Khôi phục từ bản sao lưu</label></div>
+        <input type="file" id="bkFile" accept=".json,application/json" style="display:none">
+        <div class="sub" id="bkProg" style="margin-top:6px"></div></div>
       <div id="gdStats"></div>
     </section>
 
@@ -521,6 +536,7 @@
 
     <!-- ===== KỸ THUẬT ===== -->
     <section id="v-kt" class="hide">
+      <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
     </section>
@@ -654,7 +670,7 @@
   try { const r = sessionStorage.getItem("bh_role"); if (ROLES[r]) role = r; } catch(e){}
   // phiên nhạy cảm (Giám đốc, Kế toán): mở lại app phải nhập lại mật mã
   try { const last = Number(localStorage.getItem("bh_act") || 0); if ((boss || role === "ac") && Date.now() - last > 10 * 60000) { role = null; boss = false; sessionStorage.removeItem("bh_role"); sessionStorage.removeItem("bh_boss"); } } catch(e){}
-  let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], expenses = [], colEx = null, mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
+  let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], expenses = [], colEx = null, regImp = [], colRi = null, mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
   let prevOStage = null;
   let prevStage = null;        // Map id -> stage, để phát hiện chuyển giai đoạn
   let gdMonth = null;   // tháng đang xem ở báo cáo (YYYY-MM)
@@ -679,9 +695,12 @@
   function toast(m){ const t = $("#toast"); t.textContent = m; t.style.display = "block"; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = "none", 2400); }
 
   function addMonths(d, n){ const x = new Date(d), day = x.getDate(); x.setMonth(x.getMonth() + n); if (x.getDate() < day) x.setDate(0); return x; }
-  function expiry(purchaseDate, months){ return addMonths(new Date(purchaseDate + "T00:00:00"), Number(months||12)); }
+  // months: 0 = không bảo hành (trước đây 0 bị hiểu nhầm thành 12 tháng); chỉ khi không có số mới mặc định 12
+  function expiry(purchaseDate, months){ const n = (months === undefined || months === null || months === "") ? 12 : Number(months) || 0; return addMonths(new Date(purchaseDate + "T00:00:00"), n); }
   function remain(purchaseDate, months){
     const exp = expiry(purchaseDate, months), now = today();
+    if (Number(months) >= 1200) return {ok: true, exp, days: 99999, text: "Bảo hành vĩnh viễn"};
+    if (Number(months) === 0 && months !== "" && months != null) return {ok: false, exp, text: "Không có bảo hành"};
     const diff = Math.round((exp - now) / 86400000);
     if (diff < 0) return {ok:false, exp, text:`Đã hết hạn ${-diff} ngày`};
     let m = (exp.getFullYear()-now.getFullYear())*12 + exp.getMonth()-now.getMonth();
@@ -866,22 +885,24 @@
     try { moves = JSON.parse(localStorage.getItem("baohanh_mv") || "[]"); } catch(e){ moves = []; }
     try { photosLocal = JSON.parse(localStorage.getItem("baohanh_ph") || "[]"); } catch(e){ photosLocal = []; }
     try { expenses = JSON.parse(localStorage.getItem("baohanh_ex") || "[]"); } catch(e){ expenses = []; }
+    try { regImp = JSON.parse(localStorage.getItem("baohanh_ri") || "[]"); } catch(e){ regImp = []; }
   }
   function saveLocal(){
     try { localStorage.setItem("baohanh_v1", JSON.stringify(reg)); localStorage.setItem("baohanh_tk", JSON.stringify(tickets)); localStorage.setItem("baohanh_od", JSON.stringify(orders)); localStorage.setItem("baohanh_st", JSON.stringify(stock)); localStorage.setItem("baohanh_pr", JSON.stringify(products)); localStorage.setItem("baohanh_mv", JSON.stringify(moves)); } catch(e){}
     try { localStorage.setItem("baohanh_ph", JSON.stringify(photosLocal)); } catch(e){}
     try { localStorage.setItem("baohanh_ex", JSON.stringify(expenses)); } catch(e){}
+    try { localStorage.setItem("baohanh_ri", JSON.stringify(regImp)); } catch(e){}
   }
   function dbErr(e){
     toast(e && e.code === "quota_exceeded" ? "Bộ nhớ đã đầy, hãy xóa bớt dữ liệu cũ."
         : e && e.code === "invalid_argument" ? "Tài khoản của bạn chỉ có quyền xem." : "Lưu thất bại, thử lại sau.");
   }
-  const colOf = k => ({tk: colTk, od: colOd, st: colSt, pr: colPr, mv: colMv, ph: colPh, ex: colEx})[k] || colReg;
-  const arrOf = k => ({tk: tickets, od: orders, st: stock, pr: products, mv: moves, ph: photosLocal, ex: expenses})[k] || reg;
+  const colOf = k => ({tk: colTk, od: colOd, st: colSt, pr: colPr, mv: colMv, ph: colPh, ex: colEx, ri: colRi})[k] || colReg;
+  const arrOf = k => ({tk: tickets, od: orders, st: stock, pr: products, mv: moves, ph: photosLocal, ex: expenses, ri: regImp})[k] || reg;
   // xóa 1 bản ghi (dùng cho chi phí nhập nhầm)
   async function delDoc(kind, id){
     if (mode === "cloud") { try { await colOf(kind).doc(id).delete(); } catch(e){ dbErr(e); throw e; } }
-    else { const arr = arrOf(kind), i = arr.findIndex(x => x.id === id); if (i >= 0) arr.splice(i, 1); saveLocal(); renderAll(); }
+    else { const arr = arrOf(kind), i = arr.findIndex(x => x.id === id); if (i >= 0) arr.splice(i, 1); saveLocal(); if (kind === "ri") rebuildRi(); renderAll(); }
   }
   // ghi nhiều bản ghi một lúc (nhập file tồn kho): 8 lệnh song song, báo tiến độ
   let bulk = 0, pendingSnap = {};   // đang ghi hàng loạt: tạm dừng vẽ lại + gom dữ liệu máy chủ gửi về
@@ -936,7 +957,7 @@
   const setSync = (on, txt) => { $("#dot").classList.toggle("on", on); $("#syncTxt").textContent = txt; };
 
   async function initDb(){
-    loadLocal(); onTickets(tickets.slice()); onOrders(orders.slice()); setSync(false, "Lưu trên máy");
+    loadLocal(); rebuildRi(); onTickets(tickets.slice()); onOrders(orders.slice()); setSync(false, "Lưu trên máy");
     let db = null;
     if (window.claude && window.claude.use) { try { db = await window.claude.use("db"); } catch(e){} }
     // Firebase chỉ dùng khi chạy ngoài Claude (VD: GitHub Pages)
@@ -955,6 +976,8 @@
     }, () => {});
     colReg.onSnapshot(s => { mode = "cloud"; reg = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
     colEx.onSnapshot(s => { mode = "cloud"; expenses = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
+    colRi = db.collection("regimport");
+    colRi.onSnapshot(s => { mode = "cloud"; regImp = s.docs.map(d => Object.assign({id:d.id}, d.data())); rebuildRi(); renderAll(); }, () => {});
     colTk.onSnapshot(s => {
       if (!s.metadata.fromCache) clearTimeout(timer);
       if (!gotTk) { prevStage = null; gotTk = true; }   // lần đầu: không bắn thông báo cũ
@@ -964,7 +987,10 @@
     }, () => { clearTimeout(timer); setSync(false, "Mất kết nối"); });
   }
 
-  function findReg(sn){ const k = keySN(sn); return k ? reg.find(r => keySN(r.serial) === k) : null; }
+  // sổ bảo hành: bản ghi của app trước, sau đó dữ liệu nhập từ file thống kê
+  function findReg(sn){ const k0 = keySN(sn); if (!k0) return null;
+    const one = k => reg.find(r => keySN(r.serial) === k) || riIdx.get(k) || null;
+    return one(k0) || (/^\d{5}$/.test(k0) ? one("525" + k0) : null); }   // gõ 5 số cuối (23622) cũng tìm ra 52523622
   function push(t, stage, note, extra){
     const c = JSON.parse(JSON.stringify(t));
     Object.assign(c, extra || {});
@@ -1201,7 +1227,7 @@
     const sn = F.serial.value.trim(), r = findReg(sn);
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
-    $("#foundBox").innerHTML = r ? `<div class="found">✔ Seri đã có trong hệ thống: ${esc(r.product)} – ${esc(r.customer)}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
+    $("#foundBox").innerHTML = r ? `<div class="found">${r.fromFile ? "📄 Có trong sổ bảo hành (file thống kê)" : "✔ Seri đã có trong hệ thống"}: ${esc(r.product)} – ${esc(r.customer)}${r.fromFile ? `${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.fileNote ? " · " + esc(r.fileNote) : ""}${r.purchaseDate ? "" : " · <b>file không ghi ngày</b>"}${r.fileHist ? `<br><span style="font-size:12px">Lịch sử: ${esc(r.fileHist)}</span>` : ""}<br>` : ""}${r.purchaseDate ? `, bảo hành tính từ ${fmt(r.purchaseDate)} (${r.months} tháng)` : ""}${r.replacedFrom ? `<br>🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}` : ""}</div>${r.replacedBy ? `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI MỚI sang SN <b>${esc(r.replacedBy)}</b> – hãy dùng seri mới.</div>` : ""}` : "";
     const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
     $("#foundBox").innerHTML += own.length ? `<div class="found">🔄 Máy này đã đổi cho chính khách ${esc(own[0].customer)} ngày ${fmt(own[0].date)} (SN ${esc(own[0].oldSn)} → ${esc(own[0].newSn)})</div>` : "";
     $("#foundBox").innerHTML += hitBox(exHitsFor(sn, F.customer.value), "Vẫn lưu được – phiếu sẽ chuyển <b>Kho duyệt</b> trước khi xử lý.");
@@ -1279,7 +1305,7 @@
     if (r && r.purchaseDate) { pd = r.purchaseDate; mo = r.months; }
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
-    const regRec = Object.assign({}, r || {id: uid(), createdAt: new Date().toISOString()}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
+    const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
     const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
@@ -1329,7 +1355,53 @@
     else { toast("Đã chuyển Kho"); goTo("wh", `Hàng bảo hành mới: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`); }
   };
 
+  /* ================= TRA CỨU BẢO HÀNH THEO SERI (tính theo ngày bán) ================= */
+  // tình trạng bảo hành của 1 seri: từ sổ bảo hành (app + file thống kê)
+  function wStatus(sn){
+    const r = findReg(sn); if (!r) return {r: null};
+    if (!r.purchaseDate) return {r, noDate: true};
+    const w = remain(r.purchaseDate, r.months);
+    return {r, w, exp: w.exp, days: Math.round((w.exp - today()) / 86400000)};
+  }
+  // dòng ngắn gọn hiện trên phiếu (Kỹ thuật)
+  function wBadge(sn){
+    const S = wStatus(sn);
+    if (!S.r) return `<div class="sub" style="margin-top:4px;color:var(--muted)">🔍 Seri không có trong sổ bảo hành</div>`;
+    if (S.noDate) return `<div class="sub" style="margin-top:4px;color:var(--warn)">🔍 Có trong sổ nhưng không ghi ngày bán</div>`;
+    const m = Number(S.r.months);
+    return S.w.ok ? `<div class="sub" style="margin-top:4px;color:var(--ok)"><b>🛡️ Còn bảo hành${m >= 1200 ? " vĩnh viễn" : ` ${S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m < 1200 ? ` · hết hạn ${fmt(iso(S.exp))}` : ""}</div>`
+      : `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⛔ ${m === 0 ? "Không có bảo hành" : `Hết bảo hành ${-S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m ? ` · BH ${m} tháng, hết hạn ${fmt(iso(S.exp))}` : ""}</div>`;
+  }
+  function wResultHtml(sn){
+    sn = String(sn || "").trim(); if (!sn) return "";
+    const S = wStatus(sn), hist = tickets.filter(t => keySN(t.serial) === keySN(sn) || keySN(t.exchange?.newSerial) === keySN(sn)).sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    let h = "";
+    if (!S.r) h = `<div class="wbox b-bad"><b>❓ KHÔNG TÌM THẤY</b>Seri ${esc(sn)} chưa có trong sổ bảo hành (app hoặc file thống kê).</div>`;
+    else {
+      const r = S.r, m = Number(r.months);
+      h = S.noDate ? `<div class="wbox b-warn"><b>⚠️ CHƯA RÕ NGÀY BÁN</b>Sổ không ghi ngày bán – hỏi khách hóa đơn / ngày mua.</div>`
+        : S.w.ok ? `<div class="wbox b-ok"><b>🛡️ CÒN BẢO HÀNH</b>${m >= 1200 ? "Bảo hành vĩnh viễn" : `Còn <b style="display:inline;font-size:20px">${S.days}</b> ngày (${esc(S.w.text)}) · hết hạn ${fmt(iso(S.exp))}`}</div>`
+        : `<div class="wbox b-bad"><b>⛔ ${m === 0 ? "KHÔNG CÓ BẢO HÀNH" : "HẾT HẠN BẢO HÀNH"}</b>${m === 0 ? "Sản phẩm bán không kèm bảo hành" : `Đã hết hạn ${-S.days} ngày · hết hạn ${fmt(iso(S.exp))}`}</div>`;
+      h += `<dl class="kv" style="margin-top:10px"><dt>Sản phẩm</dt><dd><b>${esc(r.product || "")}</b></dd><dt>Khách mua</dt><dd>${esc(r.customer || "")}${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.phone ? " · " + esc(r.phone) : ""}</dd>
+        <dt>Ngày bán</dt><dd><b>${r.purchaseDate ? fmt(r.purchaseDate) : "—"}</b></dd><dt>Thời hạn BH</dt><dd>${m >= 1200 ? "Vĩnh viễn" : m + " tháng"}</dd>
+        ${r.fileNote ? `<dt>Ghi chú</dt><dd>${esc(r.fileNote)}</dd>` : ""}${r.orderCode ? `<dt>Đơn bán</dt><dd>${esc(r.orderCode)}</dd>` : ""}<dt>Nguồn</dt><dd>${r.fromFile ? "📄 File " + esc(r.fromFile) : "Phần mềm"}</dd>
+        ${r.fileHist ? `<dt>Lịch sử file</dt><dd style="font-size:13px">${esc(r.fileHist)}</dd>` : ""}</dl>`;
+      if (r.replacedBy) h += `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI sang SN <b>${esc(r.replacedBy)}</b> – máy cũ đã thu hồi.</div>`;
+      if (r.replacedFrom) h += `<div class="found">🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}</div>`;
+    }
+    if (hist.length) h += `<h4 style="margin:10px 0 4px;font-size:14px">Các lần bảo hành / sửa chữa (${hist.length})</h4>` + hist.slice(0, 8).map(t => `<div class="sub">• ${fmt(t.createdAt)} · ${esc(TYPE[t.type])} · ${esc(t.issue || "")} · <b>${esc(STAGES[t.stage]?.label || "")}</b> · ${esc(t.code)}</div>`).join("");
+    return h;
+  }
+  function drawWLookup(host){
+    if (!host || host._built) return; host._built = true;
+    host.innerHTML = `<h3>🔍 Tra cứu bảo hành</h3><div class="sub" style="margin-bottom:6px">Gõ số seri → còn / hết bảo hành, còn bao nhiêu ngày (tính theo <b>ngày bán</b>).</div>
+      <input class="wlq" type="search" inputmode="text" placeholder="Nhập số seri máy khách mang tới" autocomplete="off"><div class="wlr" style="margin-top:8px"></div>`;
+    const q = host.querySelector(".wlq"), r = host.querySelector(".wlr");
+    q.addEventListener("input", () => { const v = q.value.trim(); r.innerHTML = v.length >= 4 ? wResultHtml(v) : ""; });
+  }
+
   function renderBH(){
+    drawWLookup($("#wlBh")); drawRiBatches();
     refreshRecv();
     const trk = tickets.filter(t => !CLOSED.includes(t.stage)).sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#trackList").innerHTML = trk.length ? trk.map(t => tkCard(t)).join("") : `<div class="empty">Không có hàng đang xử lý.</div>`;
@@ -1457,8 +1529,214 @@
     $("#gdLkList").innerHTML = L.map(t => tkCard(t)).join("");
     bindCards($("#gdLkList"));
   }
+  /* ================= NHẬP SỔ BẢO HÀNH TỪ FILE EXCEL (thống kê seri bán hàng) =================
+     Lưu gọn thành gói (~800 seri / gói) ở bảng "regimport" để mỗi lần mở app chỉ đọc vài chục gói, không phải hàng nghìn bản ghi. */
+  const RI_CHUNK = 800;
+  const SALE_RE = /^(xuat (ban|khuyen mai|kem|tang|doi)|doi bu)/;
+  // ngày trong Excel: số ngày (Excel serial) / chuỗi dd/mm/yyyy [giờ] -> YYYY-MM-DD
+  function xlDate(v){
+    if (v == null || v === "") return "";
+    if (typeof v === "number" && v > 1) { const p = window.XLSX.SSF.parse_date_code(v); return p && p.y > 1900 ? `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}` : ""; }
+    const m = String(v).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if (m) { const y = m[3].length === 2 ? "20" + m[3] : m[3]; return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; }
+    const m2 = String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? `${m2[1]}-${m2[2]}-${m2[3]}` : "";
+  }
+  function riParse(rows, opt){
+    // tìm dòng tiêu đề có cột SERI
+    let hi = rows.findIndex(r => r.some(c => /^seri$|^so seri$|^serial$/.test(norm(String(c)).trim())));
+    if (hi < 0) throw new Error("Không thấy cột SERI trong file");
+    const H = rows[hi].map(c => norm(String(c)).replace(/\s+/g, " ").trim()), col = (...ks) => H.findIndex(h => ks.some(k => h === k || h.startsWith(k)));
+    const C = {date: col("ngay"), code: col("ma kh"), cus: col("ten kh", "khach hang", "ten khach"), model: col("model"), note: col("dien giai"), prod: col("ten mat hang", "san pham", "ten sp"),
+      sn: col("seri", "so seri", "serial"), bh: col("bao hanh", "thoi han"), time: col("thoi gian"), ns1: col("seri doi lan 1"), nd1: col("ngay doi lan 1"), ns2: col("seri doi lan 2"), nd2: col("ngay doi lan 2")};
+    // ô bảo hành trống: "auto" = theo loại sản phẩm (loa 6 tháng, còn lại 12 tháng)
+    const autoMonths = p => /^loa|loa karaoke|loa keo|loa xach|loa mini|loa di dong/.test(norm(p)) ? 6 : 12;
+    const months = (v, p) => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths === "auto" ? autoMonths(p) : Number(opt.emptyMonths); if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? (opt.emptyMonths === "auto" ? autoMonths(p) : Number(opt.emptyMonths)) : n; };
+    // đầu / máy karaoke các loại: luôn bảo hành 12 tháng kể từ ngày mua (VV ở cột THỜI GIAN = mã kích hoạt vĩnh viễn)
+    const isKara = p => /dau karaoke|may karaoke/.test(norm(p));
+    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, text: 0, split: 0, multi: 0, multiSn: 0, fixed: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
+    // ô SERI có thể ghi chú ("Không chụp", "Anh Hậu giao thẳng", "52525843 - BH 6 tháng"…):
+    // có chữ tiếng Việt / ít hơn 3 chữ số -> chỉ lấy các seri chuẩn 525xxxxx tìm thấy, không có thì bỏ qua
+    const VN = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+    // 1 ô có thể nhiều seri: "23622,23412,23487" = 3 sản phẩm → 52523622, 52523412, 52523487 (5 số → thêm 525 ở đầu)
+    // số 6 chữ số trong ngoặc / sau dấu "/" (VD 21603(223576)) là mã, không phải seri → ghi chú
+    const snOfCell = v => { const raw = String(v ?? "").trim(); if (!raw) return [];
+      const multi = /[,;\/()\n]/.test(raw) || /\d\s+\d{5}/.test(raw) || VN.test(raw) || (/\d+\D+\d+/.test(raw.replace(/\s+/g, "")) && /^\d[\d\s,;\/()\-]*$/.test(raw));
+      if (!multi) { const one = raw.replace(/\s+/g, "").toUpperCase(); return [{s: /^\d{5}$/.test(one) ? "525" + one : one, fixed: /^\d{5}$/.test(one)}]; }
+      const nums = (raw.match(/\d[\d ]*\d|\d/g) || []).map(x => x.replace(/\s+/g, "")), out = [], codes = [];
+      nums.forEach(n => { if (n.length === 5) out.push({s: "525" + n, fixed: true}); else if (n.length === 8 && n.startsWith("525")) out.push({s: n}); else if (n.length === 6) codes.push(n);
+        else if (n.length >= 7 && !VN.test(raw)) out.push({s: n}); else if (/525\d{5}/.test(n)) out.push({s: n.match(/525\d{5}/)[0]}); });
+      if (!out.length && !VN.test(raw) && !/[,;()\n]/.test(raw)) return [{s: raw.replace(/\s+/g, "").toUpperCase()}];
+      if (!out.length) return [{s: "", text: true}];
+      const seen = new Set(), L = out.filter(x => !seen.has(x.s) && seen.add(x.s));
+      return L.map(x => Object.assign(x, {split: true, many: L.length, codes})); };
+    rows.slice(hi + 1).forEach(r => {
+      if (!r.some(c => String(c).trim())) return; stat.rows++;
+      const cells = snOfCell(r[C.sn]); if (!cells.length) { stat.empty++; return; }
+      if (cells[0].text) { stat.text++; return; }
+      if (cells[0].split) stat.split++;
+      if (cells.length > 1) { stat.multi++; stat.multiSn += cells.length; }
+      stat.fixed += cells.filter(x => x.fixed).length;
+      cells.forEach(({s, codes}) => {
+      if (opt.skipShort && s.length < 5) { stat.short++; return; }
+      stat.withSn++;
+      const d = xlDate(r[C.date]), type = String(r[C.note] ?? "").trim(), bh = String(r[C.bh] ?? "").trim();
+      if (d) { if (!stat.minD || d < stat.minD) stat.minD = d; if (d > stat.maxD) stat.maxD = d; }
+      const row = {d, type, c: String(r[C.cus] ?? "").replace(/\s+/g, " ").trim(), k: String(r[C.code] ?? "").trim(), p: String(r[C.prod] ?? "").replace(/\s+/g, " ").trim(), md: String(r[C.model] ?? "").trim(),
+        m: months(r[C.bh], r[C.prod]), bh, codes: (codes || []).join(", "), act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
+        nd: xlDate((C.nd2 >= 0 && r[C.nd2] && r[C.ns2] ? r[C.nd2] : "") || (C.nd1 >= 0 && r[C.nd1]) || (C.nd2 >= 0 && r[C.nd2]) || "")};
+      if (!g.has(s)) g.set(s, []); g.get(s).push(row);
+      });
+    });
+    const recs = [];
+    g.forEach((L, s) => {
+      if (L.length > 1) stat.dupSn++;
+      L.sort((a,b) => (a.d || "").localeCompare(b.d || ""));
+      const sale = L.filter(x => SALE_RE.test(norm(x.type))), main = (sale.length ? sale : L).at(-1), ex = L.filter(x => x.ns).at(-1);
+      if (/^525\d{5}$/.test(s)) stat.std++; else stat.other++;
+      let m = main.m, n = main.type.replace(/\s+/g, " ").trim() + (main.codes ? ` · mã ${main.codes}` : "");
+      if (parseInt(main.bh) === 1) { m = 1; n += " · Hàng đổi bảo hành (1 tháng)"; stat.doi1++; if (isKara(main.p) && L.some(x => x.act)) n += " · Mã kích hoạt: vĩnh viễn"; }   // ghi 1 tháng = hàng đổi bảo hành → giữ nguyên
+      else if (opt.kara12 && isKara(main.p)) { m = 12; stat.kara++; if (L.some(x => x.act)) { n += " · Mã kích hoạt: vĩnh viễn"; stat.act++; } }
+      else if (main.bh && isNaN(parseInt(main.bh))) n += ` (BH: ${main.bh})`;
+      const rec = {s, p: main.p, c: main.c, k: main.k, d: main.d, m, md: main.md, n};
+      if (L.length > 1) rec.h = L.slice(-6).map(x => `${x.d ? fmt(x.d) : "?"} · ${x.type || "?"} · ${x.c}${x.bh ? " · BH " + x.bh : ""}`).join(" | ");
+      if (ex) { stat.ex++; rec.ns = ex.ns; rec.nd = ex.nd || ""; }
+      recs.push(rec);
+    });
+    // seri mới đổi cho khách: ghi nhận máy mới (nếu chưa có dòng riêng)
+    recs.filter(r => r.ns).forEach(r => { if (!g.has(r.ns)) recs.push({s: r.ns, p: r.p, c: r.c, k: r.k, d: r.nd || r.d, m: r.m, md: r.md, n: `Máy đổi cho khách (từ SN ${r.s})`, rf: r.s}); });
+    return {recs, stat, cols: C};
+  }
+  // chỉ mục tra cứu: seri -> bản ghi (dạng giống sổ bảo hành của app)
+  let riIdx = new Map(), riEx = [];
+  function rebuildRi(){
+    riIdx = new Map(); riEx = [];
+    regImp.slice().sort((a,b) => (a.at || "").localeCompare(b.at || "")).forEach(doc => (doc.rows || []).forEach(x => {
+      const r = {id: "ri_" + x.s, serial: x.s, product: x.p, customer: x.c, custCode: x.k, purchaseDate: x.d, months: x.d ? Number(x.m) || 0 : undefined, model: x.md, fileNote: x.n, fileHist: x.h, fromFile: doc.file, replacedBy: x.ns || undefined, replacedFrom: x.rf || undefined};
+      riIdx.set(keySN(x.s), r);
+      if (x.ns) riEx.push({id: "fx_" + x.s, code: "File " + (doc.file || ""), customer: x.c, phone: "", product: x.p, serial: x.s, stage: "da_tra", createdAt: x.nd || x.d, fromFile: true,
+        exchange: {oldSerial: x.s, newSerial: x.ns, newProduct: x.p, until: x.d && x.m ? iso(addMonths(new Date(x.d + "T00:00:00"), Number(x.m))) : "", at: x.nd || x.d}});
+    }));
+  }
+  function drawRiBatches(){
+    const b = new Map(); regImp.forEach(d => { const k = d.batch || d.id; if (!b.has(k)) b.set(k, {file: d.file, at: d.at, by: d.by, n: 0, docs: []}); const x = b.get(k); x.n += (d.rows || []).length; x.docs.push(d.id); });
+    const L = [...b.entries()].sort((a,b) => (b[1].at || "").localeCompare(a[1].at || ""));
+    $("#riList").innerHTML = L.length ? L.map(([k, x]) => `<div class="item" style="cursor:default"><div class="row"><div><div class="pname">📄 ${esc(x.file || "File")}</div><div class="sub">${x.n.toLocaleString("vi-VN")} seri · nhập ${fmtTime(x.at)}${x.by ? " · " + esc(x.by) : ""}</div></div>
+      <button type="button" class="btn sm danger" data-ridel="${esc(k)}">🗑 Xóa</button></div></div>`).join("") + `<div class="sub">Tổng đang tra cứu từ file: <b>${riIdx.size.toLocaleString("vi-VN")}</b> seri</div>` : `<div class="sub">Chưa nhập file nào.</div>`;
+    $("#riList").querySelectorAll("[data-ridel]").forEach(bt => bt.onclick = async () => { const x = b.get(bt.dataset.ridel); if (!x || !confirm(`Xóa dữ liệu tra cứu từ file “${x.file}” (${x.n} seri)?`)) return;
+      bt.disabled = true; try { for (const id of x.docs) await delDoc("ri", id); toast("Đã xóa dữ liệu file"); } catch(e){ bt.disabled = false; } });
+  }
+  $("#riFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    $("#riProg").textContent = "Đang đọc file…";
+    let rows;
+    try { await loadScript(XLSX_URL); const wb = window.XLSX.read(await f.arrayBuffer(), {type: "array"}); rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true, defval: ""}); }
+    catch(err){ $("#riProg").textContent = ""; toast("Không đọc được file Excel (cần mạng để tải bộ đọc)"); return; }
+    $("#riProg").textContent = "";
+    const F = $("#actForm");
+    const draw = () => {
+      const opt = {emptyMonths: F.em.value === "auto" ? "auto" : Number(F.em.value), vvMonths: Number(F.vv.value), skipShort: F.ss.checked, kara12: F.k12.checked};
+      let res; try { res = riParse(rows, opt); } catch(err){ $("#riPrev").innerHTML = `<div class="reason">${esc(err.message)}</div>`; F._res = null; return; }
+      const S = res.stat, inApp = res.recs.filter(r => reg.some(x => keySN(x.serial) === keySN(r.s))).length;
+      F._res = res;
+      $("#riPrev").innerHTML = `<table class="ptable"><tr><th style="text-align:left;width:auto">Nội dung</th><th style="width:90px">Số lượng</th></tr>
+        <tr><td>Dòng dữ liệu</td><td>${S.rows.toLocaleString("vi-VN")}</td></tr><tr><td>Dòng có seri</td><td>${S.withSn.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>Dòng không có seri (bỏ qua)</td><td>${S.empty.toLocaleString("vi-VN")}</td></tr>
+        ${S.text ? `<tr><td>Ô SERI ghi chú, không phải seri (bỏ qua – VD “Không chụp”)</td><td>${S.text}</td></tr>` : ""}${S.multi ? `<tr><td>Ô ghi nhiều seri (VD “23622,23412,…”) → tách từng sản phẩm</td><td>${S.multi} ô → ${S.multiSn.toLocaleString("vi-VN")} seri</td></tr>` : ""}${S.fixed ? `<tr><td>Seri 5 số → thêm 525 ở đầu (VD 23622 → 52523622)</td><td>${S.fixed.toLocaleString("vi-VN")}</td></tr>` : ""}${S.short ? `<tr><td>Seri quá ngắn (bỏ qua)</td><td>${S.short}</td></tr>` : ""}
+        <tr><td><b>Seri khác nhau sẽ nhập</b></td><td><b>${res.recs.length.toLocaleString("vi-VN")}</b></td></tr>
+        <tr><td>· đúng chuẩn công ty (525 + 5 số)</td><td>${S.std.toLocaleString("vi-VN")}</td></tr><tr><td>· seri hãng khác / dạng khác</td><td>${S.other.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>· seri có nhiều dòng (lấy lần bán gần nhất)</td><td>${S.dupSn.toLocaleString("vi-VN")}</td></tr><tr><td>· có đổi hàng</td><td>${S.ex}</td></tr>
+        <tr><td>· ghi 1 tháng = hàng đổi bảo hành (giữ nguyên 1 tháng)</td><td>${S.doi1.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>· đầu / máy karaoke → 12 tháng${S.act ? ` (${S.act} có mã kích hoạt vĩnh viễn)` : ""}</td><td>${S.kara.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>· đã có trong sổ của app (giữ bản của app)</td><td>${inApp}</td></tr>
+        <tr><td>Khoảng ngày</td><td style="white-space:nowrap">${S.minD ? fmt(S.minD) : "?"} – ${S.maxD ? fmt(S.maxD) : "?"}</td></tr></table>
+        <div class="sub" style="margin-top:6px">Ví dụ: ${res.recs.slice(0, 3).map(r => `SN ${esc(r.s)} · ${esc(r.p)} · ${esc(r.c)} · ${r.d ? fmt(r.d) : "?"} · ${r.m} tháng`).join("<br>")}</div>`;
+    };
+    F.innerHTML = `<div class="grab"></div><h2>📥 Nhập sổ bảo hành từ file</h2><div class="sub">File: <b>${esc(f.name)}</b></div>
+      <div class="two"><div><label>Cột bảo hành để trống</label><select name="em"><option value="auto" selected>Theo loại SP (loa 6 th, còn lại 12 th)</option><option value="12">12 tháng</option><option value="6">6 tháng</option><option value="0">Không bảo hành</option></select></div>
+        <div><label>Bảo hành ghi "VV" (mã kích hoạt)</label><select name="vv"><option value="1200">Vĩnh viễn</option><option value="0">Không bảo hành</option><option value="12">12 tháng</option></select></div></div>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" name="k12" checked style="width:auto;margin:0"> Đầu / máy karaoke các loại: bảo hành <b>&nbsp;12 tháng&nbsp;</b> kể từ ngày mua (trừ hàng ghi 1 tháng = hàng đổi bảo hành)</label>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:4px"><input type="checkbox" name="ss" checked style="width:auto;margin:0"> Bỏ qua seri quá ngắn (dưới 5 ký tự)</label>
+      <div class="sub">"VV" ở cột THỜI GIAN của đầu karaoke = mã kích hoạt vĩnh viễn (ghi chú kèm). "Bao test" tính là không bảo hành. Một seri có nhiều dòng → lấy <b>lần xuất bán gần nhất</b> làm ngày mua.</div>
+      <div id="riPrev" style="margin-top:10px"></div><div class="sub" id="riRun" style="margin-top:6px"></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">📥 Nhập vào sổ bảo hành</button></div>`;
+    ["em", "vv", "ss", "k12"].forEach(n => F[n].addEventListener("change", draw)); draw();
+    actCtx = {run: async () => {
+      const res = F._res; if (!res || !res.recs.length) { toast("Không có seri để nhập"); throw new Error("x"); }
+      const now = new Date().toISOString(), batch = "b" + Date.now().toString(36), L = res.recs.filter(r => !reg.some(x => keySN(x.serial) === keySN(r.s)));
+      const docs = []; for (let i = 0; i < L.length; i += RI_CHUNK) docs.push({id: `${batch}_${String(i / RI_CHUNK).padStart(3, "0")}`, batch, file: f.name, at: now, by: actor(), rows: L.slice(i, i + RI_CHUNK).map(r => JSON.parse(JSON.stringify(r)))});
+      await putMany("ri", docs, n => { $("#riRun").textContent = `Đang lưu… ${Math.min(n * RI_CHUNK, L.length).toLocaleString("vi-VN")}/${L.length.toLocaleString("vi-VN")} seri`; });
+      if (mode !== "cloud") { rebuildRi(); renderAll(); }
+      toast(`Đã nhập ${L.length.toLocaleString("vi-VN")} seri vào sổ bảo hành – tab Bảo hành gõ seri là tra được`);
+    }};
+    open("actBg");
+  });
+
+  /* ================= SAO LƯU & KHÔI PHỤC DỮ LIỆU (Giám đốc) ================= */
+  const BK = [["reg", "warranties", "Sổ bảo hành (seri)"], ["tk", "tickets", "Phiếu bảo hành / sửa chữa"], ["od", "orders", "Đơn bán"], ["st", "stock", "Tồn kho theo seri"],
+    ["pr", "products", "Danh mục sản phẩm"], ["mv", "moves", "Lịch sử nhập / xuất"], ["ex", "expenses", "Chi phí công ty"], ["ri", "regimport", "Sổ bảo hành nhập từ file (gói)"], ["ph", "photos", "Ảnh"]];
+  const bkLastAt = () => { try { return localStorage.getItem("bh_backup_at") || ""; } catch(e){ return ""; } };
+  function drawBackup(){
+    const last = bkLastAt(), days = last ? daysSince(last) : null;
+    $("#bkLast").innerHTML = last ? `Lần sao lưu gần nhất trên máy này: <b>${fmtTime(last)}</b> (${days} ngày trước)${days > 7 ? ` <b style="color:var(--bad)">– đã quá 7 ngày, nên sao lưu ngay</b>` : ""}` : `<b style="color:var(--bad)">Máy này chưa sao lưu lần nào – nên sao lưu ngay.</b>`;
+    $("#bkBox").classList.toggle("latebox", !last || days > 7);
+  }
+  async function allPhotos(){
+    if (mode === "cloud" && colPh) { const snap = await colPh.get(); return snap.docs.map(d => Object.assign({id: d.id}, d.data())); }
+    return photosLocal.slice();
+  }
+  $("#bkGo").onclick = async () => {
+    const b = $("#bkGo"); b.disabled = true;
+    try {
+      $("#bkProg").textContent = "Đang gom dữ liệu…";
+      const withPh = $("#bkPh").checked, data = {};
+      BK.forEach(([k, name]) => { if (k !== "ph") data[name] = arrOf(k).map(x => JSON.parse(JSON.stringify(x))); });
+      if (withPh) { $("#bkProg").textContent = "Đang tải ảnh…"; data.photos = await allPhotos(); }
+      const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length])), now = new Date().toISOString();
+      const file = {app: "QUANG ANH AUDIO – Phần mềm bảo hành", format: 1, exportedAt: now, by: actor(), withPhotos: withPh, counts, data};
+      const stamp = iso(new Date()) + "_" + new Date().toTimeString().slice(0, 5).replace(":", "h");
+      await saveBlob(`QuangAnh_SaoLuu_${stamp}.json`, new Blob([JSON.stringify(file)], {type: "application/json"}), "Đã lưu file sao lưu");
+      try { localStorage.setItem("bh_backup_at", now); } catch(e){}
+      $("#bkProg").innerHTML = `✔ Đã sao lưu: ${BK.filter(([, n]) => counts[n] != null).map(([, n, l]) => `${l} <b>${counts[n]}</b>`).join(" · ")}. Hãy cất file lên Google Drive / USB.`;
+      drawBackup();
+    } catch(e){ $("#bkProg").textContent = "Không sao lưu được: " + (e.message || e); }
+    finally { b.disabled = false; }
+  };
+  $("#bkFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    let bk;
+    try { bk = JSON.parse(await f.text()); } catch(err){ toast("File không đọc được – chọn đúng file sao lưu .json"); return; }
+    if (!bk || !bk.data || !/QUANG ANH AUDIO/.test(bk.app || "")) { toast("Đây không phải file sao lưu của phần mềm"); return; }
+    const plan = BK.filter(([, n]) => Array.isArray(bk.data[n])).map(([k, n, l]) => { const cur = new Set(arrOf(k).map(x => x.id)), L = bk.data[n].filter(x => x && x.id);
+      return {k, n, l, L, missing: L.filter(x => !cur.has(x.id)), cur: k === "ph" ? null : arrOf(k).length}; });
+    const F = $("#actForm");
+    F.innerHTML = `<div class="grab"></div><h2>♻️ Khôi phục dữ liệu</h2>
+      <div class="sub">File: <b>${esc(f.name)}</b> · sao lưu lúc <b>${fmtTime(bk.exportedAt)}</b>${bk.by ? " · " + esc(bk.by) : ""}</div>
+      <table class="ptable" style="margin-top:10px"><tr><th style="text-align:left;width:auto">Dữ liệu</th><th>Trong file</th><th>Hiện có</th><th>Bị mất</th></tr>
+        ${plan.map(r => `<tr><td>${esc(r.l)}</td><td>${r.L.length}</td><td>${r.cur ?? "—"}</td><td><b style="color:${r.missing.length ? "var(--bad)" : "var(--ok)"}">${r.missing.length}</b></td></tr>`).join("")}</table>
+      <label>Cách khôi phục</label>
+      <div class="choice" style="grid-template-columns:1fr">
+        <button type="button" class="opt sel" data-rm="missing"><span class="ic">➕</span>Chỉ thêm lại mục bị mất<br><small>(an toàn – không đụng dữ liệu đang có)</small></button>
+        <button type="button" class="opt" data-rm="all"><span class="ic">⏪</span>Thêm mục bị mất + đưa mục đã sửa về như bản sao lưu<br><small>(những thay đổi sau thời điểm sao lưu sẽ bị ghi đè)</small></button></div>
+      <label>Gõ <b>KHOI PHUC</b> để xác nhận</label><input name="cf" autocomplete="off" placeholder="KHOI PHUC">
+      <div class="sub" id="rsProg" style="margin-top:8px"></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn danger">♻️ Khôi phục</button></div>`;
+    let rm = "missing";
+    F.querySelectorAll(".opt[data-rm]").forEach(o => o.onclick = () => { rm = o.dataset.rm; F.querySelectorAll(".opt[data-rm]").forEach(x => x.classList.toggle("sel", x === o)); });
+    actCtx = {run: async () => {
+      if (norm(F.cf.value).replace(/\s+/g, " ").trim() !== "khoi phuc") { toast("Gõ đúng chữ KHOI PHUC để xác nhận"); F.cf.focus(); throw new Error("x"); }
+      let total = 0;
+      for (const r of plan) {
+        const list = rm === "all" ? r.L : r.missing; if (!list.length) continue;
+        $("#rsProg").textContent = `Đang khôi phục ${r.l}…`;
+        await putMany(r.k, list, n => { $("#rsProg").textContent = `Đang khôi phục ${r.l}: ${n}/${list.length}`; });
+        total += list.length;
+      }
+      toast(total ? `Đã khôi phục ${total} mục từ bản sao lưu` : "Không có mục nào cần khôi phục");
+    }};
+    open("actBg");
+  });
+
   function renderGD(){
-    drawGdLk(); drawGdWeek();
+    drawGdLk(); drawGdWeek(); drawBackup(); drawRiBatches();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
@@ -1675,11 +1953,12 @@
   /* ================= KỸ THUẬT ================= */
   const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
+    drawWLookup($("#wlKt"));
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
     const f = KTF.find(x => x[0] === ktFilter)[2];
     const rows = tickets.filter(f).sort((a,b) => ktFilter==="xong" ? (b.updatedAt||"").localeCompare(a.updatedAt||"") : (a.createdAt||"").localeCompare(b.createdAt||""));
-    $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t,
+    $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t, wBadge(t.serial) +
         (t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
       : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
       : t.stage==="cho_lk" ? `<div class="cardbtns"><button class="btn okb" data-lkok="${esc(t.id)}">✅ Linh kiện đã về – tiếp tục sửa</button></div>` : "")
@@ -1757,6 +2036,7 @@
       <h2><span class="tag ${t.type}">${TYPE[t.type]}</span>${esc(t.product)}</h2>
       <dl class="kv"><dt>Số seri</dt><dd>${esc(t.serial)}</dd><dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
         ${isBH ? `<dt>Bảo hành</dt><dd>${esc(t.warrantyText)}${oldExp ? ` (hết hạn ${oldExp})` : ""}</dd>` : ""}
+        <dt>Tra cứu BH</dt><dd>${wBadge(t.serial).replace('margin-top:4px;', '')}</dd>
         ${(t.history||[]).filter(h => h.note && h.by === "Giám đốc").map(h => `<dt>GĐ ghi chú</dt><dd>${esc(h.note)}</dd>`).join("")}</dl>
       <label>Phương án xử lý *</label>
       <div class="choice">
@@ -2367,7 +2647,7 @@
 
   /* ================= HÀNG ĐỔI CHO KHÁCH & CẢNH BÁO SERI TRÙNG ================= */
   const exDate = t => t.exchange?.at || t.createdAt;
-  const exchanges = () => tickets.filter(t => t.exchange && t.stage !== "huy").sort((a,b) => (exDate(b) || "").localeCompare(exDate(a) || ""));
+  const exchanges = () => tickets.filter(t => t.exchange && t.stage !== "huy").concat(riEx).sort((a,b) => (exDate(b) || "").localeCompare(exDate(a) || ""));
   // seri này từng là seri cũ (máy đã thu hồi) hoặc seri mới (máy đã giao khách) trong một lần đổi?
   function exHits(sn, skipId){
     const k = keySN(sn); if (!k) return [];
