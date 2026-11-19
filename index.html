@@ -550,6 +550,7 @@
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
         <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
+      <div class="panel hide" id="ccBox"></div>
       <div class="panel hide" id="plBox"></div>
       <div class="panel exbox" id="exAc"></div>
     </section>
@@ -557,8 +558,6 @@
     <!-- ===== CHẤM CÔNG ===== -->
     <section id="v-cc" class="hide">
       <form class="panel" id="ccSelf" autocomplete="off" onsubmit="return false"></form>
-      <div class="panel hide" id="ccBox"></div>
-      <div class="panel hide" id="ccNote"><div class="sub">📅 Bảng chấm công cả tháng của mọi nhân viên chỉ Kế toán và Giám đốc xem, sửa được.</div></div>
     </section>
 
     <!-- ===== KỸ THUẬT ===== -->
@@ -1007,7 +1006,7 @@
 
   // sổ bảo hành: bản ghi của app trước, sau đó dữ liệu nhập từ file thống kê
   function findReg(sn){ const k0 = keySN(sn); if (!k0) return null;
-    const one = k => reg.find(r => keySN(r.serial) === k) || riIdx.get(k) || null;
+    const one = k => reg.find(r => keySN(r.serial) === k) || reg.find(r => (r.subSerials || []).some(x => keySN(x) === k)) || riIdx.get(k) || null;
     return one(k0) || (/^\d{5}$/.test(k0) ? one("525" + k0) : null); }   // gõ 5 số cuối (23622) cũng tìm ra 52523622
   function push(t, stage, note, extra){
     const c = JSON.parse(JSON.stringify(t));
@@ -2901,6 +2900,7 @@
             <div class="chips snpick" data-i="${i}" style="flex-wrap:wrap;max-height:150px;overflow:auto">${av.slice(0, 200).map(x => `<button type="button" class="chip" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
             : `<div class="sub" style="margin:4px 0">${(() => { const n = qtyStock(l.product); return n != null ? `Tồn kho: <b style="color:${n >= l.qty ? "var(--ok)" : "var(--bad)"}">${n}</b> cái · ` : ""; })()}Gõ seri bên dưới (mỗi dòng 1 seri).</div>`; })()}
           <textarea class="sn" data-i="${i}" rows="${Math.min(6, Math.max(2, l.qty))}" placeholder="${Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
+          <button type="button" class="btn sm pri xkscan" data-i="${i}" style="margin-top:6px">📷 Quét seri bằng camera</button>
           <div class="sub snc" data-i="${i}"></div></div>
           <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
       <div id="xkApproveW" class="hide" style="margin-top:10px;padding:10px;border:2px solid var(--bad);border-radius:10px">
@@ -2940,6 +2940,16 @@
       setList(i, inStock(l.product).map(x => x.serial).filter(sn => !used.has(keySN(sn))).slice(0, l.qty));
     });
     F5.querySelectorAll(".sn").forEach(t => t.addEventListener("input", sync)); sync();
+    // quét camera: duyệt từng seri, thêm vào dòng hàng, quét tiếp tới khi đủ số lượng
+    F5.querySelectorAll(".xkscan").forEach(b => b.onclick = () => { const i = Number(b.dataset.i), l = o.lines[i];
+      const used = v => (o.lines || []).some((_, j) => snList(j).some(x => keySN(x) === keySN(v)));
+      const left = Math.max(1, l.qty - snList(i).length);
+      const mainOf = v => findStock(v)?.serial || v;
+      openScanner(sn => { const m = mainOf(sn); if (used(m)) return false; setList(i, snList(i).concat(m)); return true; },
+        {multi: true, max: left, has: v => used(mainOf(v)) ? (mainOf(v) !== v ? `Bộ này đã quét (seri chính ${mainOf(v)})` : "Seri này đã có trong đơn") : false,
+         info: v => { const st = findStock(v); return !st ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không có trong kho – vẫn xuất được (trừ kho theo số lượng)</div>`
+           : st.status !== "in" ? `<div class="sub" style="color:var(--bad)">⛔ Seri đã xuất ở đơn ${esc(st.orderCode || "khác")}</div>`
+           : `<div class="found">✔ Có trong kho: ${esc(st.product)}${norm(st.product) !== norm(l.product) ? ` <b style="color:var(--bad)">(khác sản phẩm đơn: ${esc(l.product)})</b>` : ""}${st.subSerials?.length ? `<br>📦 Hàng bộ – seri chính <b>${esc(st.serial)}</b> + ${st.subSerials.map(esc).join(", ")}` : ""}</div>`; }}); });
     // chụp ảnh tem seri -> tự đọc số seri, thêm vào ô seri của dòng đó (bỏ seri đã có hoặc đã dùng ở dòng khác)
     F5.querySelectorAll(".xkph").forEach(box => photoPicker(box, 3, imgs => autoReadSn(box, imgs, sns => {
       const i = Number(box.dataset.i); if (modes[i] === "khong") return 0;
@@ -2948,7 +2958,8 @@
     })));
     drawModes();
     actCtx = {run: async () => {
-      const serials = (o.lines||[]).map((l,i) => modes[i] === "khong" ? [] : snList(i));
+      // seri phụ của hàng bộ → đổi về seri chính của bộ (bỏ trùng)
+      const serials = (o.lines||[]).map((l,i) => modes[i] === "khong" ? [] : [...new Set(snList(i).map(sn => { const x = findStock(sn); return x && x.subSerials?.some(y => keySN(y) === keySN(sn)) ? x.serial : sn; }))]);
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i], n = serials[i].length;
         if (modes[i] === "nhap" && ((l.months && n !== l.qty) || n > l.qty)) { toast(`${l.product}: cần đúng ${l.qty} seri (đang có ${n}) – hoặc chọn “📷 Ảnh seri”`); F5.querySelector(`.sn[data-i="${i}"]`).focus(); throw new Error("x"); }
@@ -2970,7 +2981,8 @@
         const l = o.lines[i]; if (!l.months) continue;
         for (const sn of serials[i]) {
           const r = findReg(sn);
-          await put("reg", Object.assign({}, r || {id: uid(), createdAt: now}, {serial: sn, customer: o.customer, phone: o.phone, product: l.product, purchaseDate: o.saleDate, months: l.months, orderCode: o.code, updatedAt: now}));
+          const sub = findStock(sn)?.subSerials;
+          await put("reg", Object.assign({}, r || {id: uid(), createdAt: now}, {serial: sn, customer: o.customer, phone: o.phone, product: l.product, purchaseDate: o.saleDate, months: l.months, orderCode: o.code, updatedAt: now}, sub?.length ? {subSerials: sub} : {}));
         }
       }
       const lines = [];
@@ -2997,7 +3009,10 @@
   /* ================= TỒN KHO (nhập từ Excel) ================= */
   const stId = sn => "sn_" + keySN(sn).replace(/[^A-Z0-9_-]/g, "_");
   const prId = name => "p_" + norm(name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 120);
-  const findStock = sn => stock.find(x => keySN(x.serial) === keySN(sn));
+  const findStock = sn => { const k = keySN(sn); return stock.find(x => keySN(x.serial) === k) || stock.find(x => (x.subSerials || []).some(y => keySN(y) === k)); };
+  // hàng theo BỘ: 1 sản phẩm có nhiều số seri (VD bộ HDMI không dây 1-2 = 3 seri, 1-4 = 5 seri)
+  const snPerOf = name => { const p = findProduct(name); if (p && Number(p.snPer) > 0) return Number(p.snPer);
+    const m = String(name || "").match(/(?:^|[^\d])1\s*[-–]\s*([1-8])(?!\d)/); return m && /hdmi|không dây|khong day|wireless|bộ|bo /i.test(name) ? 1 + Number(m[1]) : 1; };
   const inStock = name => stock.filter(x => x.status === "in" && norm(x.product) === norm(name)).sort((a,b) => (a.importedAt||"").localeCompare(b.importedAt||"") || String(a.serial).localeCompare(String(b.serial)));
   const findProduct = name => products.find(p => norm(p.name) === norm(name));
   // mặt hàng nhỏ được đánh dấu "không cần seri" (Kho bật trong thông tin sản phẩm)
@@ -3395,8 +3410,9 @@
   function pickSn(text){ const pc = parseCodes(text); if (pc.sn) return pc;
     const raw = String(text || "").trim().replace(/\s+/g, ""); return /^[A-Za-z0-9\-]{5,20}$/.test(raw) ? {sn: raw.toUpperCase(), kh: ""} : null; }
   async function openScanner(onSn, want = {}){
+    try { document.activeElement?.blur?.(); } catch(e){} document.querySelectorAll(".sugg").forEach(x => x.classList.add("hide"));   // đóng danh sách gợi ý đang mở
     const S = $("#scanSheet");
-    S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📷 Quét số seri</h2><div class="sub">Đưa <b>mã vạch / tem seri</b> vào giữa khung xanh, giữ yên 1–2 giây – app tự đọc và điền.</div>
+    S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📷 Quét số seri</h2><div class="sub">Đưa <b>mã vạch / tem seri</b> vào giữa khung xanh, giữ yên 1–2 giây – app tự đọc và điền.</div>${want.multi ? `<div class="badge b-info" style="margin-top:6px">Quét liên tục · đã quét ${want.count || 0}${want.max ? `/${want.max}` : ""} seri${want.last ? ` · vừa xong ${esc(want.last)} – đưa tem tiếp theo vào` : ""}</div>` : ""}
       <div class="scanbox"><video playsinline muted autoplay></video><div class="aim"></div></div>
       <div class="sub scst" style="margin-top:8px">Đang mở camera…</div>
       <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn scocr">🔢 Tem không có mã vạch – đọc chữ số</button><button type="button" class="btn sctorch hide">🔦 Đèn</button>
@@ -3408,20 +3424,27 @@
     // bước DUYỆT: hiện seri đọc được → Đúng thì dùng luôn, sai thì gõ lại ngay tại đây
     const finish = res => { if (done) return; done = true; stopScan(); try { navigator.vibrate?.(150); } catch(e){}
       const r = typeof res === "string" ? {sn: res, kh: ""} : res;
-      S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✅ Kiểm tra số seri vừa quét</h2><div class="sub">So với tem trên máy: <b>đúng</b> thì bấm <b>Duyệt</b>, <b>sai</b> thì sửa lại số ngay ô dưới rồi bấm Duyệt.</div>
+      S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✅ Kiểm tra số seri vừa quét</h2>${want.multi ? `<div class="badge b-info" style="margin:4px 0">Đã quét ${want.count || 0}${want.max ? `/${want.max}` : ""} seri</div>` : ""}<div class="sub">So với tem trên máy: <b>đúng</b> thì bấm <b>Duyệt</b>, <b>sai</b> thì sửa lại số ngay ô dưới rồi bấm Duyệt.</div>
         <label>Số seri</label><input class="cfsn" value="${esc(r.sn)}" autocomplete="off" inputmode="numeric" style="font-size:24px;font-weight:800;letter-spacing:1px;text-align:center">
         ${want.kh ? `<label>Mã kích hoạt <span class="sub">(mã thứ 2 trên tem – nếu có)</span></label><input class="cfkh" value="${esc(r.kh || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">
           <label>Mã kích hoạt mới <span class="sub">(mã thứ 3 – mã cập nhật, nếu có)</span></label><input class="cfkh2" value="${esc(r.kh2 || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">` : ""}
         <div class="cfw" style="margin-top:8px"></div>
-        <div class="btns"><button type="button" class="btn okb cfok" style="font-size:17px">✔ Đúng – Duyệt</button></div>
+        <div class="btns">${want.multi ? `<button type="button" class="btn okb cfok" style="font-size:16px">✔ Đúng – Duyệt & quét tiếp</button><button type="button" class="btn pri cfdone">✔ Duyệt & xong</button>` : `<button type="button" class="btn okb cfok" style="font-size:17px">✔ Đúng – Duyệt</button>`}</div>
         <div class="btns"><button type="button" class="btn cfagain">🔄 Quét lại</button><button type="button" class="btn" data-close="scanBg">Hủy</button></div>`;
       const inp = S.querySelector(".cfsn"), kh = S.querySelector(".cfkh"), kh2 = S.querySelector(".cfkh2"), w = S.querySelector(".cfw");
       const prev = () => { const v = inp.value.trim(); const x = v ? findReg(v) : null;
-        w.innerHTML = !v ? "" : !snOk(v) ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại</div>` : x ? `<div class="found">✔ Có trong sổ bảo hành: ${esc(x.product || "")} – ${esc(x.customer || "")}</div>` : `<div class="sub">Seri chưa có trong sổ bảo hành</div>`; };
+        const dupWhy = v && want.has ? want.has(v) : false;
+        w.innerHTML = !v ? "" : dupWhy ? `<div class="sub" style="color:var(--bad)">⚠️ ${typeof dupWhy === "string" ? esc(dupWhy) : "Seri này đã có trong danh sách"} – quét seri khác</div>` : !snOk(v) ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại</div>` : want.info ? want.info(v) : x ? `<div class="found">✔ Có trong sổ bảo hành: ${esc(x.product || "")} – ${esc(x.customer || "")}</div>` : `<div class="sub">Seri chưa có trong sổ bảo hành</div>`; };
       inp.addEventListener("input", prev); prev();
-      S.querySelector(".cfok").onclick = () => { const v = inp.value.trim().replace(/\s+/g, ""); if (!v) { toast("Nhập số seri"); inp.focus(); return; }
-        close("scanBg"); toast(`✔ Đã duyệt seri ${v}`); onSn(v, kh ? kh.value.trim() : "", kh2 ? kh2.value.trim() : ""); };
-      S.querySelector(".cfagain").onclick = () => openScanner(onSn, want); };
+      const approve = more => { const v = inp.value.trim().replace(/\s+/g, ""); if (!v) { toast("Nhập số seri"); inp.focus(); return; }
+        const why = want.has && want.has(v); if (why) { toast(typeof why === "string" ? why : "Seri này đã có trong danh sách"); if (!more) close("scanBg"); else openScanner(onSn, Object.assign(want, {last: v})); return; }
+        const ok = onSn(v, kh ? kh.value.trim() : "", kh2 ? kh2.value.trim() : "");
+        if (ok !== false) want.count = (want.count || 0) + 1;
+        toast(`✔ Đã duyệt seri ${v}${want.multi ? ` (${want.count || 0}${want.max ? "/" + want.max : ""})` : ""}`);
+        if (more && !(want.max && want.count >= want.max)) openScanner(onSn, Object.assign(want, {last: v})); else close("scanBg"); };
+      S.querySelector(".cfok").onclick = () => approve(!!want.multi);
+      if (want.multi) S.querySelector(".cfdone").onclick = () => approve(false);
+      S.querySelector(".cfagain").onclick = () => openScanner(onSn, Object.assign(want, {last: inp.value.trim() || want.last})); };   // không đọc lại ngay tem vừa bỏ qua
     S.querySelector(".scclose").onclick = () => { stopScan(); close("scanBg"); };
     const grab = () => { const c = document.createElement("canvas"), w = v.videoWidth, h = v.videoHeight; if (!w) return null;
       // cắt vùng khung xanh (giữa ảnh) cho đọc nhanh và chính xác hơn
@@ -3436,7 +3459,10 @@
         for (const x of r.filter(x => x.isValid)) { const sn = pickSn(x.text); if (sn) return sn; } } catch(e){}
       return ""; };
     const loop = async () => { if (done || !scanStream || !$("#scanBg").classList.contains("show")) { if (!done) stopScan(); return; }
-      if (!scanBusy) { scanBusy = true; try { const sn = await readFrame(); if (sn) { finish(sn); return; } } finally { scanBusy = false; } }
+      if (!scanBusy) { scanBusy = true; try { const sn = await readFrame(), v = sn ? (sn.sn || sn) : "";
+        if (v && !(want.last && keySN(v) === keySN(want.last))) {
+          const dup = want.multi && want.has ? want.has(v) : false;   // quét liên tục: tem đã quét rồi thì tự bỏ qua, quét tiếp
+          if (dup) say(`⏭ ${v}: ${typeof dup === "string" ? dup : "đã quét"} – đưa tem tiếp theo vào khung`, "var(--warn)"); else { finish(sn); return; } } } finally { scanBusy = false; } }
       scanTimer = setTimeout(loop, 350); };
     // đọc chữ số trên tem (OCR) từ khung hình hiện tại
     S.querySelector(".scocr").onclick = async () => { const c = grab(); if (!c) { say("Camera chưa sẵn sàng", "var(--warn)"); return; }
@@ -3511,7 +3537,7 @@
       <div><input class="nhq" type="number" min="1" inputmode="numeric" value="1"></div>
       <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
         <div class="sub nhsnhint"></div></div>
-      <div class="full nhsnbox"><div class="nhsns"></div><button type="button" class="btn sm nhsnadd" style="margin-top:6px">+ Thêm dòng seri</button></div>
+      <div class="full nhsnbox"><div class="nhsetw" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 4px"><span class="sub">Mỗi sản phẩm có</span><select class="nhsp" style="width:auto;padding:6px 8px">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">${n} số seri${n > 1 ? " (hàng bộ)" : ""}</option>`).join("")}</select></div><div class="sub nhsetinfo"></div><div class="nhsns"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn sm pri nhscan">📷 Quét seri bằng camera</button><button type="button" class="btn sm nhsnadd">+ Thêm dòng seri</button></div></div>
       <div class="full nhcost"><details><summary style="cursor:pointer;font-weight:650;font-size:14px;padding:6px 0">💰 Giá vốn đợt nhập <span class="sub">(tùy chọn – tự chia giá 1 sản phẩm, có / không VAT)</span></summary>
         <div class="two"><div><label class="nhctl">Tổng tiền đợt nhập (đ) – đã gồm VAT</label><input class="nhct" inputmode="numeric" placeholder="VD: 102.400.000"></div>
           <div><label>Tính theo</label><select class="nhcm"><option value="total">Tổng tiền cả đợt</option><option value="unit">Giá 1 SP chưa VAT</option></select></div></div>
@@ -3537,6 +3563,12 @@
       add.forEach(s => addSn(s, true)); upd(); return add.length;
     });
     photoPicker($e(".nhph"), 3, imgs => { if (el._hasSn) readSn(imgs); });
+    // quét camera: mỗi seri duyệt xong thêm 1 dòng, quét tiếp liên tục (số lượng tự đếm)
+    $e(".nhscan").onclick = () => openScanner(sn => { const have = new Set(sns().map(keySN)); if (have.has(keySN(sn))) return false;
+      el.querySelectorAll(".nhsn").forEach(x => { if (!x.value.trim()) x.parentElement.remove(); }); addSn(sn, true); upd(); return true; },
+      {multi: true, has: v => sns().some(x => keySN(x) === keySN(v)) ? "Seri này đã quét trong đợt nhập này" : findStock(v)?.status === "in" ? `Seri này đã có trong kho (${findStock(v).product})` : false,
+        info: v => { const per = el._per || 1, n = sns().length + 1; return `<div class="found">🆕 Seri mới – sẽ nhập kho “${esc($e(".nhn").value.trim() || "…")}”${per > 1 ? ` · bộ ${Math.ceil(n / per)}, seri ${(n - 1) % per + 1}/${per}` : ""}</div>`; }});
+    $e(".nhsp").onchange = () => { el._per = Number($e(".nhsp").value) || 1; el._perTouched = true; upd(); };
     el._hasSn = false;
     const sns = () => [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean);
     const setSnBtns = () => el.querySelectorAll(".nhsnopt button").forEach(x => x.classList.toggle("on", (x.dataset.s === "1") === el._hasSn));
@@ -3544,10 +3576,14 @@
       const moi = el.dataset.m === "moi", n = $e(".nhn").value.trim();
       // hàng có sẵn: tự chọn Có/Không seri theo sản phẩm (đánh dấu hàng nhỏ, hoặc đã từng nhập theo seri) – trừ khi người dùng đã tự chọn
       if (!moi && !el._snTouched && n !== el._snFor) { el._snFor = n; el._hasSn = !!n && !noSerial(n) && stock.some(x => norm(x.product) === norm(n)); setSnBtns(); }
-      const list = sns(), useSn = el._hasSn;
+      if (!el._perTouched && n !== el._perFor) { el._perFor = n; el._per = snPerOf(n); $e(".nhsp").value = String(el._per); }
+      const list = sns(), useSn = el._hasSn, per = el._per || 1;
       $e(".nhsnbox").classList.toggle("hide", !useSn);
       $e(".nhsnhint").textContent = useSn ? "📷 Chụp ảnh tem seri – app tự đọc số seri và thêm từng dòng (số lượng tự đếm); kiểm tra lại cho đúng. Không đọc được thì có ảnh là đủ, không cần gõ." : "Hàng nhỏ / không có seri – chỉ cộng tồn theo số lượng (ảnh không bắt buộc).";
-      if (useSn && list.length) { $e(".nhq").value = list.length; $e(".nhq").readOnly = true; } else $e(".nhq").readOnly = false;
+      if (useSn && list.length) { $e(".nhq").value = Math.ceil(list.length / per); $e(".nhq").readOnly = true; } else $e(".nhq").readOnly = false;
+      const rem = list.length % per;
+      $e(".nhsetinfo").innerHTML = useSn && per > 1 ? (list.length ? `📦 ${list.length} seri = <b>${Math.floor(list.length / per)} bộ</b>${rem ? ` <b style="color:var(--bad)">+ bộ cuối mới có ${rem}/${per} seri – quét tiếp cho đủ</b>` : ""} · mỗi bộ ${per} seri, quét lần lượt từng bộ (seri đầu tiên là seri chính của bộ)` : `Hàng bộ: mỗi sản phẩm ${per} seri – quét đủ ${per} seri cho 1 bộ rồi sang bộ tiếp theo`) : "";
+      el.querySelectorAll(".nhsns > div").forEach((d, k) => { d.style.marginTop = per > 1 && k % per === 0 && k ? "14px" : "6px"; d.title = per > 1 ? `Bộ ${Math.floor(k / per) + 1} – seri ${k % per + 1}/${per}` : ""; });
       const q = parseInt($e(".nhq").value) || 0, exists = n && (findProduct(n) || productNames().some(p => norm(p) === norm(n)));
       let h = "";
       if (n && !moi) h = exists ? `<b>Tồn ${stockOf(n)} → <span style="color:var(--ok)">${stockOf(n) + q}</span></b>` : `<b style="color:var(--bad)">Chưa có trong kho – chọn “Sản phẩm mới”</b>`;
@@ -3580,7 +3616,7 @@
   $("#nhGo").onclick = async () => {
     const rows = [...$("#nhRows").children].map(el => { const moi = el.dataset.m === "moi", useSn = !!el._hasSn;
       return {el, moi, name: el.querySelector(".nhn").value.trim(), qty: parseInt(el.querySelector(".nhq").value) || 0, ph: el.querySelector(".nhph")._photos(), cost: el._cost ? el._cost() : null,
-        sns: useSn ? [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean) : []}; }).filter(r => r.name);
+        sns: useSn ? [...el.querySelectorAll(".nhsn")].map(x => x.value.trim()).filter(Boolean) : [], per: useSn ? (el._per || 1) : 1}; }).filter(r => r.name);
     if (!rows.length) { toast("Hãy chọn sản phẩm cần nhập"); return; }
     for (const r of rows) {
       const exists = findProduct(r.name) || productNames().some(p => norm(p) === norm(r.name));
@@ -3592,6 +3628,8 @@
       const bad = r.sns.find(v => !snOk(v)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
       const dup = r.sns.find((v, i) => r.sns.findIndex(y => keySN(y) === keySN(v)) !== i); if (dup) { toast(`Seri ${dup} bị nhập trùng`); return; }
       const inSt = r.sns.find(v => { const x = findStock(v); return x && x.status === "in"; }); if (inSt) { toast(`Seri ${inSt} đã có trong kho`); return; }
+      if (r.per > 1 && r.sns.length % r.per) { toast(`“${r.name}”: hàng bộ ${r.per} seri – bộ cuối mới có ${r.sns.length % r.per} seri, quét / gõ thêm cho đủ`); return; }
+      if (r.per > 1 && r.sns.length) r.qty = r.sns.length / r.per;
     }
     const allSn = rows.flatMap(r => r.sns.map(keySN)); if (new Set(allSn).size !== allSn.length) { toast("Có seri bị nhập trùng giữa các dòng"); return; }
     const now = new Date().toISOString(), note = $("#nhNote").value.trim(), ref = "Nhập hàng" + (note ? " – " + note : "");
@@ -3599,21 +3637,27 @@
     rows.forEach(r => { const ex = productNames().find(p => norm(p) === norm(r.name)); if (ex) { r.name = ex; return; }
       if (newPr.some(p => norm(p.name) === norm(r.name))) return;
       let id = prId(r.name), k = 2; while (usedIds.has(id)) id = prId(r.name) + "-" + (k++); usedIds.add(id);
-      newPr.push(Object.assign({id, name: r.name, months: 12, noSerial: !r.el._hasSn, createdAt: now, updatedAt: now}, r.cost ? {lastCost: Object.assign({at: now}, r.cost)} : {})); });
+      newPr.push(Object.assign({id, name: r.name, months: 12, noSerial: !r.el._hasSn, createdAt: now, updatedAt: now}, r.per > 1 ? {snPer: r.per} : {}, r.cost ? {lastCost: Object.assign({at: now}, r.cost)} : {})); });
     const b = $("#nhGo"); b.disabled = true;
     try {
       if (newPr.length) await putMany("pr", newPr);
       // sản phẩm đã có: lưu giá vốn lần nhập gần nhất
       const prCost = rows.filter(r => r.cost && !newPr.some(p => norm(p.name) === norm(r.name)) && findProduct(r.name)).map(r => Object.assign({}, findProduct(r.name), {lastCost: Object.assign({at: now}, r.cost), updatedAt: now}));
       if (prCost.length) await putMany("pr", prCost);
+      // ghi nhớ số seri / 1 sản phẩm (hàng bộ) cho lần nhập sau
+      const prPer = rows.filter(r => r.sns.length && !newPr.some(p => norm(p.name) === norm(r.name)) && findProduct(r.name) && Number(findProduct(r.name).snPer || 1) !== r.per).map(r => Object.assign({}, findProduct(r.name), {snPer: r.per, updatedAt: now}));
+      if (prPer.length) await putMany("pr", prPer);
       for (const r of rows) r.photos = r.ph.length ? await savePhotos(r.ph, {product: r.name, ref}) : [];
       // có seri -> mỗi seri 1 dòng tồn kho; không seri -> cộng theo số lượng
-      const stList = rows.flatMap(r => r.sns.map(sn => { const old = findStock(sn), p = findProduct(r.name);
-        return Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: r.name, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor(), photos: r.photos}, r.cost ? {unitCost: r.cost.unit, unitCostVat: r.cost.unitVat} : {}); }));
+      // hàng bộ: mỗi bộ (per seri liên tiếp) = 1 dòng tồn kho, seri đầu là seri chính, các seri còn lại lưu kèm (subSerials)
+      const groups = r => r.per > 1 ? Array.from({length: r.sns.length / r.per}, (_, k) => r.sns.slice(k * r.per, k * r.per + r.per)) : r.sns.map(x => [x]);
+      const stList = rows.flatMap(r => groups(r).map(g => { const sn = g[0], old = findStock(sn), p = findProduct(r.name);
+        const rec = Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: r.name, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor(), photos: r.photos}, r.cost ? {unitCost: r.cost.unit, unitCostVat: r.cost.unitVat} : {});
+        if (g.length > 1) rec.subSerials = g.slice(1); else delete rec.subSerials; return rec; }));
       if (stList.length) await putMany("st", stList);
       const mv = rows.filter(r => !r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.el._hasSn ? {snByPhoto: true} : {}, r.cost ? {cost: r.cost} : {}));
       // dòng có seri: ghi 1 mục lịch sử (qty 0) để hiện trong “Lần nhập gần đây”
-      const log = rows.filter(r => r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: 0, snQty: r.sns.length, serials: r.sns, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.cost ? {cost: r.cost} : {}));
+      const log = rows.filter(r => r.sns.length).map(r => Object.assign({id: "mv_" + uid(), product: r.name, qty: 0, snQty: r.sns.length / r.per, serials: r.sns, snPer: r.per, at: now, kind: "nhap", ref, by: actor(), photos: r.photos}, r.cost ? {cost: r.cost} : {}));
       if (mv.length + log.length) await putMany("mv", mv.concat(log));
       toast(`Đã nhập kho ${rows.reduce((a,r) => a + r.qty, 0)} cái · ${rows.length} mặt hàng – tồn kho đã cập nhật`);
       $("#nhRows").innerHTML = ""; $("#nhNote").value = ""; nhAddRow();
@@ -4161,7 +4205,7 @@
     ccYm = ccYm || iso(new Date()).slice(0, 7);
     const emps = ccPeople(), n = ccDays(ccYm), [y, m] = ccYm.split("-"), sh = ccSheet(ccYm), tdy = iso(new Date());
     const wd = d => new Date(+y, +m - 1, d).getDay();
-    host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y}</h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
+    host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y} <span class="sub" style="font-weight:400">(nhận tự động từ mục Chấm công)</span></h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
       <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:#dcfce7;color:#16a34a;padding:0 4px;border-radius:4px;font-weight:700">✔ xanh</span> = nhân viên tự chấm công thành công trên app. Cột CN tô xám. Cột <b>Giờ</b> = tổng giờ tự chấm (60 phút = 1 giờ).</div>
       ${(() => { const L = emps.map(e => ({e, lg: expenses.find(x => x.kind === "cclog" && x.nvId === e.id && x.date === tdy)})), ok = L.filter(x => x.lg?.in).length;
         return `<div class="found" style="margin:8px 0"><b>Hôm nay ${fmt(tdy)}: ${ok}/${L.length} người đã chấm công</b>${L.map(({e, lg}) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span>${lg?.in ? `<b style="color:#16a34a">✅</b>` : "⏳"} <b>${esc(ccShort(e.name))}</b>${norm(e.name) !== norm(ccShort(e.name)) ? ` <span class="sub">${esc(e.name)}</span>` : ""}</span><span class="sub" style="text-align:right">${lg?.in ? `vào ${tm(lg.in)}${lg.out ? ` · tan ${tm(lg.out)} · ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ` : ""}${lg.inLoc?.dist != null ? ` · ${lg.inLoc.dist} m` : ""}` : "chưa chấm"}</span></div>`).join("")}</div>`; })()}
@@ -4172,20 +4216,66 @@
             style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:#dcfce7;color:#16a34a;" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${r.src === "nv" && r.c === "X" ? "✔" : CC_SHOW[r.c] || ""}</td>`; }).join("")}
           <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
         : `<div class="empty">Chưa có nhân viên.</div>`}
-      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Excel bảng chấm công</button><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
+      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Xuất Excel bảng chấm công</button><label class="btn" style="text-align:center">📥 Nhập lại Excel đã sửa<input type="file" id="ccXlsIn" accept=".xlsx,.xls" hidden></label><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
       <div class="sub" id="ccLocTxt"></div>`;
     const cfg = expenses.find(x => x.id === "cc_cfg");
     $("#ccLocTxt").textContent = cfg?.lat ? `Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}). Phạm vi chấm công: ${ccRadius()} m – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.` : "Chưa đặt vị trí công ty.";
     $("#ccMonth").onchange = e => { ccYm = e.target.value || iso(new Date()).slice(0, 7); drawCC(); };
-    const saveCodes = async (mut, nv) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
-      mut(doc.codes); doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
-    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => { const nv = td.dataset.nv, d = td.dataset.d, cur = ccSheet(ccYm)?.codes?.[nv]?.[d] || "";
-      const next = CC_CODES[(CC_CODES.indexOf(cur) + 1) % CC_CODES.length]; saveCodes(c => { c[nv] = c[nv] || {}; if (next) c[nv][d] = next; else delete c[nv][d]; }, nv); });
+    const saveCodes = async (mut, nv, noteFor, dayFor) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
+      mut(doc.codes); if (noteFor !== undefined && dayFor) { doc.notes = doc.notes || {}; doc.notes[nv] = doc.notes[nv] || {}; if (noteFor) doc.notes[nv][dayFor] = noteFor; else delete doc.notes[nv][dayFor]; }
+      doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
+    // chạm vào ô → mở bảng CHỈNH SỬA (xem thông tin, chọn lại, bấm Lưu) – tránh lỡ tay đổi ngày
+    host.querySelectorAll(".cccell").forEach(td => td.onclick = () => openCCEdit(td.dataset.nv, Number(td.dataset.d)));
+    const openCCEdit = (nv, d) => { const e = emps.find(x => x.id === nv); if (!e) return;
+      const ds = `${ccYm}-${String(d).padStart(2, "0")}`, man = ccSheet(ccYm)?.codes?.[nv]?.[d] || "", note = ccSheet(ccYm)?.notes?.[nv]?.[d] || "";
+      const lg = expenses.find(x => x.kind === "cclog" && x.nvId === nv && x.date === ds), cur = ccCode(ccYm, nv, d);
+      const F = $("#actForm"); let pick = man;
+      const OPTS = [["X", "✅ Cả ngày"], ["H", "½ Nửa ngày"], ["P", "🌴 Nghỉ phép (có lương)"], ["L", "🎌 Nghỉ lễ (có lương)"], ["R", "👪 Việc riêng (có lương)"], ["K", "⛔ Nghỉ không lương"], ["", lg?.in ? "↩️ Theo nhân viên tự chấm" : "⬜ Để trống (chưa chấm)"]];
+      F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✏️ Chỉnh sửa chấm công</h2>
+        <div class="sub"><b style="color:var(--ink);font-size:16px">${esc(e.name)}</b> · ${["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"][new Date(ds).getDay()]} ${fmt(ds)}</div>
+        <div class="found" style="margin-top:10px"><b>Thông tin hiện tại:</b> ${cur.c ? `<b>${esc(CC_LABEL[cur.c] || cur.c)}</b> ${cur.src === "kt" ? "(Kế toán chấm)" : "(nhân viên tự chấm)"}` : "Chưa chấm"}
+          ${lg?.in ? `<br>🕘 Nhân viên tự chấm: vào <b>${tm(lg.in)}</b>${lg.out ? ` · tan <b>${tm(lg.out)}</b> · làm <b>${hm(ccMin(lg))}</b> (= ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ)` : " · chưa tan ca"}${lg.inLoc?.dist != null ? ` · cách công ty ${lg.inLoc.dist} m` : ""}` : "<br>Nhân viên không tự chấm ngày này"}
+          ${ccSheet(ccYm)?.by && man ? `<br><span class="sub">Sửa lần cuối: ${esc(ccSheet(ccYm).by)}${ccSheet(ccYm).updatedAt ? " · " + fmtTime(ccSheet(ccYm).updatedAt) : ""}</span>` : ""}</div>
+        <label>Chọn lại</label><div class="opts ccopts" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${OPTS.map(([k, t]) => `<button type="button" class="opt ${k === pick ? "sel" : ""}" data-cc="${k}" style="padding:12px 6px;font-size:14px">${t}</button>`).join("")}</div>
+        <label>Ghi chú <span class="sub">(không bắt buộc)</span></label><input name="ccnote" value="${esc(note)}" placeholder="VD: quên chấm, đi công trình, nghỉ ốm…" autocomplete="off">
+        <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu</button></div>`;
+      F.querySelectorAll("[data-cc]").forEach(b => b.onclick = () => { pick = b.dataset.cc; F.querySelectorAll("[data-cc]").forEach(x => x.classList.toggle("sel", x === b)); });
+      actCtx = {run: async () => { const nt = F.ccnote.value.trim();
+        await saveCodes(c => { c[nv] = c[nv] || {}; if (pick) c[nv][d] = pick; else delete c[nv][d]; }, nv, nt, d);
+      }, after: () => toast(`Đã lưu chấm công ${ccShort(e.name)} ngày ${fmt(ds)}`)};
+      open("actBg"); };
     host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
+      if (!confirm(`Chấm X (cả ngày) cho tất cả ngày thường còn trống của ${emps.find(x => x.id === nv)?.name || ""} trong tháng?`)) return;
       saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }, nv); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
     $("#ccLoc").onclick = () => { if (!navigator.geolocation) { toast("Máy không hỗ trợ định vị"); return; }
       navigator.geolocation.getCurrentPosition(async p => { await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, updatedAt: new Date().toISOString()})); toast("Đã lưu vị trí công ty"); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
+    // nhập lại file Excel bảng chấm công đã sửa (đúng mẫu file xuất ra): chỉ ghi những ô khác với hiện tại
+    $("#ccXlsIn").onchange = async ev => { const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+      try { await loadScript(XLSX_URL); const X = window.XLSX, wb = X.read(await f.arrayBuffer(), {type: "array"}), rows = X.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: false, defval: ""});
+        const title = rows.slice(0, 4).flat().join(" "), mt = title.match(/THÁNG\s*(\d{1,2})\s*\/\s*(\d{4})/i), ym = mt ? `${mt[2]}-${mt[1].padStart(2, "0")}` : ccYm;
+        const hi = rows.findIndex(r => norm(r[1]) === norm("Họ và tên")); if (hi < 0) { toast("File không đúng mẫu bảng chấm công (thiếu cột “Họ và tên”)"); return; }
+        const head = rows[hi], days = head.map((h, c) => /^\d{1,2}$/.test(String(h).trim()) ? [c, Number(h)] : null).filter(Boolean), people = ccPeople();
+        const MAP = {"X": "X", "✔": "X", "V": "X", "1": "X", "½": "H", "1/2": "H", "0.5": "H", "0,5": "H", "H": "H", "P": "P", "L": "L", "R": "R", "K": "K", "": ""};
+        const changes = [], miss = [], bad = [];
+        rows.slice(hi + 1).forEach(r => { const nm = String(r[1] || "").trim(); if (!nm || /người chấm|giám đốc/i.test(nm)) return;
+          const e = people.find(x => norm(x.name) === norm(nm)) || people.find(x => norm(ccShort(x.name)) === norm(nm)); if (!e) { miss.push(nm); return; }
+          days.forEach(([c, d]) => { const raw = String(r[c] ?? "").trim().toUpperCase(), code = MAP[raw]; if (code === undefined) { bad.push(`${nm} ngày ${d}: “${r[c]}”`); return; }
+            if (code !== ccCode(ym, e.id, d).c) changes.push({e, d, code}); }); });
+        const F = $("#actForm"), [yy, mm] = ym.split("-");
+        F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📥 Nhập lại bảng chấm công tháng ${mm}/${yy}</h2>
+          <div class="found" style="margin-top:8px">${changes.length ? `Có <b>${changes.length}</b> ô thay đổi so với hiện tại:` : "Không có ô nào thay đổi so với hiện tại."}
+            ${changes.slice(0, 40).map(x => `<div style="font-size:13px">• ${esc(ccShort(x.e.name))} – ngày ${x.d}: <b>${esc(CC_SHOW[ccCode(ym, x.e.id, x.d).c] || "trống")}</b> → <b>${esc(CC_SHOW[x.code] || "trống")}</b></div>`).join("")}${changes.length > 40 ? `<div class="sub">… và ${changes.length - 40} ô khác</div>` : ""}</div>
+          ${miss.length ? `<div class="sub" style="color:var(--warn);margin-top:6px">⚠️ Không nhận ra tên: ${miss.map(esc).join(", ")} – bỏ qua</div>` : ""}
+          ${bad.length ? `<div class="sub" style="color:var(--warn);margin-top:6px">⚠️ Ký hiệu lạ (bỏ qua): ${bad.slice(0, 8).map(esc).join("; ")}${bad.length > 8 ? "…" : ""} – chỉ dùng X, ½, P, L, R, K hoặc để trống</div>` : ""}
+          <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button>${changes.length ? `<button type="submit" class="btn pri">💾 Lưu ${changes.length} thay đổi</button>` : ""}</div>`;
+        actCtx = {run: async () => { if (!changes.length) return;
+          const doc = JSON.parse(JSON.stringify(ccSheet(ym) || {id: "cc_" + ym, kind: "chamcong", month: ym, date: ym + "-01", amount: 0, codes: {}}));
+          for (const x of changes) { await ccEnsure(x.e); doc.codes[x.e.id] = doc.codes[x.e.id] || {}; if (x.code) doc.codes[x.e.id][x.d] = x.code; else delete doc.codes[x.e.id][x.d]; }
+          doc.updatedAt = new Date().toISOString(); doc.by = actor() + " (nhập Excel)"; await put("ex", doc); ccYm = ym; plDraft = null; drawCC(); drawPayroll();
+        }, after: () => toast(`Đã cập nhật ${changes.length} ô chấm công từ file Excel`)};
+        open("actBg");
+      } catch(e){ toast("Không đọc được file Excel"); } };
     $("#ccXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX;
       const head = ["STT", "Họ và tên", ...Array.from({length: n}, (_, i) => String(i + 1)), "Ngày công", "Tổng giờ làm", "Nghỉ có lương (L,P,R)", "Nghỉ không lương"];
       const rows = emps.map((e, i) => { const s = ccSummary(ccYm, e.id); return [i + 1, e.name, ...Array.from({length: n}, (_, d) => CC_SHOW[ccCode(ccYm, e.id, d + 1).c] || ""), s.work, hDec(s.mins), s.leave, s.unpaid]; });
@@ -4244,7 +4334,8 @@
     q(".ccIn").onclick = () => stamp("in"); q(".ccOut").onclick = () => stamp("out");
   }
   const openCheckin = () => drawSelf($("#actForm"), true);
-  function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement) && !F.querySelector(".ccok")) drawSelf(F, false); drawCC(); $("#ccNote").classList.toggle("hide", role === "ac" || boss); }
+  // tab Chấm công: chỉ để nhân viên chấm; bảng tổng hợp nằm ở tab Kế toán
+  function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement) && !F.querySelector(".ccok")) drawSelf(F, false); }
   function showCC(){ ccView = true;
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === "cc"));
     ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== "cc"));
@@ -4307,7 +4398,7 @@
           if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
           pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
-    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawPayroll();
+    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawCC(); drawPayroll();
     $("#acMonth").value = acMonth;
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
