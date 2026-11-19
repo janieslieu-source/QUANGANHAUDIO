@@ -4501,7 +4501,7 @@
       <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
       ${!edit && t.shipCharge && !t.shipChargeDone ? `<div class="reason">🚚 Phí ship tính lại khách: <b>${money(t.shipCharge)}</b> – nhớ cộng vào số tiền thanh toán / công nợ.</div>` : ""}
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
-      ${t.pay?.gd === "tra" ? `<div class="reason" style="background:var(--badbg);color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(t.pay.gdNote || "")}</b>${t.pay.gdFix ? `<br>Đã điền sẵn số Giám đốc sửa: <b>${esc(PAY[t.pay.gdFix.status] || "")} ${money(t.pay.gdFix.amount)}</b> – kiểm tra rồi bấm Lưu để gửi lại Giám đốc` : ""}</div>` : ""}
+      ${t.pay?.gd === "tra" ? `<div class="reason" style="background:var(--badbg);color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(t.pay.gdNote || "")}</b>${t.pay.gdFix ? `<br>Đã điền sẵn số Giám đốc sửa: <b>${esc(PAY[t.pay.gdFix.status] || "")} ${money(t.pay.gdFix.amount)}</b> – bấm Lưu là <b>hoàn tất</b> (Giám đốc không phải duyệt lại; nếu đổi sang số khác thì sẽ gửi Giám đốc duyệt)` : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
       ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
         : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>`}
@@ -4577,12 +4577,15 @@
       // Kế toán ghi xong -> chờ Giám đốc duyệt lại; Giám đốc tự ghi thì coi như đã duyệt
       // Giám đốc đã báo khách trả và Kế toán ghi đúng số đó -> coi như Giám đốc đã duyệt
       const reqOk = req && ((payStatus === "da_tt" && pay.amount === Number(req.amount)) || (payStatus === "cong_no" && pay.amount === Math.max(0, debt0 - Number(req.amount))));
-      Object.assign(pay, boss ? {gd: "ok", gdAt: pay.editedAt || pay.at, gdBy: "Giám đốc"} : reqOk ? {gd: "ok", gdAt: pay.at, gdBy: "Giám đốc (đã báo khách trả)"} : {gd: "cho"});
+      // Giám đốc đã điền số đúng và Kế toán lưu đúng số đó -> xong luôn, Giám đốc không phải duyệt lại
+      const gf = t.pay?.gd === "tra" ? t.pay.gdFix : null, fixOk = !!gf && payStatus === gf.status && pay.amount === Number(gf.amount);
+      Object.assign(pay, boss ? {gd: "ok", gdAt: pay.editedAt || pay.at, gdBy: "Giám đốc"} : reqOk ? {gd: "ok", gdAt: pay.at, gdBy: "Giám đốc (đã báo khách trả)"} : fixOk ? {gd: "ok", gdAt: new Date().toISOString(), gdBy: "Giám đốc (đã sửa số)"} : {gd: "cho"});
+      if (fixOk) note += " – đúng số Giám đốc sửa, hoàn tất";
       if (req) note += ` (theo Giám đốc báo khách trả ${money(req.amount)})`;
       const shipDone = !edit && t.shipCharge && !t.shipChargeDone ? {shipChargeDone: true} : {};
       if (isOd) await advanceOrder(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone)); else await advance(t, payStatus, note, Object.assign({pay, payReq: null}, shipDone));
-      if (!boss && !reqOk) pushTo("gd", `👔 Giám đốc duyệt ${PAY[payStatus].toLowerCase()}: ${t.code} – ${t.customer}`, `${money(pay.amount)}${edit ? " (Kế toán đã sửa)" : ""}`, t.id);
-      toast(edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
+      if (!boss && !reqOk && !fixOk) pushTo("gd", `👔 Giám đốc duyệt ${PAY[payStatus].toLowerCase()}: ${t.code} – ${t.customer}`, `${money(pay.amount)}${edit ? " (Kế toán đã sửa)" : ""}`, t.id);
+      toast(fixOk ? "Đã lưu theo số Giám đốc sửa – hoàn tất, không cần duyệt lại" : edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
     }};
     open("actBg");
   }
