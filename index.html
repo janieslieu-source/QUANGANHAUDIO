@@ -353,8 +353,15 @@
         </div>
       </form>
 
+      <div class="panel wlook" id="wlBh"></div>
       <div class="panel"><h3>⏳ Đang xử lý</h3><div class="list" id="trackList"></div></div>
       <div class="panel"><div class="row"><h3>✅ Đã trả khách</h3></div><div class="list" id="doneList"></div></div>
+      <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành từ file Excel</h3>
+        <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
+        <div class="btns" style="margin-top:0"><label class="btn pri" for="riFile" style="text-align:center">📥 Chọn file Excel để nhập</label></div>
+        <input type="file" id="riFile" accept=".xlsx,.xls,.csv" style="display:none">
+        <div class="sub" id="riProg" style="margin-top:6px"></div>
+        <div id="riList" class="list" style="margin-top:10px"></div></div>
     </section>
 
     <!-- ===== GIÁM ĐỐC ===== -->
@@ -376,12 +383,6 @@
         <div id="gwBody"></div>
         <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
-      <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành từ file Excel</h3>
-        <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
-        <div class="btns" style="margin-top:0"><label class="btn pri" for="riFile" style="text-align:center">📥 Chọn file Excel để nhập</label></div>
-        <input type="file" id="riFile" accept=".xlsx,.xls,.csv" style="display:none">
-        <div class="sub" id="riProg" style="margin-top:6px"></div>
-        <div id="riList" class="list" style="margin-top:10px"></div></div>
       <div class="panel" id="bkBox"><h3>💾 Sao lưu & khôi phục dữ liệu</h3>
         <div class="sub" id="bkLast" style="margin-bottom:8px"></div>
         <div class="sub" style="margin-bottom:8px">Tải về <b>1 file</b> chứa toàn bộ dữ liệu (sổ bảo hành, phiếu BH/SC, đơn bán, tồn kho, sản phẩm, lịch sử nhập xuất, chi phí). Nên sao lưu <b>mỗi tuần</b> và cất lên Google Drive / USB.</div>
@@ -535,6 +536,7 @@
 
     <!-- ===== KỸ THUẬT ===== -->
     <section id="v-kt" class="hide">
+      <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
     </section>
@@ -1351,7 +1353,53 @@
     else { toast("Đã chuyển Kho"); goTo("wh", `Hàng bảo hành mới: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`); }
   };
 
+  /* ================= TRA CỨU BẢO HÀNH THEO SERI (tính theo ngày bán) ================= */
+  // tình trạng bảo hành của 1 seri: từ sổ bảo hành (app + file thống kê)
+  function wStatus(sn){
+    const r = findReg(sn); if (!r) return {r: null};
+    if (!r.purchaseDate) return {r, noDate: true};
+    const w = remain(r.purchaseDate, r.months);
+    return {r, w, exp: w.exp, days: Math.round((w.exp - today()) / 86400000)};
+  }
+  // dòng ngắn gọn hiện trên phiếu (Kỹ thuật)
+  function wBadge(sn){
+    const S = wStatus(sn);
+    if (!S.r) return `<div class="sub" style="margin-top:4px;color:var(--muted)">🔍 Seri không có trong sổ bảo hành</div>`;
+    if (S.noDate) return `<div class="sub" style="margin-top:4px;color:var(--warn)">🔍 Có trong sổ nhưng không ghi ngày bán</div>`;
+    const m = Number(S.r.months);
+    return S.w.ok ? `<div class="sub" style="margin-top:4px;color:var(--ok)"><b>🛡️ Còn bảo hành${m >= 1200 ? " vĩnh viễn" : ` ${S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m < 1200 ? ` · hết hạn ${fmt(iso(S.exp))}` : ""}</div>`
+      : `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⛔ ${m === 0 ? "Không có bảo hành" : `Hết bảo hành ${-S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m ? ` · BH ${m} tháng, hết hạn ${fmt(iso(S.exp))}` : ""}</div>`;
+  }
+  function wResultHtml(sn){
+    sn = String(sn || "").trim(); if (!sn) return "";
+    const S = wStatus(sn), hist = tickets.filter(t => keySN(t.serial) === keySN(sn) || keySN(t.exchange?.newSerial) === keySN(sn)).sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    let h = "";
+    if (!S.r) h = `<div class="wbox b-bad"><b>❓ KHÔNG TÌM THẤY</b>Seri ${esc(sn)} chưa có trong sổ bảo hành (app hoặc file thống kê).</div>`;
+    else {
+      const r = S.r, m = Number(r.months);
+      h = S.noDate ? `<div class="wbox b-warn"><b>⚠️ CHƯA RÕ NGÀY BÁN</b>Sổ không ghi ngày bán – hỏi khách hóa đơn / ngày mua.</div>`
+        : S.w.ok ? `<div class="wbox b-ok"><b>🛡️ CÒN BẢO HÀNH</b>${m >= 1200 ? "Bảo hành vĩnh viễn" : `Còn <b style="display:inline;font-size:20px">${S.days}</b> ngày (${esc(S.w.text)}) · hết hạn ${fmt(iso(S.exp))}`}</div>`
+        : `<div class="wbox b-bad"><b>⛔ ${m === 0 ? "KHÔNG CÓ BẢO HÀNH" : "HẾT HẠN BẢO HÀNH"}</b>${m === 0 ? "Sản phẩm bán không kèm bảo hành" : `Đã hết hạn ${-S.days} ngày · hết hạn ${fmt(iso(S.exp))}`}</div>`;
+      h += `<dl class="kv" style="margin-top:10px"><dt>Sản phẩm</dt><dd><b>${esc(r.product || "")}</b></dd><dt>Khách mua</dt><dd>${esc(r.customer || "")}${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.phone ? " · " + esc(r.phone) : ""}</dd>
+        <dt>Ngày bán</dt><dd><b>${r.purchaseDate ? fmt(r.purchaseDate) : "—"}</b></dd><dt>Thời hạn BH</dt><dd>${m >= 1200 ? "Vĩnh viễn" : m + " tháng"}</dd>
+        ${r.fileNote ? `<dt>Ghi chú</dt><dd>${esc(r.fileNote)}</dd>` : ""}${r.orderCode ? `<dt>Đơn bán</dt><dd>${esc(r.orderCode)}</dd>` : ""}<dt>Nguồn</dt><dd>${r.fromFile ? "📄 File " + esc(r.fromFile) : "Phần mềm"}</dd>
+        ${r.fileHist ? `<dt>Lịch sử file</dt><dd style="font-size:13px">${esc(r.fileHist)}</dd>` : ""}</dl>`;
+      if (r.replacedBy) h += `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI sang SN <b>${esc(r.replacedBy)}</b> – máy cũ đã thu hồi.</div>`;
+      if (r.replacedFrom) h += `<div class="found">🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}</div>`;
+    }
+    if (hist.length) h += `<h4 style="margin:10px 0 4px;font-size:14px">Các lần bảo hành / sửa chữa (${hist.length})</h4>` + hist.slice(0, 8).map(t => `<div class="sub">• ${fmt(t.createdAt)} · ${esc(TYPE[t.type])} · ${esc(t.issue || "")} · <b>${esc(STAGES[t.stage]?.label || "")}</b> · ${esc(t.code)}</div>`).join("");
+    return h;
+  }
+  function drawWLookup(host){
+    if (!host || host._built) return; host._built = true;
+    host.innerHTML = `<h3>🔍 Tra cứu bảo hành</h3><div class="sub" style="margin-bottom:6px">Gõ số seri → còn / hết bảo hành, còn bao nhiêu ngày (tính theo <b>ngày bán</b>).</div>
+      <input class="wlq" type="search" inputmode="text" placeholder="Nhập số seri máy khách mang tới" autocomplete="off"><div class="wlr" style="margin-top:8px"></div>`;
+    const q = host.querySelector(".wlq"), r = host.querySelector(".wlr");
+    q.addEventListener("input", () => { const v = q.value.trim(); r.innerHTML = v.length >= 4 ? wResultHtml(v) : ""; });
+  }
+
   function renderBH(){
+    drawWLookup($("#wlBh")); drawRiBatches();
     refreshRecv();
     const trk = tickets.filter(t => !CLOSED.includes(t.stage)).sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#trackList").innerHTML = trk.length ? trk.map(t => tkCard(t)).join("") : `<div class="empty">Không có hàng đang xử lý.</div>`;
@@ -1500,10 +1548,19 @@
     const months = v => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths; if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? opt.emptyMonths : n; };
     // đầu / máy karaoke các loại: luôn bảo hành 12 tháng kể từ ngày mua (VV ở cột THỜI GIAN = mã kích hoạt vĩnh viễn)
     const isKara = p => /dau karaoke|may karaoke/.test(norm(p));
-    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
+    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, text: 0, split: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
+    // ô SERI có thể ghi chú ("Không chụp", "Anh Hậu giao thẳng", "52525843 - BH 6 tháng"…):
+    // có chữ tiếng Việt / ít hơn 3 chữ số -> chỉ lấy các seri chuẩn 525xxxxx tìm thấy, không có thì bỏ qua
+    const VN = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+    const snOfCell = v => { const raw = String(v ?? "").trim(); if (!raw) return [];
+      if (VN.test(raw) || (raw.match(/\d/g) || []).length < 3) { const f = raw.replace(/\s+/g, "").match(/525\d{5}/g); return f ? [...new Set(f)].map(x => ({s: x, split: true})) : [{s: "", text: true}]; }
+      return [{s: raw.replace(/\s+/g, "").toUpperCase()}]; };
     rows.slice(hi + 1).forEach(r => {
       if (!r.some(c => String(c).trim())) return; stat.rows++;
-      const s = String(r[C.sn] ?? "").trim().replace(/\s+/g, "").toUpperCase(); if (!s) { stat.empty++; return; }
+      const cells = snOfCell(r[C.sn]); if (!cells.length) { stat.empty++; return; }
+      if (cells[0].text) { stat.text++; return; }
+      if (cells[0].split) stat.split++;
+      cells.forEach(({s}) => {
       if (opt.skipShort && s.length < 5) { stat.short++; return; }
       stat.withSn++;
       const d = xlDate(r[C.date]), type = String(r[C.note] ?? "").trim(), bh = String(r[C.bh] ?? "").trim();
@@ -1512,6 +1569,7 @@
         m: months(r[C.bh]), bh, act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
         nd: xlDate((C.nd2 >= 0 && r[C.nd2] && r[C.ns2] ? r[C.nd2] : "") || (C.nd1 >= 0 && r[C.nd1]) || (C.nd2 >= 0 && r[C.nd2]) || "")};
       if (!g.has(s)) g.set(s, []); g.get(s).push(row);
+      });
     });
     const recs = [];
     g.forEach((L, s) => {
@@ -1566,7 +1624,8 @@
       F._res = res;
       $("#riPrev").innerHTML = `<table class="ptable"><tr><th style="text-align:left;width:auto">Nội dung</th><th style="width:90px">Số lượng</th></tr>
         <tr><td>Dòng dữ liệu</td><td>${S.rows.toLocaleString("vi-VN")}</td></tr><tr><td>Dòng có seri</td><td>${S.withSn.toLocaleString("vi-VN")}</td></tr>
-        <tr><td>Dòng không có seri (bỏ qua)</td><td>${S.empty.toLocaleString("vi-VN")}</td></tr>${S.short ? `<tr><td>Seri quá ngắn (bỏ qua)</td><td>${S.short}</td></tr>` : ""}
+        <tr><td>Dòng không có seri (bỏ qua)</td><td>${S.empty.toLocaleString("vi-VN")}</td></tr>
+        ${S.text ? `<tr><td>Ô SERI ghi chú, không phải seri (bỏ qua – VD “Không chụp”)</td><td>${S.text}</td></tr>` : ""}${S.split ? `<tr><td>Ô SERI có ghi chú – đã tách lấy seri 525…</td><td>${S.split}</td></tr>` : ""}${S.short ? `<tr><td>Seri quá ngắn (bỏ qua)</td><td>${S.short}</td></tr>` : ""}
         <tr><td><b>Seri khác nhau sẽ nhập</b></td><td><b>${res.recs.length.toLocaleString("vi-VN")}</b></td></tr>
         <tr><td>· đúng chuẩn công ty (525 + 5 số)</td><td>${S.std.toLocaleString("vi-VN")}</td></tr><tr><td>· seri hãng khác / dạng khác</td><td>${S.other.toLocaleString("vi-VN")}</td></tr>
         <tr><td>· seri có nhiều dòng (lấy lần bán gần nhất)</td><td>${S.dupSn.toLocaleString("vi-VN")}</td></tr><tr><td>· có đổi hàng</td><td>${S.ex}</td></tr>
@@ -1879,11 +1938,12 @@
   /* ================= KỸ THUẬT ================= */
   const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
+    drawWLookup($("#wlKt"));
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
     const f = KTF.find(x => x[0] === ktFilter)[2];
     const rows = tickets.filter(f).sort((a,b) => ktFilter==="xong" ? (b.updatedAt||"").localeCompare(a.updatedAt||"") : (a.createdAt||"").localeCompare(b.createdAt||""));
-    $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t,
+    $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t, wBadge(t.serial) +
         (t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
       : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
       : t.stage==="cho_lk" ? `<div class="cardbtns"><button class="btn okb" data-lkok="${esc(t.id)}">✅ Linh kiện đã về – tiếp tục sửa</button></div>` : "")
@@ -1961,6 +2021,7 @@
       <h2><span class="tag ${t.type}">${TYPE[t.type]}</span>${esc(t.product)}</h2>
       <dl class="kv"><dt>Số seri</dt><dd>${esc(t.serial)}</dd><dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
         ${isBH ? `<dt>Bảo hành</dt><dd>${esc(t.warrantyText)}${oldExp ? ` (hết hạn ${oldExp})` : ""}</dd>` : ""}
+        <dt>Tra cứu BH</dt><dd>${wBadge(t.serial).replace('margin-top:4px;', '')}</dd>
         ${(t.history||[]).filter(h => h.note && h.by === "Giám đốc").map(h => `<dt>GĐ ghi chú</dt><dd>${esc(h.note)}</dd>`).join("")}</dl>
       <label>Phương án xử lý *</label>
       <div class="choice">
