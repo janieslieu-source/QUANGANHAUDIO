@@ -1244,9 +1244,43 @@
     if (canKtFail(t)) $("#dKtFail").onclick = () => { close("detailBg"); detailId = null; openKtFail(t.id); };
     if (canCancelTk(t)) $("#dCancelTk").onclick = () => { close("detailBg"); detailId = null; openCancelTk(t.id); };
     if (canReportPaid(t)) $("#dPaidReq").onclick = () => { close("detailBg"); detailId = null; openPaidReq(t.id); };
+    if (canEditInfo()) { $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="dInfo">✏️ Sửa thông tin khách (tên, SĐT)</button></div>`);
+      $("#dInfo").onclick = () => { close("detailBg"); detailId = null; openEditInfo("tk", t.id); }; }
     if (boss) $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="dPurge" style="color:var(--bad);border-color:var(--bad)">🗑 Xóa vĩnh viễn phiếu (phiếu test / nhập nhầm)</button></div>`);
     if (boss) $("#dPurge").onclick = () => { close("detailBg"); detailId = null; openPurge("tk", t.id); };
     open("detailBg");
+  }
+
+  /* ================= SỬA THÔNG TIN KHÁCH TRÊN PHIẾU / ĐƠN =================
+     Đổi tên khách, SĐT, địa chỉ → cập nhật luôn sổ bảo hành, seri đã xuất, chi phí ship gắn với mã đơn; ghi vào quá trình xử lý */
+  const canEditInfo = () => boss || ["ac", "sa", "bh", "wh"].includes(role);
+  function openEditInfo(kind, id){
+    const isOd = kind === "od", x = (isOd ? orders : tickets).find(y => y.id === id); if (!x) return; const F = $("#actForm");
+    const names = [...new Set([...orders, ...tickets].map(y => y.customer).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")).slice(0, 400);
+    F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✏️ Sửa thông tin khách – ${esc(x.code)}</h2>
+      <div class="sub">${esc(isOd ? orderSummary(x) : x.product)} · tạo ${fmtTime(x.createdAt)}</div>
+      <label>Tên khách hàng *</label><input name="ecust" value="${esc(x.customer || "")}" list="ecustList" autocomplete="off"><datalist id="ecustList">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
+      <label>Số điện thoại</label><input name="ephone" value="${esc(x.phone || "")}" inputmode="tel" autocomplete="off">
+      ${isOd ? `<label>Địa chỉ</label><input name="eaddr" value="${esc(x.address || "")}" autocomplete="off">` : ""}
+      <label>Lý do sửa <span class="sub">(không bắt buộc)</span></label><input name="ewhy" placeholder="VD: đặt nhầm tên khách" autocomplete="off">
+      <div class="sub" style="margin-top:8px">Sổ bảo hành, seri đã xuất và chi phí ship của ${isOd ? "đơn" : "phiếu"} này cũng được đổi theo tên mới.</div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu</button></div>`;
+    actCtx = {run: async () => {
+      const c = F.ecust.value.trim(), ph = F.ephone.value.trim(), ad = isOd ? F.eaddr.value.trim() : x.address;
+      if (!c) { toast("Nhập tên khách hàng"); F.ecust.focus(); throw new Error("x"); }
+      const ch = []; if (c !== (x.customer || "")) ch.push(`Tên: ${x.customer || "—"} → ${c}`); if (ph !== (x.phone || "")) ch.push(`SĐT: ${x.phone || "—"} → ${ph || "—"}`); if (isOd && ad !== (x.address || "")) ch.push(`Địa chỉ: ${x.address || "—"} → ${ad || "—"}`);
+      if (!ch.length) { toast("Chưa thay đổi gì"); throw new Error("x"); }
+      const now = new Date().toISOString(), old = x.customer || "", why = F.ewhy.value.trim();
+      const extra = {customer: c, phone: ph}; if (isOd) extra.address = ad;
+      const note = `✏️ Sửa thông tin khách: ${ch.join(" · ")}${why ? " – " + why : ""}`;
+      if (isOd) await advanceOrder(x, x.stage, note, extra); else await advance(x, x.stage, note, extra);
+      // đổi theo ở các nơi khác
+      const regs = reg.filter(r => isOd ? r.orderCode === x.code : (keySN(r.serial) === keySN(x.serial) || (x.exchange && keySN(r.serial) === keySN(x.exchange.newSerial))) && norm(r.customer) === norm(old));
+      for (const r of regs) await put("reg", Object.assign({}, r, {customer: c, phone: ph || r.phone, updatedAt: now}));
+      for (const z of stock.filter(z => z.orderCode === x.code && norm(z.customer) === norm(old))) await put("st", Object.assign({}, z, {customer: c}));
+      for (const e of expenses.filter(e => (e.ref === x.code || e.orderCode === x.code) && e.customer && norm(e.customer) === norm(old))) await put("ex", Object.assign({}, e, {customer: c}));
+    }, after: () => toast(`Đã sửa thông tin ${isOd ? "đơn" : "phiếu"} ${x.code}`)};
+    open("actBg");
   }
 
   /* ================= XÓA VĨNH VIỄN PHIẾU / ĐƠN (Giám đốc) =================
@@ -2667,6 +2701,8 @@
         try { if (o.exportedAt && !isWh()) await requestCancel(o, why); else await cancelOrder(o, why); close("detailBg"); } catch(e){ $("#cxOk").disabled = false; toast("Lưu thất bại, thử lại"); }
       };
     }
+    if (canEditInfo()) { $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="oInfo">✏️ Sửa thông tin khách (tên, SĐT, địa chỉ)</button></div>`);
+      $("#oInfo").onclick = () => { close("detailBg"); openEditInfo("od", o.id); }; }
     if (boss) { $("#detail").insertAdjacentHTML("beforeend", `<div class="btns"><button type="button" class="btn" id="oPurge" style="color:var(--bad);border-color:var(--bad)">🗑 Xóa vĩnh viễn đơn (đơn test / nhập nhầm)</button></div>`);
       $("#oPurge").onclick = () => { close("detailBg"); openPurge("od", o.id); }; }
     open("detailBg");
