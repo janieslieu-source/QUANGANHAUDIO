@@ -265,6 +265,7 @@
       <button type="button" class="dept" data-role="sa"><span class="ic">🛒</span><b>Bán hàng</b></button>
       <button type="button" class="dept" data-role="wh"><span class="ic">📦</span><b>Kho</b></button>
     </div>
+    <button type="button" class="btn" id="ccQuick" style="width:100%;margin:0 0 10px">🕘 Chấm công (nhân viên – không cần mật mã)</button>
     <input id="pw" type="password" placeholder="Mật mã" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <div class="err" id="pwErr"></div>
     <div class="btns" style="margin-top:8px"><button class="btn pri" type="submit">Vào</button></div>
@@ -278,7 +279,6 @@
       <h1 class="t" id="appTitle">Bảo hành</h1>
       <div class="hright">
         <div class="sync"><span class="dot" id="dot"></span><span id="syncTxt">…</span></div>
-        <button class="iconbtn" id="ccBtn" aria-label="Chấm công" title="Chấm công">🕘</button>
         <button class="iconbtn" id="bell" aria-label="Thông báo">🔔<span class="cnt hide" id="bellCnt">0</span></button>
         <button class="iconbtn" id="logout">Thoát</button>
       </div>
@@ -291,6 +291,7 @@
       <button class="tab" data-tab="ac"><span class="ti">💰</span>Kế toán<span class="cnt hide"></span></button>
       <button class="tab" data-tab="sa"><span class="ti">🛒</span>Bán hàng<span class="cnt hide"></span></button>
       <button class="tab" data-tab="wh"><span class="ti">📦</span>Kho<span class="cnt hide"></span></button>
+      <button class="tab" data-tab="cc"><span class="ti">🕘</span>Chấm công<span class="cnt hide"></span></button>
     </nav>
   </header>
 
@@ -532,9 +533,15 @@
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
         <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
-      <div class="panel hide" id="ccBox"></div>
       <div class="panel hide" id="plBox"></div>
       <div class="panel exbox" id="exAc"></div>
+    </section>
+
+    <!-- ===== CHẤM CÔNG ===== -->
+    <section id="v-cc" class="hide">
+      <form class="panel" id="ccSelf" autocomplete="off" onsubmit="return false"></form>
+      <div class="panel hide" id="ccBox"></div>
+      <div class="panel hide" id="ccNote"><div class="sub">📅 Bảng chấm công cả tháng của mọi nhân viên chỉ Kế toán và Giám đốc xem, sửa được.</div></div>
     </section>
 
     <!-- ===== KỸ THUẬT ===== -->
@@ -678,7 +685,7 @@
   let prevStage = null;        // Map id -> stage, để phát hiện chuyển giai đoạn
   let gdMonth = null;   // tháng đang xem ở báo cáo (YYYY-MM)
   let bhMode = "sua";   // hàng còn bảo hành: "sua" = gửi kỹ thuật, "doimoi" = đổi máy mới tại quầy
-  let recvType = null, ktFilter = "cho", pendingTab = null, actCtx = null, detailId = null;
+  let recvType = null, ktFilter = "cho", pendingTab = null, actCtx = null, detailId = null, ccView = false;
 
   /* ---------- tiện ích ---------- */
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -832,10 +839,10 @@
     if (await checkPw(loginRole, $("#pw").value)) { $("#pw").value = ""; setBoss(loginRole === "gd"); enter(loginRole); }
     else { $("#pwErr").textContent = "Sai mật mã. Vui lòng thử lại."; $("#pw").select(); }
   };
-  document.querySelectorAll(".tab").forEach(b => b.onclick = () => goTo(b.dataset.tab));
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => b.dataset.tab === "cc" ? showCC() : goTo(b.dataset.tab));
   const ktLocked = () => role === "kt" && !boss;
   function goTo(r, reason){
-    if (r === role) { renderAll(); return; }
+    if (r === role) { if (ccView) enter(r); else renderAll(); return; }
     if (ktLocked()) { if (reason) toast(reason.replace(/\s*[^.]*nhập mật mã[^.]*\.?$/i, "").trim() + " – đã báo bộ phận đó."); else toast("Phiên Kỹ thuật chỉ xem tab Kỹ thuật. Muốn sang bộ phận khác: bấm Thoát rồi đăng nhập lại."); return; }
     if (boss) { enter(r); if (reason) toast(reason); return; }
     pendingTab = r;
@@ -867,12 +874,12 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) idleCheck(); });
   function setBoss(v){ boss = !!v; try { sessionStorage.setItem("bh_boss", boss ? "1" : ""); } catch(e){} }
   function enter(r){
-    role = r; try { sessionStorage.setItem("bh_role", r); } catch(e){}
+    role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
     registerDevice();
     $("#login").classList.add("hide"); $("#app").classList.remove("hide");
-    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt"); });
+    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && !["kt", "cc"].includes(b.dataset.tab)); });
     markActive();
-    ["bh","gd","kt","vc","ac","sa","wh"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
+    ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
     const tb = document.querySelector(`.tab[data-tab="${r}"]`); if (tb && tb.scrollIntoView) tb.scrollIntoView({inline: "center", block: "nearest"});
     $("#appTitle").textContent = boss && r !== "gd" ? `👔 GĐ › ${ROLES[r].icon} ${ROLES[r].name}` : ROLES[r].icon + " " + ROLES[r].name;
     renderAll(); window.scrollTo(0,0);
@@ -1162,7 +1169,7 @@
                wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho").length};
     document.querySelectorAll(".tab").forEach(b => { const c = b.querySelector(".cnt"), v = n[b.dataset.tab]; c.textContent = v; c.classList.toggle("hide", !v); });
     if (!role) return;
-    if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
+    if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
     if (detailId && $("#detailBg").classList.contains("show")) showDetail(detailId);
   }
   const isLate = t => !CLOSED.includes(t.stage) && daysSince(t.createdAt) > LATE_DAYS;
@@ -3917,8 +3924,14 @@
     if (lg && lg.in) { const h = lg.out ? (new Date(lg.out) - new Date(lg.in)) / 36e5 : 99; return {c: h < 4 ? "H" : "X", src: "nv", lg}; }
     return {c: "", src: ""};
   }
+  // giờ làm: (tan ca – vào ca) tính ra phút, quy đổi 60 phút = 1 giờ
+  const ccMin = lg => lg && lg.in && lg.out ? Math.max(0, Math.round((new Date(lg.out) - new Date(lg.in)) / 60000)) : 0;
+  const hm = m => `${Math.floor(m / 60)} giờ${m % 60 ? ` ${m % 60} phút` : ""}`;
+  const hDec = m => Math.round(m / 60 * 100) / 100;
+  const tm = t => new Date(t).toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"});
   function ccSummary(ym, nvId){
-    const n = ccDays(ym), s = {work: 0, leave: 0, unpaid: 0, marks: 0};
+    const n = ccDays(ym), s = {work: 0, leave: 0, unpaid: 0, marks: 0, mins: 0};
+    ccLogs(ym).forEach(lg => { if (lg.nvId === nvId) s.mins += ccMin(lg); });
     for (let d = 1; d <= n; d++) { const {c} = ccCode(ym, nvId, d); if (!c) continue; s.marks++;
       if (c === "X") s.work += 1; else if (c === "H") s.work += 0.5; else if ("PLR".includes(c)) s.leave += 1; else if (c === "K") s.unpaid += 1; }
     return s;
@@ -3935,13 +3948,13 @@
     const emps = plEmployees(), n = ccDays(ccYm), [y, m] = ccYm.split("-"), sh = ccSheet(ccYm), tdy = iso(new Date());
     const wd = d => new Date(+y, +m - 1, d).getDay();
     host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y}</h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
-      <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:var(--infobg);padding:0 4px;border-radius:4px">xanh</span> = nhân viên tự bấm vào ca trên app. Cột CN tô xám.</div>
+      <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:var(--infobg);padding:0 4px;border-radius:4px">xanh</span> = nhân viên tự bấm vào ca trên app. Cột CN tô xám. Cột <b>Giờ</b> = tổng giờ tự chấm (60 phút = 1 giờ).</div>
       ${emps.length ? `<div style="overflow-x:auto;margin:0 -4px"><table class="cctab" style="border-collapse:collapse;font-size:13px">
-        <tr><th style="position:sticky;left:0;background:var(--card);text-align:left;min-width:110px;padding:4px">Nhân viên</th>${Array.from({length: n}, (_, i) => `<th style="padding:2px;min-width:30px;${wd(i + 1) === 0 ? "background:var(--line)" : ""}${`${ccYm}-${String(i + 1).padStart(2, "0")}` === tdy ? ";color:var(--brand)" : ""}">${i + 1}<div class="sub" style="font-size:10px">${["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]}</div></th>`).join("")}<th style="padding:4px">Công</th><th style="padding:4px">Nghỉ</th><th style="padding:4px">K</th></tr>
+        <tr><th style="position:sticky;left:0;background:var(--card);text-align:left;min-width:110px;padding:4px">Nhân viên</th>${Array.from({length: n}, (_, i) => `<th style="padding:2px;min-width:30px;${wd(i + 1) === 0 ? "background:var(--line)" : ""}${`${ccYm}-${String(i + 1).padStart(2, "0")}` === tdy ? ";color:var(--brand)" : ""}">${i + 1}<div class="sub" style="font-size:10px">${["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]}</div></th>`).join("")}<th style="padding:4px">Công</th><th style="padding:4px">Giờ</th><th style="padding:4px">Nghỉ</th><th style="padding:4px">K</th></tr>
         ${emps.map(e => { const s = ccSummary(ccYm, e.id); return `<tr><td style="position:sticky;left:0;background:var(--card);padding:4px;font-weight:600;white-space:nowrap">${esc(e.name)}<div class="sub"><button type="button" class="link" data-ccfill="${esc(e.id)}" style="padding:0;font-size:11px">✔ chấm đủ ngày thường</button></div></td>
-          ${Array.from({length: n}, (_, i) => { const r = ccCode(ccYm, e.id, i + 1); return `<td class="cccell" data-nv="${esc(e.id)}" data-d="${i + 1}" title="${esc(r.lg ? `Vào ${fmtTime(r.lg.in)}${r.lg.out ? " · ra " + fmtTime(r.lg.out) : ""}${r.lg.inLoc ? ` · cách công ty ${r.lg.inLoc.dist ?? "?"} m` : ""}` : CC_LABEL[r.c] || "Chưa chấm")}"
+          ${Array.from({length: n}, (_, i) => { const r = ccCode(ccYm, e.id, i + 1); return `<td class="cccell" data-nv="${esc(e.id)}" data-d="${i + 1}" title="${esc(r.lg ? `Vào ${tm(r.lg.in)}${r.lg.out ? " · ra " + tm(r.lg.out) + " · làm " + hm(ccMin(r.lg)) : ""}${r.lg.inLoc ? ` · cách công ty ${r.lg.inLoc.dist ?? "?"} m` : ""}` : CC_LABEL[r.c] || "Chưa chấm")}"
             style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:var(--infobg);color:var(--info);" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${CC_SHOW[r.c] || ""}</td>`; }).join("")}
-          <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
+          <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
         : `<div class="empty">Chưa có nhân viên – thêm nhân viên ở “Bảng lương” bên dưới trước.</div>`}
       <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Excel bảng chấm công</button><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
       <div class="sub" id="ccLocTxt"></div>`;
@@ -3958,50 +3971,59 @@
       navigator.geolocation.getCurrentPosition(async p => { await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, updatedAt: new Date().toISOString()})); toast("Đã lưu vị trí công ty"); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
     $("#ccXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX;
-      const head = ["STT", "Họ và tên", ...Array.from({length: n}, (_, i) => String(i + 1)), "Ngày công", "Nghỉ có lương (L,P,R)", "Nghỉ không lương"];
-      const rows = emps.map((e, i) => { const s = ccSummary(ccYm, e.id); return [i + 1, e.name, ...Array.from({length: n}, (_, d) => CC_SHOW[ccCode(ccYm, e.id, d + 1).c] || ""), s.work, s.leave, s.unpaid]; });
-      const aoa = [[COMPANY], [`BẢNG CHẤM CÔNG THÁNG ${m}/${y}`], [`Ký hiệu: X cả ngày · ½ nửa ngày · P phép · L lễ · R việc riêng · K không lương`], [], ["", "", ...Array.from({length: n}, (_, i) => ["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]), "", "", ""], head, ...rows, [], ["", "Người chấm công", ...Array(n - 4).fill(""), "Giám đốc duyệt"]];
-      const ws = X.utils.aoa_to_sheet(aoa); ws["!cols"] = [{wch: 5}, {wch: 24}, ...Array(n).fill({wch: 4}), {wch: 10}, {wch: 12}, {wch: 12}];
-      ws["!merges"] = [0, 1, 2].map(r => ({s: {r, c: 0}, e: {r, c: n + 4}}));
+      const head = ["STT", "Họ và tên", ...Array.from({length: n}, (_, i) => String(i + 1)), "Ngày công", "Tổng giờ làm", "Nghỉ có lương (L,P,R)", "Nghỉ không lương"];
+      const rows = emps.map((e, i) => { const s = ccSummary(ccYm, e.id); return [i + 1, e.name, ...Array.from({length: n}, (_, d) => CC_SHOW[ccCode(ccYm, e.id, d + 1).c] || ""), s.work, hDec(s.mins), s.leave, s.unpaid]; });
+      const aoa = [[COMPANY], [`BẢNG CHẤM CÔNG THÁNG ${m}/${y}`], [`Ký hiệu: X cả ngày · ½ nửa ngày · P phép · L lễ · R việc riêng · K không lương`], [], ["", "", ...Array.from({length: n}, (_, i) => ["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]), "", "", "", ""], head, ...rows, [], ["", "Người chấm công", ...Array(n - 4).fill(""), "Giám đốc duyệt"]];
+      const ws = X.utils.aoa_to_sheet(aoa); ws["!cols"] = [{wch: 5}, {wch: 24}, ...Array(n).fill({wch: 4}), {wch: 10}, {wch: 11}, {wch: 12}, {wch: 12}];
+      ws["!merges"] = [0, 1, 2].map(r => ({s: {r, c: 0}, e: {r, c: n + 5}}));
       const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, `Cham cong T${m}-${y}`);
       await saveBlob(`Cham-cong_${ccYm}.xlsx`, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu bảng chấm công"); } catch(e){ toast("Không tạo được file Excel"); } };
   }
   // ① nhân viên tự chấm công: nút 🕘 trên đầu màn hình
   const ccMe = () => { try { return localStorage.getItem("bh_ccme") || ""; } catch(e){ return ""; } };
   function distM(a, b){ const R = 6371000, r = x => x * Math.PI / 180, dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng), h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); }
-  function openCheckin(){
-    const emps = plEmployees(), me = ccMe(), F = $("#actForm"), d = iso(new Date());
+  function drawSelf(F, sheet){
+    const emps = plEmployees(), me = ccMe(), d = iso(new Date()), q = x => F.querySelector(x);
     const myLog = id => expenses.find(x => x.kind === "cclog" && x.nvId === id && x.date === d);
-    const draw = () => { const id = F.ccnv?.value || me, lg = id ? myLog(id) : null, ym = d.slice(0, 7), s = id ? ccSummary(ym, id) : null;
-      $("#ccStat").innerHTML = !id ? "" : lg ? `Hôm nay: vào ca <b>${fmtTime(lg.in)}</b>${lg.out ? ` · tan ca <b>${fmtTime(lg.out)}</b>` : " · <b>chưa tan ca</b>"}` : "Hôm nay <b>chưa chấm công</b>.";
-      if (s) $("#ccStat").innerHTML += `<br>Tháng ${ym.slice(5)}: <b>${s.work}</b> công${s.leave ? ` · ${s.leave} ngày nghỉ có lương` : ""}${s.unpaid ? ` · ${s.unpaid} ngày không lương` : ""}`;
-      $("#ccIn").disabled = !id || !!lg; $("#ccOut").disabled = !id || !lg || !!lg.out; };
-    F.innerHTML = `<div class="grab"></div><h2>🕘 Chấm công</h2><div class="sub">${fmt(d)} · ${new Date().toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"})}</div>
+    const draw = () => { const st = q(".ccStat"); if (!st) return;
+      const id = F.ccnv?.value || "", lg = id ? myLog(id) : null, ym = d.slice(0, 7), s = id ? ccSummary(ym, id) : null;
+      st.innerHTML = !id ? "Chọn tên của bạn để chấm công." : lg ? `Hôm nay: vào ca <b>${tm(lg.in)}</b>${lg.out ? ` · tan ca <b>${tm(lg.out)}</b><br>Giờ làm hôm nay: <b>${hm(ccMin(lg))}</b> = <b>${hDec(ccMin(lg))} giờ</b>` : ` · <b>chưa tan ca</b> (đã làm ${hm(Math.max(0, Math.round((Date.now() - new Date(lg.in)) / 60000)))})`}` : "Hôm nay <b>chưa chấm công</b>.";
+      if (s) st.innerHTML += `<br>Tháng ${ym.slice(5)}: <b>${s.work}</b> công · <b>${hDec(s.mins)}</b> giờ làm${s.leave ? ` · ${s.leave} ngày nghỉ có lương` : ""}${s.unpaid ? ` · ${s.unpaid} ngày không lương` : ""}`;
+      q(".ccIn").disabled = !id || !!lg; q(".ccOut").disabled = !id || !lg || !!lg.out; };
+    F.innerHTML = `${sheet ? `<div class="grab"></div>` : ""}<h2 style="margin:0 0 4px">🕘 Chấm công</h2><div class="sub">${fmt(d)} · ${tm(new Date())} · giờ làm tính theo phút, 60 phút = 1 giờ</div>
       ${emps.length ? `<label>Bạn là</label><select name="ccnv"><option value="">— Chọn tên của bạn —</option>${emps.map(e => `<option value="${esc(e.id)}" ${e.id === me ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select>
         ${ccCfg()?.lat ? `<div class="sub" style="margin-top:10px">📍 Cần bật định vị – chỉ chấm được khi bạn ở trong phạm vi <b>${ccRadius()} m</b> quanh công ty.</div><input type="checkbox" name="ccgps" checked hidden>`
           : `<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="ccgps" checked style="width:auto;margin:0"> Kèm vị trí (GPS)</label>`}
-        <div class="found" id="ccStat" style="margin-top:10px"></div>
-        <div class="btns"><button type="button" class="btn okb" id="ccIn">▶ Vào ca</button><button type="button" class="btn pri" id="ccOut">⏹ Tan ca</button></div>`
+        <div class="found ccStat" style="margin-top:10px"></div>
+        <div class="btns"><button type="button" class="btn okb ccIn">▶ Vào ca</button><button type="button" class="btn pri ccOut">⏹ Tan ca</button></div>`
       : `<div class="empty">Kế toán chưa thêm danh sách nhân viên (tab Kế toán → Bảng lương).</div>`}
-      <div class="btns"><button type="button" class="btn" data-close="actBg">Đóng</button></div>`;
-    actCtx = null; open("actBg"); if (!emps.length) return;
+      ${sheet ? `<div class="btns"><button type="button" class="btn" data-close="actBg">Đóng</button></div>` : ""}`;
+    if (sheet) { actCtx = null; open("actBg"); }
+    if (!emps.length) return;
     F.ccnv.onchange = () => { try { localStorage.setItem("bh_ccme", F.ccnv.value); } catch(e){} draw(); }; draw();
     const getLoc = () => new Promise(ok => { if (!navigator.geolocation) return ok(ccCfg()?.lat ? {err: "máy không hỗ trợ định vị"} : null); if (!F.ccgps.checked) return ok(null);
-      navigator.geolocation.getCurrentPosition(p => { const loc = {lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy)}, cfg = expenses.find(x => x.id === "cc_cfg");
+      navigator.geolocation.getCurrentPosition(p => { const loc = {lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy)}, cfg = ccCfg();
         if (cfg?.lat) loc.dist = distM(loc, cfg); ok(loc); }, () => ok({err: "không lấy được vị trí"}), {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}); });
     const stamp = async kind => { const id = F.ccnv.value; if (!id) { toast("Chọn tên của bạn"); return; }
-      const btn = kind === "in" ? $("#ccIn") : $("#ccOut"); btn.disabled = true; const t0 = btn.textContent; btn.textContent = "📍 Đang lấy vị trí…";
+      const btn = q(kind === "in" ? ".ccIn" : ".ccOut"); btn.disabled = true; const t0 = btn.textContent; btn.textContent = "📍 Đang lấy vị trí…";
       const e = emps.find(x => x.id === id), loc = await getLoc(), now = new Date().toISOString(), old = myLog(id); btn.textContent = t0; draw();
       const cfg = ccCfg();
       if (cfg?.lat) { const rad = ccRadius();
         if (!loc || loc.err) { toast("Không lấy được vị trí – bật định vị (GPS) và cho phép trình duyệt dùng vị trí rồi thử lại"); return; }
         const eff = loc.dist - Math.min(loc.acc || 0, CC_GPS_TOL); loc.ok = eff <= rad;
         if (!loc.ok) { toast(`Bạn đang cách công ty khoảng ${loc.dist} m (sai số ±${loc.acc} m) – ngoài phạm vi ${rad} m nên chưa chấm được. Đến gần công ty hơn rồi thử lại, hoặc báo Kế toán chấm tay.`); return; } }
-      const doc = Object.assign({}, old || {id: `cl_${id}_${d}`, kind: "cclog", nvId: id, name: e.name, date: d, amount: 0}, kind === "in" ? {in: now, inLoc: loc} : {out: now, outLoc: loc}, {by: actor()});
-      try { await put("ex", doc); toast(`${kind === "in" ? "Đã vào ca" : "Đã tan ca"} lúc ${new Date(now).toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"})}${loc?.dist != null ? ` · cách công ty ${loc.dist} m` : ""}`); draw(); } catch(err){} };
-    $("#ccIn").onclick = () => stamp("in"); $("#ccOut").onclick = () => stamp("out");
+      const doc = Object.assign({}, old || {id: `cl_${id}_${d}`, kind: "cclog", nvId: id, name: e.name, date: d, amount: 0}, kind === "in" ? {in: now, inLoc: loc} : {out: now, outLoc: loc}, {by: role ? actor() : "Nhân viên tự chấm"});
+      if (kind === "out") { doc.mins = ccMin(doc); doc.hours = hDec(doc.mins); }
+      try { await put("ex", doc); toast(kind === "in" ? `Đã vào ca lúc ${tm(now)}${loc?.dist != null ? ` · cách công ty ${loc.dist} m` : ""}` : `Đã tan ca lúc ${tm(now)} · hôm nay làm ${hm(doc.mins)} (= ${doc.hours} giờ)`); draw(); } catch(err){} };
+    q(".ccIn").onclick = () => stamp("in"); q(".ccOut").onclick = () => stamp("out");
   }
-  $("#ccBtn").onclick = () => openCheckin();
+  const openCheckin = () => drawSelf($("#actForm"), true);
+  function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement)) drawSelf(F, false); drawCC(); $("#ccNote").classList.toggle("hide", role === "ac" || boss); }
+  function showCC(){ ccView = true;
+    document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === "cc"));
+    ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== "cc"));
+    $("#appTitle").textContent = "🕘 Chấm công"; drawCCView(); window.scrollTo(0, 0); }
+  $("#ccQuick").onclick = () => openCheckin();
 
   /* ================= KẾ TOÁN ================= */
   let acMonth = null;
@@ -4059,7 +4081,7 @@
           if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
           pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
-    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawCC(); drawPayroll();
+    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawPayroll();
     $("#acMonth").value = acMonth;
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
