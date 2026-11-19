@@ -57,6 +57,7 @@
 
   main{padding:14px 14px calc(env(safe-area-inset-bottom) + 40px);max-width:720px;margin:0 auto}
   .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+  .panel{scroll-margin-top:150px}
   .panel h3{margin:0 0 10px;font-size:15px}
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
   .stat{background:var(--bg);border-radius:12px;padding:10px 4px;text-align:center}
@@ -350,6 +351,12 @@
     <!-- ===== GIÁM ĐỐC ===== -->
     <section id="v-gd" class="hide">
       <div class="panel"><h3>🛠️ Hàng sửa chữa chờ duyệt <span class="sub" id="gdCnt"></span></h3><div class="list" id="gdList"></div></div>
+      <div class="panel" id="gdPayBox"><div class="row" style="align-items:center"><h3 style="margin:0">💰 Thanh toán / công nợ chờ Giám đốc duyệt <span class="sub" id="gdPayCnt"></span></h3><button class="btn sm pri hide" id="gdPayAll" type="button">✓ Duyệt tất cả</button></div>
+        <div class="sub" style="margin:4px 0 8px">Kế toán ghi nhận xong → Giám đốc kiểm tra lại số tiền. Sai thì bấm “Yêu cầu xem lại” để Kế toán sửa.</div>
+        <div class="list" id="gdPayList"></div></div>
+      <div class="panel" id="gdDebtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ còn sót</h3><b id="gdDebtSum" style="color:var(--bad)"></b></div>
+        <div id="gdDebtBody" style="margin-top:10px"></div>
+        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📄 PDF công nợ còn sót</button></div></div>
       <div id="gdStats"></div>
     </section>
 
@@ -459,6 +466,7 @@
     <!-- ===== KẾ TOÁN ===== -->
     <section id="v-ac" class="hide">
       <div class="seg" id="acSeg"><button data-g="tk">🛠️ Bảo hành & Sửa chữa<span class="cnt hide"></span></button><button data-g="od" class="yel">🛒 Đơn bán<span class="cnt hide"></span></button></div>
+      <div class="panel latebox hide" id="acBackBox"><h3>↩️ Giám đốc yêu cầu xem lại <span class="sub" id="acBackCnt"></span></h3><div class="list" id="acBackList"></div></div>
       <div class="panel" id="acWaitBox"><h3><span id="acGrpLbl"></span>Chờ ghi nhận thanh toán <span class="sub" id="acCnt"></span></h3><div class="list" id="acList"></div></div>
       <div class="panel" id="debtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ</h3><b id="debtSum" style="color:var(--bad)"></b></div>
         <div style="margin:10px 0"><input id="acQ" type="search" placeholder="Tìm khách, SĐT, seri, mã phiếu…" autocomplete="off"></div>
@@ -922,10 +930,10 @@
   // Đơn Grab gấp: thanh đỏ chớp; việc thường: thanh vàng.
   function pendingFor(r){
     switch (r) {
-      case "gd": return tickets.filter(t => t.stage === "cho_gd");
+      case "gd": return [...tickets.filter(t => t.stage === "cho_gd"), ...gdPayWait()];
       case "kt": return tickets.filter(t => t.stage === "cho_kt");
       case "vc": return [...orders.filter(o => o.stage === "cho_vc"), ...tickets.filter(t => WAIT_VC.includes(t.stage))];
-      case "ac": return [...tickets, ...orders].filter(x => x.stage === "cho_tt");
+      case "ac": return [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra");
       case "wh": return [...orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy"), ...tickets.filter(t => t.stage === "cho_kho")];
       case "sa": return orders.filter(o => o.stage === "cho_xk");          // đơn đã xác nhận, chờ kho xuất
       case "bh": return tickets.filter(t => t.stage === "cho_gd");         // phiếu sửa chữa chờ GĐ duyệt
@@ -946,6 +954,7 @@
   const itemName = x => x.lines ? `đơn ${x.code} – ${x.customer}` : `${x.product} (SN ${x.serial})`;
   function updateUrgent(){
     const bar = $("#urgentBar");
+    bar.dataset.scroll = "";
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("gaptab",
       (b.dataset.tab === "wh" && orders.some(o => isUrgent(o) && o.stage === "cho_xk")) || (b.dataset.tab === "vc" && orders.some(o => isUrgent(o) && o.stage === "cho_vc"))));
     const active = role && !$("#app").classList.contains("hide");
@@ -963,6 +972,16 @@
       bar.classList.add("calm"); bar.classList.remove("hide");
       return 0;
     }
+    // Giám đốc: không còn việc chờ duyệt nhưng vẫn còn công nợ treo -> thanh nhắc (vàng, không reo chuông)
+    const debts = active && !total && !day.length && boss ? debtNow() : [];
+    if (debts.length) {
+      const sum = debts.reduce((a,x) => a + (Number(x.pay?.amount) || 0), 0), cus = new Set(debts.map(x => x.customer)).size;
+      const td = iso(new Date()), newToday = debts.filter(x => debtStart(x) && iso(new Date(debtStart(x))) === td).length, late = debts.filter(x => debtAge(x) >= DEBT_DAYS).length;
+      bar.textContent = `📒 Công nợ còn treo: ${cus} khách – ${money(sum)}${newToday ? ` · hôm nay thêm ${newToday}` : ""}${late ? ` · ⏰ ${late} phiếu quá ${DEBT_DAYS} ngày` : ""}. Bấm để xem`;
+      bar.dataset.to = "gd"; bar.dataset.scroll = "gdDebtBox";
+      document.body.classList.add("hasgap"); bar.classList.add("calm"); bar.classList.remove("hide");
+      return 0;
+    }
     if (!total) { bar.classList.add("hide"); return 0; }
     if (urg.length) {
       const f = urg[0], where = f.stage === "cho_xk" ? "chờ XUẤT KHO" : "chờ GỬI GRAB";
@@ -973,6 +992,7 @@
       const r = boss ? "gd" : role;
       const more = pend.length > 1 ? ` (+${pend.length - 1})` : "";
       bar.textContent = r === "sa" ? `⏳ ${pend.length} đơn đã xác nhận đang chờ Kho xuất: ${itemName(pend[0])}${more}. Bấm để xem`
+        : r === "gd" && pend.some(x => x.pay?.gd === "cho") ? `👔 ${pend.length} việc chờ Giám đốc duyệt (sửa chữa / thanh toán – công nợ): ${itemName(pend[0])}${more}. Bấm để xem`
         : r === "bh" ? `⏳ ${pend.length} phiếu sửa chữa đang chờ Giám đốc duyệt: ${itemName(pend[0])}${more}. Bấm để xem`
         : `🔔 ${pend.length} việc đang chờ ${ROLES[r].name} xử lý: ${itemName(pend[0])}${more}. Bấm để xem`;
       bar.dataset.to = r;
@@ -981,7 +1001,12 @@
     bar.classList.remove("hide");
     return total;
   }
-  $("#urgentBar").onclick = () => { goTo($("#urgentBar").dataset.to); window.scrollTo({top: 0, behavior: "smooth"}); };
+  $("#urgentBar").onclick = () => {
+    const bar = $("#urgentBar"), sc = bar.dataset.scroll; bar.dataset.scroll = "";
+    goTo(bar.dataset.to);
+    const el = sc && $("#" + sc);
+    if (el && !el.closest(".hide")) setTimeout(() => el.scrollIntoView({behavior: "smooth", block: "start"}), 150); else window.scrollTo({top: 0, behavior: "smooth"});
+  };
   function softChime(){                       // chuông nhẹ: 1 hồi, âm lượng nhỏ
     try { const a = audio(); master.gain.setValueAtTime(0.25, a.currentTime); beep(1); setTimeout(() => { try { master.gain.setValueAtTime(0.9, actx.currentTime); } catch(e){} }, 1800); } catch(e){}
   }
@@ -1043,10 +1068,10 @@
     updateBell(); updateUrgent(); debtReminder();
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
-               gd: tickets.filter(t => t.stage==="cho_gd").length,
+               gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
                kt: tickets.filter(t => t.stage==="cho_kt"||t.stage==="dang_sua").length,
                vc: tickets.filter(t => WAIT_VC.includes(t.stage)).length + orders.filter(o => o.stage === "cho_vc").length,
-               ac: tickets.filter(t => t.stage === "cho_tt").length + orders.filter(o => o.stage === "cho_tt").length,
+               ac: [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra").length,
                sa: 0,
                wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho").length};
     document.querySelectorAll(".tab").forEach(b => { const c = b.querySelector(".cnt"), v = n[b.dataset.tab]; c.textContent = v; c.classList.toggle("hide", !v); });
@@ -1065,6 +1090,7 @@
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
       ${t.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[t.pay.status]}: <b style="color:${t.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(t.pay.amount)}</b>${t.pay.status === "da_tt" && t.pay.paidDate ? " · " + fmt(t.pay.paidDate) : ""}${t.stage === "cong_no" ? ` · nợ ${debtAge(t)} ngày${debtAge(t) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
+      ${gdLine(t)}
       <div class="sub" style="margin-top:4px">${esc(t.code)} · nhận ${fmt(t.createdAt)} ${isLate(t) ? `<b style="color:var(--bad)">(🚨 tồn ${daysSince(t.createdAt)} ngày)</b>` : `(${daysSince(t.createdAt)} ngày)`}</div>
       ${btns || ""}
     </div>`;
@@ -1261,7 +1287,67 @@
     const max = Math.max(1, ...pairs.map(p => p[1]));
     return pairs.map(([l,n]) => `<div class="hbar"><span class="lbl">${esc(l)}</span><span class="track"><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`).join("");
   }
+  /* ---------- Giám đốc duyệt lại thanh toán / công nợ do Kế toán ghi ---------- */
+  const gdPayWait = () => [...tickets, ...orders].filter(x => x.pay?.gd === "cho" && ["cong_no", "da_tt"].includes(x.stage));
+  function gdLine(x){
+    const g = x.pay?.gd; if (!g || hidePrice()) return "";
+    if (g === "ok") return `<div class="sub" style="margin-top:4px;color:var(--ok)">👔 Giám đốc đã duyệt${x.pay.gdAt ? " · " + fmtTime(x.pay.gdAt) : ""}</div>`;
+    if (g === "tra") return `<div class="sub" style="margin-top:4px;color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(x.pay.gdNote || "")}</b></div>`;
+    return `<div class="sub" style="margin-top:4px;color:var(--warn)">⏳ Chờ Giám đốc duyệt</div>`;
+  }
+  // lưu kết quả duyệt (giữ nguyên giai đoạn, ghi vào quá trình xử lý)
+  async function gdDecide(x, ok, note){
+    const pay = Object.assign({}, x.pay, {gd: ok ? "ok" : "tra", gdAt: new Date().toISOString(), gdBy: actor(), gdNote: ok ? "" : note});
+    const msg = ok ? `👔 Giám đốc đã duyệt ${PAY[x.stage].toLowerCase()}: ${money(pay.amount)}${note ? " – " + note : ""}` : `↩️ Giám đốc yêu cầu Kế toán xem lại: ${note}`;
+    if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
+    if (!ok) pushTo("ac", `↩️ Kế toán: Giám đốc yêu cầu xem lại ${x.code}`, `${x.customer} – ${note}`, x.id);
+  }
+  const debtNow = () => [...tickets, ...orders].filter(x => x.stage === "cong_no");
+  function drawGdPay(){
+    const L = gdPayWait().sort((a,b) => (a.pay.at || "").localeCompare(b.pay.at || ""));
+    $("#gdPayCnt").textContent = L.length ? `(${L.length})` : "";
+    $("#gdPayAll").classList.toggle("hide", L.length < 2);
+    $("#gdPayList").innerHTML = L.length ? L.map(x => card(x, `<div class="sub" style="margin-top:6px">💰 Kế toán ghi: <b>${PAY[x.stage]} – ${money(x.pay.amount)}</b>${x.pay.method ? " · " + esc(x.pay.method) : ""}${x.pay.editedBy ? " · ✏️ đã sửa" : ""}${x.pay.note ? "<br>📝 " + esc(x.pay.note) : ""}</div>
+      <div class="cardbtns"><button class="btn danger" data-gdno="${esc(x.id)}">↩ Yêu cầu xem lại</button><button class="btn pri" data-gdok="${esc(x.id)}">✓ Duyệt</button></div>`)).join("")
+      : `<div class="empty">Không có thanh toán / công nợ chờ duyệt.</div>`;
+    bindAny($("#gdPayList"));
+    $("#gdPayList").querySelectorAll("[data-gdok]").forEach(b => b.onclick = async () => { const x = findAny(b.dataset.gdok); if (!x) return; b.disabled = true;
+      try { await gdDecide(x, true); toast("Đã duyệt"); } catch(e){ b.disabled = false; } });
+    $("#gdPayList").querySelectorAll("[data-gdno]").forEach(b => b.onclick = () => { const x = findAny(b.dataset.gdno); if (!x) return;
+      openAct({title: "Yêu cầu Kế toán xem lại", t: x.lines ? {product: `Đơn ${x.code}: ${orderSummary(x)}`, serial: "—", customer: x.customer} : x,
+        noteLabel: "Cần xem lại điều gì (VD: sai số tiền, khách đã trả…)", required: true, okText: "↩ Gửi Kế toán", okCls: "danger",
+        run: async note => { await gdDecide(x, false, note); toast("Đã gửi Kế toán xem lại"); }}); });
+    $("#gdPayAll").onclick = async () => { const b = $("#gdPayAll"); b.disabled = true;
+      try { for (const x of gdPayWait()) await gdDecide(x, true); toast("Đã duyệt tất cả"); } catch(e){} finally { b.disabled = false; } };
+  }
+  function drawGdDebt(){
+    const D = debtNow(), total = D.reduce((a,x) => a + (Number(x.pay?.amount) || 0), 0);
+    const ws = new Date(today()); ws.setDate(ws.getDate() - (ws.getDay() + 6) % 7);
+    const newW = D.filter(x => { const s0 = debtStart(x); return s0 && new Date(s0) >= ws; });
+    const by = {}; D.forEach(x => { const k = x.customer || "?"; by[k] = by[k] || {n: 0, amt: 0, oldest: 0, items: []}; by[k].n++; by[k].amt += Number(x.pay?.amount) || 0; by[k].oldest = Math.max(by[k].oldest, debtAge(x)); by[k].items.push(x); });
+    const rows = Object.entries(by).sort((a,b) => b[1].oldest - a[1].oldest || b[1].amt - a[1].amt);
+    $("#gdDebtSum").textContent = D.length ? money(total) : "";
+    $("#gdDebtBox").classList.toggle("latebox", D.some(x => debtAge(x) >= DEBT_DAYS));
+    $("#gdDebtBody").innerHTML = D.length ? `<div class="stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:10px">
+        <div class="stat c-bad"><b>${rows.length}</b><span>Khách còn nợ</span></div>
+        <div class="stat c-warn"><b>${newW.length}</b><span>Nợ mới tuần này (từ ${fmt(iso(ws))})</span></div>
+        <div class="stat ${D.some(x => debtAge(x) >= DEBT_DAYS) ? "late" : ""} c-bad"><b>${D.filter(x => debtAge(x) >= DEBT_DAYS).length}</b><span>Quá ${DEBT_DAYS} ngày</span></div></div>
+      <table class="ptable"><tr><th style="text-align:left;width:auto">Khách hàng</th><th>Số phiếu</th><th style="width:110px">Còn nợ</th></tr>
+      ${rows.map(([k,v]) => `<tr class="gdcus" data-c="${esc(k)}" style="cursor:pointer"><td><b>${esc(k)}</b>${v.oldest >= DEBT_DAYS ? ` <span class="sub" style="color:var(--bad)">⏰ ${v.oldest} ngày</span>` : ` <span class="sub">${v.oldest} ngày</span>`}
+        <div class="sub">${v.items.map(x => `${esc(x.code)}${x.pay?.gd === "cho" ? " ⏳" : x.pay?.gd === "tra" ? " ↩️" : ""}`).join(", ")}</div></td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>
+      <div class="sub" style="margin-top:6px">Bấm vào tên khách để xem từng phiếu. ⏳ = chờ Giám đốc duyệt · ↩️ = đã trả Kế toán xem lại.</div>`
+      : `<div class="empty">✅ Không còn công nợ.</div>`;
+    $("#gdDebtBody").querySelectorAll(".gdcus").forEach(tr => tr.onclick = () => { const it = by[tr.dataset.c]?.items || []; if (it.length === 1) { it[0].lines ? showOrder(it[0].id) : showDetail(it[0].id); return; }
+      $("#detail").innerHTML = `<div class="grab"></div><h2>📒 ${esc(tr.dataset.c)}</h2><div class="list" id="gdCusList">${it.map(x => card(x)).join("")}</div><div class="btns"><button class="btn" data-close="detailBg">Đóng</button></div>`;
+      bindAny($("#gdCusList")); open("detailBg"); });
+    $("#gdDebtPdf").onclick = () => exportReportPdf({file: "Cong-no-con-sot_" + iso(new Date()), landscape: true, title: "Công nợ còn sót", period: "Tính đến " + fmt(iso(new Date())),
+      summary: [["Tổng còn nợ", vnd(total) + " đ"], ["Khách còn nợ", rows.length], ["Nợ mới tuần này", newW.length], [`Quá ${DEBT_DAYS} ngày`, D.filter(x => debtAge(x) >= DEBT_DAYS).length]],
+      head: [{t:"Khách hàng"},{t:"SĐT"},{t:"Mã"},{t:"Loại"},{t:"Hàng"},{t:"Ngày ghi nợ"},{t:"Số ngày nợ",r:1},{t:"GĐ duyệt"},{t:"Số tiền (đ)",r:1}],
+      rows: D.slice().sort((a,b) => (a.customer||"").localeCompare(b.customer||"", "vi") || debtAge(b) - debtAge(a)).map(x => [x.customer, x.phone || "", x.code, x.lines ? "Đơn bán" : TYPE[x.type], x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), debtAge(x), x.pay?.gd === "ok" ? "Đã duyệt" : x.pay?.gd === "tra" ? "Xem lại" : x.pay?.gd === "cho" ? "Chờ duyệt" : "", vnd(x.pay?.amount)]),
+      foot: ["TỔNG CỘNG", "", "", "", "", "", "", "", vnd(total)], sign: ["Kế toán", "Giám đốc", ""]});
+  }
   function renderGD(){
+    drawGdPay(); drawGdDebt();
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
     $("#gdList").innerHTML = wait.length ? wait.map(t => tkCard(t, `<div class="cardbtns">
@@ -1850,6 +1936,7 @@
       <div class="sub" style="margin-top:4px">🚚 ${OSHIP[o.ship?.method] || ""}${o.ship?.carrier ? " " + esc(o.ship.carrier) : ""}${o.ship?.tracking ? " · MVĐ " + esc(o.ship.tracking) : ""}${o.ship?.date ? " · <b>gửi " + fmt(o.ship.date) + "</b>" : ""}${o.exportedAt ? " · xuất kho " + fmtTime(o.exportedAt) : ""}</div>
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
       ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
+      ${gdLine(o)}
       ${btns || ""}</div>`;
   }
   const card = (x, btns) => x.lines ? odCard(x, btns) : tkCard(x, btns);
@@ -2779,6 +2866,17 @@
     $("#acList").innerHTML = wait.length ? wait.map(t => card(t, `<div class="cardbtns"><button class="btn pri" data-pay="${esc(t.id)}">💰 Ghi nhận thanh toán</button></div>`)).join("")
       : `<div class="empty">Không có đơn chờ.</div>`;
     bindAny($("#acList"));
+    const back = [...tickets, ...orders].filter(x => x.pay?.gd === "tra");
+    $("#acBackBox").classList.toggle("hide", !back.length);
+    $("#acBackCnt").textContent = back.length ? `(${back.length})` : "";
+    $("#acBackList").innerHTML = back.map(x => card(x, `<div class="cardbtns"><button class="btn" data-acre="${esc(x.id)}">↪ Gửi lại GĐ (không sửa)</button><button class="btn pri" data-acfix="${esc(x.id)}">✏️ Sửa chi phí</button></div>`)).join("");
+    bindAny($("#acBackList"));
+    $("#acBackList").querySelectorAll("[data-acfix]").forEach(b => b.onclick = () => openPay(b.dataset.acfix, null, true));
+    $("#acBackList").querySelectorAll("[data-acre]").forEach(b => b.onclick = () => { const x = findAny(b.dataset.acre); if (!x) return;
+      openAct({title: "Gửi lại Giám đốc – không sửa", t: x.lines ? {product: `Đơn ${x.code}: ${orderSummary(x)}`, serial: "—", customer: x.customer} : x, noteLabel: "Giải thích cho Giám đốc", required: true, okText: "↪ Gửi lại Giám đốc",
+        run: async note => { const pay = Object.assign({}, x.pay, {gd: "cho", gdNote: ""}); const msg = `↪ Kế toán giữ nguyên ${money(pay.amount)}, gửi lại Giám đốc: ${note}`;
+          if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
+          pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
     drawDebt(); drawWeekDebt();
     $("#acMonth").value = acMonth;
@@ -2873,7 +2971,10 @@
         note = `✏️ Sửa chi phí: ${PAY[p.status] || ""} ${money(p.amount)} → ${PAY[payStatus]} ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
         pay.editedAt = pay.at; pay.editedBy = actor(); pay.at = p.at || pay.at;   // giữ thời điểm ghi nhận gốc (tính tuổi nợ đúng)
       }
+      // Kế toán ghi xong -> chờ Giám đốc duyệt lại; Giám đốc tự ghi thì coi như đã duyệt
+      Object.assign(pay, boss ? {gd: "ok", gdAt: pay.editedAt || pay.at, gdBy: "Giám đốc"} : {gd: "cho"});
       if (isOd) await advanceOrder(t, payStatus, note, {pay}); else await advance(t, payStatus, note, {pay});
+      if (!boss) pushTo("gd", `👔 Giám đốc duyệt ${PAY[payStatus].toLowerCase()}: ${t.code} – ${t.customer}`, `${money(pay.amount)}${edit ? " (Kế toán đã sửa)" : ""}`, t.id);
       toast(edit ? "Đã sửa chi phí" : payStatus === "cong_no" ? "Đã ghi công nợ" : "Đã ghi nhận thanh toán");
     }};
     open("actBg");
