@@ -356,7 +356,10 @@
         <div class="list" id="gdPayList"></div></div>
       <div class="panel" id="gdDebtBox"><div class="row" style="align-items:center"><h3 style="margin:0">📒 Công nợ còn sót</h3><b id="gdDebtSum" style="color:var(--bad)"></b></div>
         <div id="gdDebtBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📄 PDF công nợ còn sót</button></div></div>
+        <div class="btns"><button class="btn" id="gdDebtPdf" type="button">📄 PDF công nợ còn sót</button></div>
+        <div class="row" style="align-items:center;margin-top:12px;gap:8px"><b style="font-size:14px">📊 Công nợ trong tuần</b><input type="date" id="gdWkDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
+        <div class="sub" style="margin-top:4px">Chọn 1 ngày bất kỳ trong tuần (Thứ 2 → Chủ nhật): nợ mới, đã thu, còn nợ cuối tuần theo từng khách.</div>
+        <div class="btns"><button class="btn pri" id="gdWkFile" type="button">📄 Lưu file PDF công nợ tuần</button></div></div>
       <div id="gdStats"></div>
     </section>
 
@@ -480,7 +483,7 @@
       <div class="panel"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Công nợ theo tuần</h3>
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
-        <div class="btns"><button class="btn" id="dwFile">📄 PDF công nợ tuần</button></div></div>
+        <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📄 PDF tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📄 PDF tuần – tất cả</button></div></div>
     </section>
 
     <!-- ===== KỸ THUẬT ===== -->
@@ -1347,7 +1350,7 @@
       foot: ["TỔNG CỘNG", "", "", "", "", "", "", "", vnd(total)], sign: ["Kế toán", "Giám đốc", ""]});
   }
   function renderGD(){
-    drawGdPay(); drawGdDebt();
+    drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
     $("#gdList").innerHTML = wait.length ? wait.map(t => tkCard(t, `<div class="cardbtns">
@@ -2980,14 +2983,14 @@
     open("actBg");
   }
   // ---- Thống kê công nợ theo tuần (Thứ 2 → Chủ nhật) ----
-  function weekRange(){
-    const d0 = $("#dwDate").value || iso(new Date()), d = new Date(d0 + "T00:00:00");
+  function weekRange(day){
+    const d0 = day || $("#dwDate").value || iso(new Date()), d = new Date(d0 + "T00:00:00");
     const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7);
     const last = new Date(e); last.setDate(e.getDate() - 1);
     return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(last))}`};
   }
-  function weekDebt(){
-    const {s, e, label} = weekRange(), L = acPick();
+  function weekDebt(list, day){
+    const {s, e, label} = weekRange(day), L = list || acPick();
     const inW = v => { if (!v) return false; const t = new Date(String(v).length <= 10 ? v + "T12:00:00" : v); return t >= s && t < e; };
     const arose = L.filter(x => debtStart(x) && inW(debtStart(x)));
     const collected = L.filter(x => x.stage === "da_tt" && x.pay?.debtSince && inW(x.pay.paidDate));
@@ -3010,16 +3013,24 @@
         ${rows.map(([k,v]) => `<tr><td>${esc(k)}${v.oldest >= DEBT_DAYS ? ` <span class="sub" style="color:var(--bad)">⏰ ${v.oldest} ngày</span>` : ""}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : `<div class="sub" style="margin-top:8px">Không có công nợ trong tuần này.</div>`}`;
   }
   $("#dwDate").addEventListener("change", drawWeekDebt);
-  $("#dwFile").onclick = () => {
-    const {label, arose, collected, openEnd, sum} = weekDebt(), {s: ws} = weekRange();
-    const row = (x, kind) => [kind, x.code, x.customer, x.phone || "", x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), x.pay?.paidDate && kind === "Đã thu" ? fmt(x.pay.paidDate) : "", debtAge(x), vnd(x.pay?.amount)];
-    exportReportPdf({file: `Cong-no-tuan_${acGroup === "od" ? "don-ban" : "BH-SC"}_${iso(ws)}`, landscape: true,
-      title: "Báo cáo công nợ theo tuần", period: `${label} · ${acGroup === "od" ? "Đơn bán" : "Bảo hành & Sửa chữa"}`,
-      summary: [["Nợ mới trong tuần", vnd(sum(arose)) + " đ"], ["Đã thu nợ trong tuần", vnd(sum(collected)) + " đ"], ["Còn nợ cuối tuần", vnd(sum(openEnd)) + " đ"]],
-      head: [{t:"Loại"},{t:"Mã"},{t:"Khách hàng"},{t:"SĐT"},{t:"Hàng"},{t:"Ngày ghi nợ"},{t:"Ngày thu"},{t:"Số ngày nợ",r:1},{t:"Số tiền (đ)",r:1}],
+  // File PDF công nợ trong tuần (mẫu báo cáo chung): list = phiếu/đơn cần tính, day = 1 ngày bất kỳ trong tuần
+  function weekDebtPdf(list, day, groupLabel, tag){
+    const {label, arose, collected, openEnd, sum, byCus} = weekDebt(list, day), {s: ws} = weekRange(day);
+    const gdTxt = x => x.pay?.gd === "ok" ? "Đã duyệt" : x.pay?.gd === "cho" ? "Chờ duyệt" : x.pay?.gd === "tra" ? "Xem lại" : "";
+    const row = (x, kind) => [kind, x.lines ? "Đơn bán" : TYPE[x.type], x.code, x.customer, x.phone || "", x.lines ? orderSummary(x) : x.product, fmt(debtStart(x)), x.pay?.paidDate && kind === "Đã thu" ? fmt(x.pay.paidDate) : "", kind === "Đã thu" ? "" : debtAge(x), gdTxt(x), vnd(x.pay?.amount)];
+    const cus = Object.entries(byCus).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => [k, v.n, v.oldest + " ngày", vnd(v.amt)]);
+    return exportReportPdf({file: `Cong-no-tuan_${tag}_${iso(ws)}`, landscape: true,
+      title: "Báo cáo công nợ theo tuần", period: `${label} · ${groupLabel}`,
+      summary: [["Nợ mới trong tuần", vnd(sum(arose)) + " đ"], ["Đã thu nợ trong tuần", vnd(sum(collected)) + " đ"], ["Còn nợ cuối tuần", vnd(sum(openEnd)) + " đ"], ["Khách còn nợ", cus.length]],
+      head: [{t:"Loại"},{t:"Nhóm"},{t:"Mã"},{t:"Khách hàng"},{t:"SĐT"},{t:"Hàng"},{t:"Ngày ghi nợ"},{t:"Ngày thu"},{t:"Số ngày nợ",r:1},{t:"GĐ duyệt"},{t:"Số tiền (đ)",r:1}],
       rows: arose.map(x => row(x, "Nợ mới")).concat(collected.map(x => row(x, "Đã thu"))).concat(openEnd.map(x => row(x, "Còn nợ"))),
-      foot: ["Còn nợ cuối tuần", "", "", "", "", "", "", "", vnd(sum(openEnd))]});
-  };
+      foot: ["Còn nợ cuối tuần", "", "", "", "", "", "", "", "", "", vnd(sum(openEnd))],
+      extra: extraTable("Còn nợ cuối tuần theo khách hàng", ["Khách hàng", "Số phiếu", "Nợ lâu nhất", "Số tiền (đ)"], cus),
+      sign: ["Kế toán", "Giám đốc", "Người lập biểu"]});
+  }
+  $("#dwFile").onclick = () => weekDebtPdf(acPick(), null, acGroup === "od" ? "Đơn bán" : "Bảo hành & Sửa chữa", acGroup === "od" ? "don-ban" : "BH-SC");
+  $("#dwFileAll").onclick = () => weekDebtPdf([...tickets, ...orders], null, "Bảo hành, Sửa chữa & Đơn bán", "tat-ca");
+  $("#gdWkFile").onclick = () => weekDebtPdf([...tickets, ...orders], $("#gdWkDate").value || iso(new Date()), "Bảo hành, Sửa chữa & Đơn bán", "tat-ca");
   async function exportPay(kind){
     const all = acPick(), od = acGroup === "od";
     const list = kind === "cong_no" ? all.filter(t => t.stage === "cong_no").sort((a,b) => debtAge(b) - debtAge(a))
