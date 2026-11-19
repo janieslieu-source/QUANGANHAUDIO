@@ -1547,7 +1547,9 @@
     const H = rows[hi].map(c => norm(String(c)).replace(/\s+/g, " ").trim()), col = (...ks) => H.findIndex(h => ks.some(k => h === k || h.startsWith(k)));
     const C = {date: col("ngay"), code: col("ma kh"), cus: col("ten kh", "khach hang", "ten khach"), model: col("model"), note: col("dien giai"), prod: col("ten mat hang", "san pham", "ten sp"),
       sn: col("seri", "so seri", "serial"), bh: col("bao hanh", "thoi han"), time: col("thoi gian"), ns1: col("seri doi lan 1"), nd1: col("ngay doi lan 1"), ns2: col("seri doi lan 2"), nd2: col("ngay doi lan 2")};
-    const months = v => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths; if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? opt.emptyMonths : n; };
+    // ô bảo hành trống: "auto" = theo loại sản phẩm (loa 6 tháng, còn lại 12 tháng)
+    const autoMonths = p => /^loa|loa karaoke|loa keo|loa xach|loa mini|loa di dong/.test(norm(p)) ? 6 : 12;
+    const months = (v, p) => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths === "auto" ? autoMonths(p) : Number(opt.emptyMonths); if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? (opt.emptyMonths === "auto" ? autoMonths(p) : Number(opt.emptyMonths)) : n; };
     // đầu / máy karaoke các loại: luôn bảo hành 12 tháng kể từ ngày mua (VV ở cột THỜI GIAN = mã kích hoạt vĩnh viễn)
     const isKara = p => /dau karaoke|may karaoke/.test(norm(p));
     const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, text: 0, split: 0, multi: 0, multiSn: 0, fixed: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
@@ -1579,7 +1581,7 @@
       const d = xlDate(r[C.date]), type = String(r[C.note] ?? "").trim(), bh = String(r[C.bh] ?? "").trim();
       if (d) { if (!stat.minD || d < stat.minD) stat.minD = d; if (d > stat.maxD) stat.maxD = d; }
       const row = {d, type, c: String(r[C.cus] ?? "").replace(/\s+/g, " ").trim(), k: String(r[C.code] ?? "").trim(), p: String(r[C.prod] ?? "").replace(/\s+/g, " ").trim(), md: String(r[C.model] ?? "").trim(),
-        m: months(r[C.bh]), bh, codes: (codes || []).join(", "), act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
+        m: months(r[C.bh], r[C.prod]), bh, codes: (codes || []).join(", "), act: /^vv/i.test(String((C.time >= 0 && r[C.time]) || "").trim()) || /^vv/i.test(bh), ns: String((C.ns2 >= 0 && r[C.ns2]) || (C.ns1 >= 0 && r[C.ns1]) || "").trim().replace(/\s+/g, "").toUpperCase(),
         nd: xlDate((C.nd2 >= 0 && r[C.nd2] && r[C.ns2] ? r[C.nd2] : "") || (C.nd1 >= 0 && r[C.nd1]) || (C.nd2 >= 0 && r[C.nd2]) || "")};
       if (!g.has(s)) g.set(s, []); g.get(s).push(row);
       });
@@ -1631,7 +1633,7 @@
     $("#riProg").textContent = "";
     const F = $("#actForm");
     const draw = () => {
-      const opt = {emptyMonths: Number(F.em.value), vvMonths: Number(F.vv.value), skipShort: F.ss.checked, kara12: F.k12.checked};
+      const opt = {emptyMonths: F.em.value === "auto" ? "auto" : Number(F.em.value), vvMonths: Number(F.vv.value), skipShort: F.ss.checked, kara12: F.k12.checked};
       let res; try { res = riParse(rows, opt); } catch(err){ $("#riPrev").innerHTML = `<div class="reason">${esc(err.message)}</div>`; F._res = null; return; }
       const S = res.stat, inApp = res.recs.filter(r => reg.some(x => keySN(x.serial) === keySN(r.s))).length;
       F._res = res;
@@ -1649,7 +1651,7 @@
         <div class="sub" style="margin-top:6px">Ví dụ: ${res.recs.slice(0, 3).map(r => `SN ${esc(r.s)} · ${esc(r.p)} · ${esc(r.c)} · ${r.d ? fmt(r.d) : "?"} · ${r.m} tháng`).join("<br>")}</div>`;
     };
     F.innerHTML = `<div class="grab"></div><h2>📥 Nhập sổ bảo hành từ file</h2><div class="sub">File: <b>${esc(f.name)}</b></div>
-      <div class="two"><div><label>Cột bảo hành để trống</label><select name="em"><option value="0">Không bảo hành</option><option value="6">6 tháng</option><option value="12">12 tháng</option></select></div>
+      <div class="two"><div><label>Cột bảo hành để trống</label><select name="em"><option value="auto" selected>Theo loại SP (loa 6 th, còn lại 12 th)</option><option value="12">12 tháng</option><option value="6">6 tháng</option><option value="0">Không bảo hành</option></select></div>
         <div><label>Bảo hành ghi "VV" (mã kích hoạt)</label><select name="vv"><option value="1200">Vĩnh viễn</option><option value="0">Không bảo hành</option><option value="12">12 tháng</option></select></div></div>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" name="k12" checked style="width:auto;margin:0"> Đầu / máy karaoke các loại: bảo hành <b>&nbsp;12 tháng&nbsp;</b> kể từ ngày mua (trừ hàng ghi 1 tháng = hàng đổi bảo hành)</label>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:4px"><input type="checkbox" name="ss" checked style="width:auto;margin:0"> Bỏ qua seri quá ngắn (dưới 5 ký tự)</label>
