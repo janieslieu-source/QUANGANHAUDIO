@@ -1142,7 +1142,7 @@
       </dl>
       <h3 style="font-size:15px;margin:10px 0 4px">Quá trình xử lý</h3>
       <div class="tl">${(t.history||[]).map(h => `<div><b>${esc(STAGES[h.stage]?.label||h.stage)}</b><br><span class="sub">${esc(h.by)} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("")}</div>
-      ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canWaitLk(t) ? `<button class="btn" id="dLkWait">⏳ Chờ linh kiện</button>` : ""}${t.stage === "cho_lk" && canKtFail(t) ? `<button class="btn okb" id="dLkOk">✅ Linh kiện đã về</button>` : ""}${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Không sửa được – trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
+      ${canKtFail(t) || canCancelTk(t) ? `<div class="btns" style="flex-wrap:wrap">${canWaitLk(t) ? `<button class="btn" id="dLkWait">⏳ Chờ linh kiện</button>` : ""}${t.stage === "cho_lk" && canKtFail(t) ? `<button class="btn okb" id="dLkOk">✅ Linh kiện đã về</button>` : ""}${canKtFail(t) ? `<button class="btn danger" id="dKtFail">↩ Trả lại khách</button>` : ""}${canCancelTk(t) ? `<button class="btn danger" id="dCancelTk">❌ Hủy phiếu</button>` : ""}</div>` : ""}
       ${t.stage === "huy" && t.cancel ? `<div class="reason" style="margin-top:10px;background:var(--badbg);color:var(--bad)">❌ Đã hủy phiếu – ${esc(t.cancel.by)} · ${fmtTime(t.cancel.at)}<br>Lý do: ${esc(t.cancel.reason)}</div>` : ""}
       <div class="btns" style="flex-wrap:wrap">${canReportPaid(t) ? `<button class="btn okb" id="dPaidReq">✅ Khách đã trả – báo Kế toán</button>` : ""}${canEditPay(t) ? `<button class="btn" id="dPayEdit">✏️ Sửa chi phí</button>` : ""}${t.ship ? `<button class="btn pri" id="dPdf">📄 Xuất PDF</button>` : ""}<button class="btn" data-close="detailBg">Đóng</button></div>`;
     if (t.ship) $("#dPdf").onclick = () => exportPdf(t);
@@ -1568,7 +1568,7 @@
   }
   function openKtFail(id){
     const t = tickets.find(x => x.id === id); if (!t) return;
-    openAct({title: "↩ Không sửa được – trả lại khách", t, noteLabel: "Lý do không sửa được (VD: hết linh kiện, hỏng nặng…)", required: true, okText: "↩ Chuyển Vận chuyển trả khách", okCls: "danger",
+    openAct({title: "↩ Trả lại khách (Kỹ thuật không sửa được)", t, noteLabel: "Lý do không sửa được (VD: hết linh kiện, hỏng nặng…)", required: true, okText: "↩ Chuyển Vận chuyển trả khách", okCls: "danger",
       run: async note => {
         const extra = {ktFail: {at: new Date().toISOString(), by: actor(), reason: note}, tech: t.tech || (() => { try { return localStorage.getItem("bh_tech") || ""; } catch(e){ return ""; } })()};
         if ($("#tkBack")?.checked) await revertTkStock(t, extra);
@@ -1636,7 +1636,7 @@
       : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
       : t.stage==="cho_lk" ? `<div class="cardbtns"><button class="btn okb" data-lkok="${esc(t.id)}">✅ Linh kiện đã về – tiếp tục sửa</button></div>` : "")
       + (canWaitLk(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn" data-lkwait="${esc(t.id)}">⏳ Chờ linh kiện</button></div>` : "")
-      + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Không sửa được – trả lại khách</button></div>` : ""))).join("")
+      + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Trả lại khách</button></div>` : ""))).join("")
       : `<div class="empty">Không có việc nào.</div>`;
     bindCards($("#ktList"));
     $("#ktList").querySelectorAll("[data-job]").forEach(b => b.onclick = () => openJob(b.dataset.job));
