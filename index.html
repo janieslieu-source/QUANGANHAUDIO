@@ -2430,15 +2430,30 @@
     inp.onchange = async () => {
       const fs = [...inp.files], room = max - list.length; inp.value = "";
       if (fs.length > room) toast(`Chỉ lưu tối đa ${max} ảnh – lấy ${room} ảnh đầu`);
-      const added = [];
-      for (const f of fs.slice(0, room)) { try { const d = await compressImg(f); list.push(d); added.push(d); } catch(e){ toast("Không đọc được ảnh"); } }
+      const added = [], files = [];
+      for (const f of fs.slice(0, room)) { try { const d = await compressImg(f); list.push(d); added.push(d); files.push(f); } catch(e){ toast("Không đọc được ảnh"); } }
       draw();
-      if (onAdd && added.length) onAdd(added);
+      if (onAdd && added.length) onAdd(files);   // ảnh gốc (nét hơn) để đọc mã vạch / số seri
     };
     box._photos = () => list.slice();
     box._clear = () => { list.length = 0; draw(); };
   }
-  /* ---------- Tự đọc số seri từ ảnh (OCR – Tesseract, chạy ngay trên điện thoại, lần đầu cần mạng để tải bộ đọc) ---------- */
+  /* ---------- Tự đọc số seri từ ảnh: 1) đọc MÃ VẠCH trên tem (nhanh, chính xác) – 2) không có mã vạch thì đọc chữ số (OCR)
+     Cả hai chạy ngay trên điện thoại; lần đầu cần mạng để tải bộ đọc ---------- */
+  const BC = {lib: "https://cdn.jsdelivr.net/npm/zxing-wasm@1.3.4/dist/iife/reader/index.js", dir: "https://cdn.jsdelivr.net/npm/zxing-wasm@1.3.4/dist/reader/"};
+  let bcReady = false;
+  async function barcodeSerials(srcs){
+    await loadScript(BC.lib);
+    const Z = window.ZXingWASM;
+    if (!bcReady) { Z.setZXingModuleOverrides({locateFile: p => BC.dir + p}); bcReady = true; }
+    const found = [];
+    for (const s of srcs) {
+      const blob = s instanceof Blob ? s : await (await fetch(s)).blob();
+      const res = await Z.readBarcodesFromImageFile(blob, {tryHarder: true, maxNumberOfSymbols: 60, formats: ["Code128", "Code39", "Code93", "Codabar", "ITF", "EAN-13", "EAN-8", "QRCode", "DataMatrix"]});
+      res.filter(x => x.isValid).forEach(x => snFromText(x.text).forEach(sn => found.includes(sn) || found.push(sn)));
+    }
+    return found;
+  }
   const OCR = {lib: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js", worker: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
     core: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1", lang: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int"};
   let ocrWorker = null;
@@ -2464,12 +2479,17 @@
   async function autoReadSn(box, imgs, apply){
     const st = box.querySelector(".phocr"); if (!st) return;
     st.style.color = ""; st.textContent = "🔎 Đang đọc số seri từ ảnh… (lần đầu hơi lâu)";
-    try {
-      const sns = await ocrSerials(imgs), n = apply(sns);
-      st.style.color = sns.length ? "var(--ok)" : "var(--warn)";
-      st.textContent = sns.length ? `✔ Đọc được ${sns.length} seri từ ảnh${n < sns.length ? ` (${sns.length - n} seri đã có sẵn)` : ""} – kiểm tra lại cho đúng với ảnh`
-        : "Không đọc được seri – chụp gần, rõ, đủ sáng rồi thử lại, hoặc gõ tay";
-    } catch(e){ st.style.color = "var(--warn)"; st.textContent = "Không tải được bộ đọc seri (cần mạng) – ảnh vẫn được lưu, có thể gõ tay seri"; }
+    let sns = [], how = "mã vạch", loaded = false;
+    try { sns = await barcodeSerials(imgs); loaded = true; } catch(e){}
+    if (!sns.length) {   // không thấy mã vạch -> đọc chữ số trên tem
+      st.textContent = "🔎 Không thấy mã vạch – đang đọc chữ số trên tem…"; how = "chữ số";
+      try { sns = await ocrSerials(imgs); loaded = true; } catch(e){}
+    }
+    if (!loaded) { st.style.color = "var(--warn)"; st.textContent = "Không tải được bộ đọc seri (cần mạng) – ảnh vẫn được lưu, có thể gõ tay seri"; return; }
+    const n = apply(sns);
+    st.style.color = sns.length ? "var(--ok)" : "var(--warn)";
+    st.textContent = sns.length ? `✔ Đọc được ${sns.length} seri (theo ${how})${n < sns.length ? ` – ${sns.length - n} seri đã có sẵn` : ""} – kiểm tra lại cho đúng với ảnh`
+      : "Không đọc được seri – chụp gần, rõ, đủ sáng (thấy rõ mã vạch) rồi thử lại, hoặc gõ tay";
   }
   async function savePhotos(list, meta){
     const ids = [], now = new Date().toISOString();
