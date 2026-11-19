@@ -1538,11 +1538,60 @@
     return `<div class="sub" style="margin-top:4px;color:var(--warn)">⏳ Chờ Giám đốc duyệt</div>`;
   }
   // lưu kết quả duyệt (giữ nguyên giai đoạn, ghi vào quá trình xử lý)
-  async function gdDecide(x, ok, note){
+  async function gdDecide(x, ok, note, fix){
     const pay = Object.assign({}, x.pay, {gd: ok ? "ok" : "tra", gdAt: new Date().toISOString(), gdBy: actor(), gdNote: ok ? "" : note});
+    if (!ok && fix) pay.gdFix = fix; else delete pay.gdFix;
     const msg = ok ? `👔 Giám đốc đã duyệt ${PAY[x.stage].toLowerCase()}: ${money(pay.amount)}${note ? " – " + note : ""}` : `↩️ Giám đốc yêu cầu Kế toán xem lại: ${note}`;
     if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
     if (!ok) pushTo("ac", `↩️ Kế toán: Giám đốc yêu cầu xem lại ${x.code}`, `${x.customer} – ${note}`, x.id);
+  }
+  // bảng kiểm tra của Giám đốc: lịch sử thanh toán của đơn + các đơn khác của khách; Đúng → Duyệt; Sai → điền số đúng → gửi Kế toán
+  function openGdReview(id){
+    const x = findAny(id); if (!x) return; const pay = x.pay || {}, F = $("#actForm");
+    const payRx = /thanh toán|công nợ|tạm ứng|khách (đã )?trả|💵|👔|↩️|✏️|sửa chi phí/i;
+    const hist = (x.history || []).filter(h => payRx.test(h.note || "") || ["cong_no", "da_tt", "cho_tt"].includes(h.stage));
+    const others = [...tickets, ...orders].filter(y => y.id !== x.id && norm(y.customer) === norm(x.customer) && y.pay).sort((a, b) => String(b.pay.at || b.createdAt).localeCompare(String(a.pay.at || a.createdAt))).slice(0, 8);
+    const owe = [...tickets, ...orders].filter(y => norm(y.customer) === norm(x.customer) && y.stage === "cong_no").reduce((a, y) => a + (Number(y.pay?.amount) || 0), 0);
+    const v = n => n != null && n !== "" ? Number(n).toLocaleString("vi-VN") : "";
+    F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">🔎 Kiểm tra thanh toán – ${esc(x.code)}</h2>
+      <div><b>${esc(x.customer)}</b>${x.phone ? ` · ${esc(x.phone)}` : ""} <span class="sub">${esc(x.lines ? orderSummary(x) : x.product)}</span></div>
+      <div class="found" style="margin-top:8px">💰 <b>Kế toán ghi: ${esc(PAY[x.stage] || "")} – ${money(pay.amount)}</b>${pay.total && pay.advance ? `<br>Tổng ${money(pay.total)} – tạm ứng ${money(pay.advance)}` : ""}${pay.method ? ` · ${esc(pay.method)}` : ""}${pay.paidDate ? ` · ngày ${fmt(pay.paidDate)}` : ""}${pay.note ? `<br>📝 ${esc(pay.note)}` : ""}${pay.editedBy ? `<br>✏️ đã sửa bởi ${esc(pay.editedBy)}` : ""}</div>
+      <h3 style="font-size:15px;margin:12px 0 4px">📜 Lịch sử thanh toán của ${x.lines ? "đơn" : "phiếu"} này</h3>
+      <div class="tl">${hist.length ? hist.map(h => `<div><b>${esc((x.lines ? OSTAGES : STAGES)[h.stage]?.label || h.stage)}</b><br><span class="sub">${esc(h.by || "")} · ${fmtTime(h.at)}</span>${h.note ? `<br>${esc(noteView(h.note))}` : ""}</div>`).join("") : `<div class="sub">Chưa có lịch sử thanh toán.</div>`}</div>
+      <h3 style="font-size:15px;margin:12px 0 4px">👤 Các đơn khác của ${esc(x.customer)} <span class="sub">· đang nợ tổng ${money(owe)}</span></h3>
+      ${others.length ? others.map(y => `<div class="sub" style="padding:4px 0;border-top:1px solid var(--line)">${esc(y.code)} · ${fmt(y.saleDate || dayOf(y.createdAt))} · <b style="color:${y.stage === "cong_no" ? "var(--bad)" : "var(--ok)"}">${esc(PAY[y.pay.status] || "")} ${money(y.pay.amount)}</b>${y.pay.paidDate ? ` · trả ${fmt(y.pay.paidDate)}` : ""}${y.pay.gd === "ok" ? " · 👔 đã duyệt" : ""}</div>`).join("") : `<div class="sub">Không có đơn nào khác.</div>`}
+      <div class="btns"><button type="button" class="btn okb" id="grOk" style="font-size:16px">✓ Đúng – Duyệt</button></div>
+      <details id="grFixW" style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;color:var(--bad);padding:8px 0">✏️ Sai – điền số đúng rồi gửi Kế toán</summary>
+        <div class="choice" style="margin-top:6px"><button type="button" class="opt" data-gs="cong_no"><span class="ic">📒</span>Công nợ</button><button type="button" class="opt" data-gs="da_tt"><span class="ic">✅</span>Đã thanh toán</button></div>
+        <div id="grDebt"><div class="two"><div><label>Tổng công nợ (đ)</label><input name="gtotal" inputmode="numeric" value="${v(pay.total ?? (x.stage === "cong_no" ? pay.amount : ""))}"></div>
+          <div><label>Khách tạm ứng (đ)</label><input name="gadv" inputmode="numeric" value="${pay.advance ? v(pay.advance) : ""}" placeholder="0 (không gõ = 0)"></div></div></div>
+        <label id="grAmtL">Số tiền đúng (đ) *</label><input name="gamt" inputmode="numeric" value="${v(pay.amount)}">
+        <div class="sub" id="grInfo"></div>
+        <label>Ghi chú cho Kế toán</label><textarea name="gnote" placeholder="VD: khách đã trả thêm 500.000 ngày 18/11…"></textarea>
+        <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn danger">↩ Gửi Kế toán sửa</button></div></details>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Đóng</button></div>`;
+    let gs = x.stage === "da_tt" ? "da_tt" : "cong_no";
+    const num = el => Number(String(el.value).replace(/[^\d]/g, "")) || 0;
+    const fmtIn = el => { el.value = el.value.trim() === "" ? "" : num(el).toLocaleString("vi-VN"); };
+    const draw = () => { F.querySelectorAll("[data-gs]").forEach(o => o.classList.toggle("sel", o.dataset.gs === gs)); $("#grDebt").classList.toggle("hide", gs !== "cong_no");
+      $("#grAmtL").textContent = gs === "cong_no" ? "Số tiền khách còn nợ (đúng) *" : "Số tiền khách đã thanh toán (đúng) *";
+      const changed = gs !== x.stage || num(F.gamt) !== Number(pay.amount || 0);
+      $("#grInfo").innerHTML = gs === "cong_no" && F.gtotal.value.trim() ? `Tổng ${money(num(F.gtotal))} – tạm ứng ${money(num(F.gadv))} = còn nợ <b>${money(num(F.gamt))}</b>` : "";
+      $("#grInfo").innerHTML += changed ? `<div style="color:var(--bad)">Kế toán ghi ${esc(PAY[x.stage] || "")} ${money(pay.amount)} → Giám đốc sửa: <b>${esc(PAY[gs])} ${money(num(F.gamt))}</b></div>` : `<div>Số giống Kế toán ghi – nếu đúng thì bấm “✓ Đúng – Duyệt”.</div>`; };
+    F.querySelectorAll("[data-gs]").forEach(o => o.onclick = () => { gs = o.dataset.gs; draw(); });
+    [F.gtotal, F.gadv].forEach(el => el.addEventListener("input", () => { fmtIn(el); if (F.gtotal.value.trim()) F.gamt.value = Math.max(0, num(F.gtotal) - num(F.gadv)).toLocaleString("vi-VN"); draw(); }));
+    F.gamt.addEventListener("input", () => { fmtIn(F.gamt); if (gs === "cong_no" && F.gamt.value.trim()) F.gtotal.value = (num(F.gamt) + num(F.gadv)).toLocaleString("vi-VN"); draw(); });
+    draw();
+    $("#grOk").onclick = async () => { $("#grOk").disabled = true; try { await gdDecide(x, true); close("actBg"); actCtx = null; toast("Đã duyệt"); } catch(e){ $("#grOk").disabled = false; } };
+    actCtx = {run: async () => {
+      if (!F.gamt.value.trim()) { toast("Điền số tiền đúng"); F.gamt.focus(); throw new Error("x"); }
+      const fix = {status: gs, amount: num(F.gamt)}; if (gs === "cong_no" && F.gtotal.value.trim()) { fix.total = num(F.gtotal); fix.advance = num(F.gadv); if (fix.advance > fix.total) { toast("Tạm ứng lớn hơn tổng"); throw new Error("x"); } }
+      const same = fix.status === x.stage && fix.amount === Number(pay.amount || 0), gn = F.gnote.value.trim();
+      if (same && !gn) { toast("Số giống Kế toán ghi – bấm “Đúng – Duyệt”, hoặc ghi chú điều cần xem lại"); throw new Error("x"); }
+      const note = (same ? "" : `Giám đốc sửa: ${PAY[fix.status]} ${money(fix.amount)}${fix.total && fix.advance ? ` (tổng ${money(fix.total)} – tạm ứng ${money(fix.advance)})` : ""} (Kế toán ghi ${PAY[x.stage]} ${money(pay.amount)})`) + (gn ? (same ? "" : " – ") + gn : "");
+      await gdDecide(x, false, note, same ? null : fix);
+    }, after: () => toast("Đã gửi Kế toán sửa theo số Giám đốc điền")};
+    open("actBg");
   }
   /* ---------- Giám đốc báo "khách đã trả" -> chuyển Kế toán cập nhật ---------- */
   const hasPayReq = x => !!x?.payReq && x.stage === "cong_no";
@@ -1584,10 +1633,7 @@
     bindAny($("#gdPayList"));
     $("#gdPayList").querySelectorAll("[data-gdok]").forEach(b => b.onclick = async () => { const x = findAny(b.dataset.gdok); if (!x) return; b.disabled = true;
       try { await gdDecide(x, true); toast("Đã duyệt"); } catch(e){ b.disabled = false; } });
-    $("#gdPayList").querySelectorAll("[data-gdno]").forEach(b => b.onclick = () => { const x = findAny(b.dataset.gdno); if (!x) return;
-      openAct({title: "Yêu cầu Kế toán xem lại", t: x.lines ? {product: `Đơn ${x.code}: ${orderSummary(x)}`, serial: "—", customer: x.customer} : x,
-        noteLabel: "Cần xem lại điều gì (VD: sai số tiền, khách đã trả…)", required: true, okText: "↩ Gửi Kế toán", okCls: "danger",
-        run: async note => { await gdDecide(x, false, note); toast("Đã gửi Kế toán xem lại"); }}); });
+    $("#gdPayList").querySelectorAll("[data-gdno]").forEach(b => b.onclick = () => openGdReview(b.dataset.gdno));
     $("#gdPayAll").onclick = async () => { const b = $("#gdPayAll"); b.disabled = true;
       try { for (const x of gdPayWait()) await gdDecide(x, true); toast("Đã duyệt tất cả"); } catch(e){} finally { b.disabled = false; } };
   }
@@ -4448,13 +4494,14 @@
     const req = !edit && hasPayReq(t) ? t.payReq : null, debt0 = Number(t.pay?.amount) || 0;
     // Giám đốc đã báo khách trả: điền sẵn – trả đủ = Đã thanh toán; trả một phần = Công nợ với số còn lại
     const p = req ? Object.assign({}, t.pay, preset === "cong_no" ? {amount: Math.max(0, debt0 - Number(req.amount)), note: `Khách trả ${money(req.amount)} ngày ${fmt(req.date)} (${req.method})${req.note ? " – " + req.note : ""}`}
-      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : (t.pay || {});
+      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || {});
     payStatus = preset || p.status || null;
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
       <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
       ${!edit && t.shipCharge && !t.shipChargeDone ? `<div class="reason">🚚 Phí ship tính lại khách: <b>${money(t.shipCharge)}</b> – nhớ cộng vào số tiền thanh toán / công nợ.</div>` : ""}
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
+      ${t.pay?.gd === "tra" ? `<div class="reason" style="background:var(--badbg);color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(t.pay.gdNote || "")}</b>${t.pay.gdFix ? `<br>Đã điền sẵn số Giám đốc sửa: <b>${esc(PAY[t.pay.gdFix.status] || "")} ${money(t.pay.gdFix.amount)}</b> – kiểm tra rồi bấm Lưu để gửi lại Giám đốc` : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
       ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
         : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>`}
@@ -4522,9 +4569,10 @@
       else if (t.pay && t.pay.debtSince) pay.debtSince = t.pay.debtSince;   // sửa phiếu đã thu: giữ ngày bắt đầu nợ cũ
       let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}${pay.total && pay.advance ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
       if (edit) {
-        if (payStatus === p.status && pay.amount === Number(p.amount) && pay.paidDate === (p.paidDate || "") && pay.method === (p.method || "") && pay.note === (p.note || "")) { toast("Chưa thay đổi gì"); throw new Error("x"); }
-        note = `✏️ Sửa chi phí: ${PAY[p.status] || ""} ${money(p.amount)} → ${PAY[payStatus]} ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}`;
-        pay.editedAt = pay.at; pay.editedBy = actor(); pay.at = p.at || pay.at;   // giữ thời điểm ghi nhận gốc (tính tuổi nợ đúng)
+        const o0 = t.pay || {};   // so với số đang lưu (không phải số Giám đốc điền sẵn)
+        if (payStatus === o0.status && pay.amount === Number(o0.amount) && pay.paidDate === (o0.paidDate || "") && pay.method === (o0.method || "") && pay.note === (o0.note || "") && (pay.total || 0) === (o0.total || 0) && (pay.advance || 0) === (o0.advance || 0) && o0.gd !== "tra") { toast("Chưa thay đổi gì"); throw new Error("x"); }
+        note = `✏️ Sửa chi phí: ${PAY[o0.status] || ""} ${money(o0.amount)} → ${PAY[payStatus]} ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}${o0.gd === "tra" && o0.gdFix ? " (theo số Giám đốc sửa)" : ""}`;
+        pay.editedAt = pay.at; pay.editedBy = actor(); pay.at = o0.at || pay.at;   // giữ thời điểm ghi nhận gốc (tính tuổi nợ đúng)
       }
       // Kế toán ghi xong -> chờ Giám đốc duyệt lại; Giám đốc tự ghi thì coi như đã duyệt
       // Giám đốc đã báo khách trả và Kế toán ghi đúng số đó -> coi như Giám đốc đã duyệt
