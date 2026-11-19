@@ -152,6 +152,13 @@
   .stat.late{background:var(--bad)!important;animation:pulse 1.6s infinite} .stat.late b,.stat.late span{color:#fff!important}
   @keyframes pulse{50%{opacity:.75}}
   .empty{text-align:center;color:var(--muted);padding:22px 10px;font-size:14px}
+  .snrow{display:flex;gap:8px;align-items:stretch}.snrow input{flex:1;min-width:0}
+  .scanbtn{flex:none;border:2px solid var(--brand);background:var(--brand);color:#fff;border-radius:12px;padding:0 14px;font-weight:700;font-size:15px;cursor:pointer;white-space:nowrap}
+  .scanbox{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-top:8px}
+  .scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+  .scanbox .aim{position:absolute;left:8%;right:8%;top:32%;bottom:32%;border:3px solid #22c55e;border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+  .scanbox .aim::after{content:"";position:absolute;left:4%;right:4%;top:50%;height:2px;background:#ef4444;animation:scanline 1.6s ease-in-out infinite alternate}
+  @keyframes scanline{from{transform:translateY(-34px)}to{transform:translateY(34px)}}
   .ccppl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
   .ccp{position:relative;border:2px solid var(--line);background:var(--bg);border-radius:12px;padding:14px 6px;text-align:center;cursor:pointer;color:var(--ink);font-weight:700;font-size:17px}
   .ccp small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -312,7 +319,9 @@
         <label>Tên khách hàng *</label><input name="customer" required>
         <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
-        <label>Số seri *</label><input name="serial" required placeholder="525xxxxx – nhập seri để chọn Bảo hành / Sửa chữa">
+        <label>Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" data-scankh="#recvForm [name=actCode]" data-scankh2="#recvForm [name=actCode2]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
+        <label>Mã kích hoạt <span class="sub">(không bắt buộc – đầu karaoke: mã thứ 2 trên tem)</span></label><input name="actCode" inputmode="numeric" placeholder="VD: 233594" autocomplete="off">
+        <label>Mã kích hoạt mới <span class="sub">(không bắt buộc – mã thứ 3: mã cập nhật; có mã mới thì không lưu mã thứ 2)</span></label><input name="actCode2" inputmode="numeric" placeholder="Mã kích hoạt mới (nếu có)" autocomplete="off">
         <div class="sub" id="snWarn" style="color:var(--warn);margin-top:4px"></div>
         <div id="foundBox"></div>
 
@@ -577,6 +586,7 @@
 </div>
 
 <div class="sheet-bg" id="actBg"><form class="sheet" id="actForm"></form></div>
+<div class="sheet-bg" id="scanBg"><div class="sheet" id="scanSheet"></div></div>
 <div class="sheet-bg" id="detailBg"><div class="sheet" id="detail"></div></div>
 <div class="sheet-bg" id="notiBg"><div class="sheet" id="notiSheet"></div></div>
 <datalist id="partsList"></datalist>
@@ -686,8 +696,6 @@
   try { boss = sessionStorage.getItem("bh_boss") === "1"; } catch(e){}
   const actor = () => boss && role !== "gd" ? `Giám đốc (tab ${ROLES[role].name})` : ROLES[role].name;
   try { const r = sessionStorage.getItem("bh_role"); if (ROLES[r]) role = r; } catch(e){}
-  // phiên nhạy cảm (Giám đốc, Kế toán): mở lại app phải nhập lại mật mã
-  try { const last = Number(localStorage.getItem("bh_act") || 0); if ((boss || role === "ac") && Date.now() - last > 10 * 60000) { role = null; boss = false; sessionStorage.removeItem("bh_role"); sessionStorage.removeItem("bh_boss"); } } catch(e){}
   let reg = [], tickets = [], orders = [], stock = [], products = [], moves = [], photosLocal = [], expenses = [], colEx = null, regImp = [], colRi = null, mode = "local", colReg = null, colTk = null, colDev = null, colOd = null, colSt = null, colPr = null, colMv = null, colPh = null;
   let prevOStage = null;
   let prevStage = null;        // Map id -> stage, để phát hiện chuyển giai đoạn
@@ -870,16 +878,8 @@
     document.querySelectorAll(".sheet-bg").forEach(b => b.classList.remove("show"));
     $("#app").classList.add("hide"); $("#login").classList.remove("hide");
   };
-  const IDLE_MS = 10 * 60000;
   function markActive(){ try { localStorage.setItem("bh_act", String(Date.now())); } catch(e){} }
   ["pointerdown", "keydown", "scroll"].forEach(ev => document.addEventListener(ev, () => { if (role) markActive(); }, {passive: true, capture: true}));
-  function idleCheck(){
-    if (!role || !(boss || role === "ac")) return;
-    const last = Number(localStorage.getItem("bh_act") || 0);
-    if (Date.now() - last > IDLE_MS) { const who = boss ? "Giám đốc" : "Kế toán"; $("#logout").click(); toast(`Đã tự thoát phiên ${who} sau 10 phút không dùng`); }
-  }
-  setInterval(idleCheck, 30000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) idleCheck(); });
   function setBoss(v){ boss = !!v; try { sessionStorage.setItem("bh_boss", boss ? "1" : ""); } catch(e){} }
   function enter(r){
     role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
@@ -1214,7 +1214,7 @@
         <dt>Mã phiếu</dt><dd>${esc(t.code)}</dd>
         <dt>Khách hàng</dt><dd>${esc(t.customer)}</dd>
         <dt>Điện thoại</dt><dd>${esc(t.phone)||"—"}</dd>
-        <dt>Số seri</dt><dd>${esc(t.serial)}</dd>
+        <dt>Số seri</dt><dd>${esc(t.serial)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
         ${t.type==="bh" && t.purchaseDate ? `<dt>Bảo hành</dt><dd>Mua ${fmt(t.purchaseDate)}, ${t.months} tháng – lúc nhận: ${esc(t.warrantyText)}</dd>` : ""}
         <dt>Lỗi</dt><dd>${esc(t.issue)||"—"}</dd>
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
@@ -1402,7 +1402,7 @@
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
     const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
-    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), history: []}, base);
+    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, {history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
     let newRec = null;
@@ -1491,9 +1491,10 @@
   function drawWLookup(host){
     if (!host || host._built) return; host._built = true;
     host.innerHTML = `<h3>🔍 Tra cứu bảo hành</h3><div class="sub" style="margin-bottom:6px">Gõ số seri → còn / hết bảo hành, còn bao nhiêu ngày (tính theo <b>ngày bán</b>).</div>
-      <input class="wlq" type="search" inputmode="text" placeholder="Nhập số seri máy khách mang tới" autocomplete="off"><div class="wlr" style="margin-top:8px"></div>`;
+      <div class="snrow"><input class="wlq" type="search" inputmode="text" placeholder="Quét hoặc gõ số seri máy khách mang tới" autocomplete="off"><button type="button" class="scanbtn" data-scanwl="1" aria-label="Quét mã seri bằng camera">📷 Quét</button></div><div class="wlr" style="margin-top:8px"></div>`;
     const q = host.querySelector(".wlq"), r = host.querySelector(".wlr");
     q.addEventListener("input", () => { const v = q.value.trim(); r.innerHTML = v.length >= 4 ? wResultHtml(v) : ""; });
+    host.querySelector("[data-scanwl]").onclick = () => openScanner(sn => { q.value = sn; q.dispatchEvent(new Event("input", {bubbles: true})); });
   }
 
   function renderBH(){
@@ -3323,13 +3324,51 @@
     });
     return out;
   }
+  async function ocrTexts(imgs){
+    await loadScript(OCR.lib);
+    if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
+      .then(async w => { await w.setParameters({tessedit_char_whitelist: "0123456789 "}); return w; })
+      .catch(e => { ocrWorker = null; throw e; });
+    const w = await ocrWorker, out = [];
+    for (const d of imgs) { const {data} = await w.recognize(d); out.push(data.text || ""); }
+    return out.join("\n");
+  }
+  // quy định sản phẩm đầu: MÃ 1 = SỐ SERI (5 số → thêm 525 phía trước), MÃ 2 (6 số) = MÃ KÍCH HOẠT, MÃ 3 (6 số) = MÃ KÍCH HOẠT MỚI (cập nhật)
+  function parseCodes(text, strict){
+    const t = String(text || "").replace(/[oO]/g, "0").replace(/[lI|]/g, "1");
+    const run = join => { const r = {sn: "", kh: "", kh2: ""};
+      // join: chữ số bị cách (VD "25 142") trên cùng 1 dòng thì ghép lại
+      const toks = t.split(/\n+/).flatMap(line => ((join ? line.replace(/(\d)\s+(?=\d)/g, "$1") : line).match(/\d{5,10}/g) || []));
+      for (const k of toks) {
+        if (!r.sn) { if (/^525\d{5}$/.test(k)) r.sn = k; else if (!strict && !join && /^\d{5}$/.test(k)) r.sn = "525" + k; }   // 5 số phải đứng riêng, không ghép từ các số rời
+        else if (!r.kh && /^\d{6}$/.test(k)) r.kh = k;
+        else if (r.kh && !r.kh2 && /^\d{6}$/.test(k)) { r.kh2 = k; break; }
+      }
+      return r; };
+    const a = run(false), b = a.sn ? null : run(true);
+    return a.sn ? a : b;
+  }
+  // xoay ảnh 90° / 270° (tem dán dọc) – trả về dataURL
+  function rotImg(src, deg){ return new Promise((ok, no) => { const im = new Image(); im.onload = () => { const c = document.createElement("canvas"), sw = deg % 180 !== 0;
+      c.width = sw ? im.height : im.width; c.height = sw ? im.width : im.height; const g = c.getContext("2d"); g.translate(c.width / 2, c.height / 2); g.rotate(deg * Math.PI / 180); g.drawImage(im, -im.width / 2, -im.height / 2);
+      ok(c.toDataURL("image/jpeg", .92)); }; im.onerror = no; im.src = src; }); }
+  // đọc chữ số trên tem: thử ảnh thẳng, không ra seri thì thử xoay 90° và 270° (tem dán dọc)
+  // ưu tiên seri đủ 8 số 525xxxxx (ở mọi chiều); chỉ khi không có mới lấy số 5 chữ số (thêm 525)
+  async function ocrCodes(src){
+    const texts = [];
+    for (const d of [0, 90, 270]) { try { const t = await ocrTexts([d ? await rotImg(src, d) : src]); texts.push(t); const pc = parseCodes(t, true); if (pc.sn) return pc; } catch(e){} }
+    for (const t of texts) { const pc = parseCodes(t); if (pc.sn) return pc; }
+    return {sn: "", kh: "", kh2: ""};
+  }
   async function ocrSerials(imgs){
     await loadScript(OCR.lib);
     if (!ocrWorker) ocrWorker = window.Tesseract.createWorker("eng", 1, {workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang})
       .then(async w => { await w.setParameters({tessedit_char_whitelist: "0123456789 "}); return w; })
       .catch(e => { ocrWorker = null; throw e; });
     const w = await ocrWorker, found = [];
-    for (const d of imgs) { const {data} = await w.recognize(d); snFromText(data.text).forEach(s => found.includes(s) || found.push(s)); }
+    for (const d of imgs) { let {data} = await w.recognize(d), sns = snFromText(data.text);
+      for (const deg of [90, 270]) { if (sns.length) break; try { ({data} = await w.recognize(await rotImg(d, deg))); sns = snFromText(data.text); } catch(e){} }   // tem dán dọc
+      sns.forEach(s => found.includes(s) || found.push(s)); }
     return found;
   }
   // đọc seri từ ảnh rồi gọi apply(danh sách seri) – apply trả về số seri mới thêm
@@ -3348,6 +3387,79 @@
     st.textContent = sns.length ? `✔ Đọc được ${sns.length} seri (theo ${how})${n < sns.length ? ` – ${sns.length - n} seri đã có sẵn` : ""} – kiểm tra lại cho đúng với ảnh`
       : "Không đọc được seri – chụp gần, rõ, đủ sáng (thấy rõ mã vạch) rồi thử lại, hoặc gõ tay";
   }
+  /* ---------- 📷 QUÉT SERI BẰNG CAMERA (điện thoại): đưa tem / mã vạch vào khung → tự đọc, tự điền ----------
+     Đọc mã vạch liên tục (BarcodeDetector có sẵn trên Android / zxing cho iPhone); tem không có mã vạch → bấm "Đọc chữ số" */
+  let scanStream = null, scanTimer = null, scanBusy = false;
+  function stopScan(){ clearTimeout(scanTimer); scanTimer = null; if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; } }
+  // chọn seri từ chữ đọc được: ưu tiên seri đúng quy định 525xxxxx, không có thì lấy mã số/chữ 5–20 ký tự
+  function pickSn(text){ const pc = parseCodes(text); if (pc.sn) return pc;
+    const raw = String(text || "").trim().replace(/\s+/g, ""); return /^[A-Za-z0-9\-]{5,20}$/.test(raw) ? {sn: raw.toUpperCase(), kh: ""} : null; }
+  async function openScanner(onSn, want = {}){
+    const S = $("#scanSheet");
+    S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📷 Quét số seri</h2><div class="sub">Đưa <b>mã vạch / tem seri</b> vào giữa khung xanh, giữ yên 1–2 giây – app tự đọc và điền.</div>
+      <div class="scanbox"><video playsinline muted autoplay></video><div class="aim"></div></div>
+      <div class="sub scst" style="margin-top:8px">Đang mở camera…</div>
+      <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn scocr">🔢 Tem không có mã vạch – đọc chữ số</button><button type="button" class="btn sctorch hide">🔦 Đèn</button>
+        <label class="btn" style="text-align:center">🖼️ Chọn / chụp ảnh<input type="file" accept="image/*" capture="environment" class="scfile" hidden></label></div>
+      <div class="btns"><button type="button" class="btn scman">⌨️ Gõ tay số seri</button><button type="button" class="btn scclose">Đóng</button></div>`;
+    S.querySelector(".scman").onclick = () => finish({sn: "", kh: "", kh2: ""});
+    const v = S.querySelector("video"), st = S.querySelector(".scst"), say = (t, c) => { st.textContent = t; st.style.color = c || ""; };
+    open("scanBg"); let done = false;
+    // bước DUYỆT: hiện seri đọc được → Đúng thì dùng luôn, sai thì gõ lại ngay tại đây
+    const finish = res => { if (done) return; done = true; stopScan(); try { navigator.vibrate?.(150); } catch(e){}
+      const r = typeof res === "string" ? {sn: res, kh: ""} : res;
+      S.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">✅ Kiểm tra số seri vừa quét</h2><div class="sub">So với tem trên máy: <b>đúng</b> thì bấm <b>Duyệt</b>, <b>sai</b> thì sửa lại số ngay ô dưới rồi bấm Duyệt.</div>
+        <label>Số seri</label><input class="cfsn" value="${esc(r.sn)}" autocomplete="off" inputmode="numeric" style="font-size:24px;font-weight:800;letter-spacing:1px;text-align:center">
+        ${want.kh ? `<label>Mã kích hoạt <span class="sub">(mã thứ 2 trên tem – nếu có)</span></label><input class="cfkh" value="${esc(r.kh || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">
+          <label>Mã kích hoạt mới <span class="sub">(mã thứ 3 – mã cập nhật, nếu có)</span></label><input class="cfkh2" value="${esc(r.kh2 || "")}" autocomplete="off" inputmode="numeric" style="font-size:18px;text-align:center">` : ""}
+        <div class="cfw" style="margin-top:8px"></div>
+        <div class="btns"><button type="button" class="btn okb cfok" style="font-size:17px">✔ Đúng – Duyệt</button></div>
+        <div class="btns"><button type="button" class="btn cfagain">🔄 Quét lại</button><button type="button" class="btn" data-close="scanBg">Hủy</button></div>`;
+      const inp = S.querySelector(".cfsn"), kh = S.querySelector(".cfkh"), kh2 = S.querySelector(".cfkh2"), w = S.querySelector(".cfw");
+      const prev = () => { const v = inp.value.trim(); const x = v ? findReg(v) : null;
+        w.innerHTML = !v ? "" : !snOk(v) ? `<div class="sub" style="color:var(--warn)">⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại</div>` : x ? `<div class="found">✔ Có trong sổ bảo hành: ${esc(x.product || "")} – ${esc(x.customer || "")}</div>` : `<div class="sub">Seri chưa có trong sổ bảo hành</div>`; };
+      inp.addEventListener("input", prev); prev();
+      S.querySelector(".cfok").onclick = () => { const v = inp.value.trim().replace(/\s+/g, ""); if (!v) { toast("Nhập số seri"); inp.focus(); return; }
+        close("scanBg"); toast(`✔ Đã duyệt seri ${v}`); onSn(v, kh ? kh.value.trim() : "", kh2 ? kh2.value.trim() : ""); };
+      S.querySelector(".cfagain").onclick = () => openScanner(onSn, want); };
+    S.querySelector(".scclose").onclick = () => { stopScan(); close("scanBg"); };
+    const grab = () => { const c = document.createElement("canvas"), w = v.videoWidth, h = v.videoHeight; if (!w) return null;
+      // cắt vùng khung xanh (giữa ảnh) cho đọc nhanh và chính xác hơn
+      const x = Math.round(w * .04), y = Math.round(h * .22), cw = w - 2 * x, ch = h - 2 * y; c.width = cw; c.height = ch; c.getContext("2d").drawImage(v, x, y, cw, ch, 0, 0, cw, ch); return c; };
+    const blobOf = c => new Promise(ok => c.toBlob(ok, "image/jpeg", .92));
+    let det = null;
+    try { if ("BarcodeDetector" in window) { const f = await BarcodeDetector.getSupportedFormats(); if (f.length) det = new BarcodeDetector({formats: f.filter(x => ["code_128", "code_39", "code_93", "codabar", "itf", "ean_13", "ean_8", "qr_code", "data_matrix", "upc_a"].includes(x))}); } } catch(e){ det = null; }
+    const readFrame = async () => { const c = grab(); if (!c) return "";
+      if (det) { try { const r = await det.detect(c); for (const x of r) { const sn = pickSn(x.rawValue); if (sn) return sn; } } catch(e){} }
+      try { await loadScript(BC.lib); const Z = window.ZXingWASM; if (!bcReady) { Z.setZXingModuleOverrides({locateFile: p => BC.dir + p}); bcReady = true; }
+        const r = await Z.readBarcodesFromImageFile(await blobOf(c), {tryHarder: true, maxNumberOfSymbols: 4, formats: ["Code128", "Code39", "Code93", "Codabar", "ITF", "EAN-13", "EAN-8", "QRCode", "DataMatrix"]});
+        for (const x of r.filter(x => x.isValid)) { const sn = pickSn(x.text); if (sn) return sn; } } catch(e){}
+      return ""; };
+    const loop = async () => { if (done || !scanStream || !$("#scanBg").classList.contains("show")) { if (!done) stopScan(); return; }
+      if (!scanBusy) { scanBusy = true; try { const sn = await readFrame(); if (sn) { finish(sn); return; } } finally { scanBusy = false; } }
+      scanTimer = setTimeout(loop, 350); };
+    // đọc chữ số trên tem (OCR) từ khung hình hiện tại
+    S.querySelector(".scocr").onclick = async () => { const c = grab(); if (!c) { say("Camera chưa sẵn sàng", "var(--warn)"); return; }
+      say("🔎 Đang đọc chữ số trên tem… (lần đầu hơi lâu)"); try { const pc = await ocrCodes(c.toDataURL("image/jpeg", .92)); if (pc.sn) finish(pc); else say("Chưa đọc được – đưa tem gần hơn, đủ sáng, chữ số nằm ngang trong khung rồi bấm lại", "var(--warn)"); }
+      catch(e){ say("Không tải được bộ đọc chữ số (cần mạng)", "var(--bad)"); } };
+    // chụp ảnh bằng ứng dụng camera (khi trình duyệt không mở được camera trực tiếp)
+    S.querySelector(".scfile").onchange = async e => { const f = e.target.files[0]; if (!f) return; say("🔎 Đang đọc ảnh…");
+      let pc = null; try { const sns = await barcodeSerials([f]); if (sns.length) pc = {sn: sns[0], kh: "", kh2: ""}; } catch(err){}
+      if (!pc) { say("🔎 Không thấy mã vạch – đang đọc chữ số…"); const u = URL.createObjectURL(f); try { const x = await ocrCodes(u); if (x.sn) pc = x; } catch(err){} finally { URL.revokeObjectURL(u); } }
+      if (pc) finish(pc); else say("Không đọc được seri từ ảnh – chụp gần, rõ hơn, hoặc gõ tay", "var(--warn)"); };
+    if (!navigator.mediaDevices?.getUserMedia) { say("Trình duyệt không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); return; }
+    try { scanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: "environment"}, width: {ideal: 1280}, height: {ideal: 720}}, audio: false});
+      if (!$("#scanBg").classList.contains("show")) { stopScan(); return; }
+      v.srcObject = scanStream; await v.play().catch(() => {});
+      say(det ? "Đang quét… giữ mã vạch trong khung xanh" : "Đang quét… (lần đầu tải bộ đọc mã vạch, cần mạng)");
+      const tr = scanStream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
+      if (cap.torch) { const tb = S.querySelector(".sctorch"); tb.classList.remove("hide"); let on = false; tb.onclick = () => { on = !on; tr.applyConstraints({advanced: [{torch: on}]}).catch(() => {}); }; }
+      loop();
+    } catch(e){ say(e && e.name === "NotAllowedError" ? "Chưa cho phép dùng camera – bấm vào biểu tượng ổ khóa trên thanh địa chỉ → cho phép Camera, hoặc bấm “Chọn / chụp ảnh”" : "Không mở được camera – bấm “Chọn / chụp ảnh”", "var(--warn)"); }
+  }
+  document.addEventListener("click", e => { const b = e.target.closest("[data-scan]"); if (!b) return; e.preventDefault();
+    const inp = document.querySelector(b.dataset.scan), khi = b.dataset.scankh ? document.querySelector(b.dataset.scankh) : null, kh2i = b.dataset.scankh2 ? document.querySelector(b.dataset.scankh2) : null;
+    if (inp) openScanner((sn, kh, kh2) => { inp.value = sn; if (khi && kh) khi.value = kh; if (kh2i && kh2) kh2i.value = kh2; inp.dispatchEvent(new Event("input", {bubbles: true})); inp.dispatchEvent(new Event("change", {bubbles: true})); }, {kh: !!khi}); });
   async function savePhotos(list, meta){
     const ids = [], now = new Date().toISOString();
     for (const d of list) { const id = "ph_" + uid(); await put("ph", Object.assign({id, data: d, at: now}, meta || {})); ids.push(id); }
