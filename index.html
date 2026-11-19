@@ -4383,7 +4383,9 @@
     await put("ex", {id: pp.id, kind: "nhanvien", name: pp.name, title: "", base: 0, pc: 0, active: true, amount: 0, date: "", order: CC_NAMES.indexOf(pp.name), createdAt: new Date().toISOString()}); }
   const CC_RADIUS = 10;            // phạm vi chấm công: 10 m quanh vị trí công ty
   const CC_GPS_TOL = 20;           // sai số GPS tối đa được trừ (điện thoại trong nhà thường sai 5–20 m)
-  const ccCfg = () => expenses.find(x => x.id === "cc_cfg");
+  // vị trí công ty mặc định (Google Maps: Cty Âm Thanh – Ánh Sáng Quang Anh, 525/9/55 Quang Trung, P10, Gò Vấp); Kế toán đặt lại được
+  const CC_HOME = {lat: 10.831625, lng: 106.665082, address: "525/9/55 Quang Trung, P10, Gò Vấp", setBy: "mặc định (Google Maps)"};
+  const ccCfg = () => expenses.find(x => x.id === "cc_cfg" && x.lat) || CC_HOME;
   const ccRadius = () => Number(ccCfg()?.radius) || CC_RADIUS;
   function drawCC(){
     const host = $("#ccBox"); if (!host) return;
@@ -4410,7 +4412,7 @@
         <label style="margin-top:0">Địa chỉ công ty</label><input id="ccAddr" placeholder="VD: 525/9/55 Quang Trung, P10, Gò Vấp" autocomplete="off">
         <label>Tọa độ</label><input id="ccLL" placeholder="10.83456, 106.66789" autocomplete="off" inputmode="decimal">
         <div class="btns"><button type="button" class="btn pri" id="ccLLSave">💾 Lưu tọa độ công ty</button></div></details>`;
-    const cfg = expenses.find(x => x.id === "cc_cfg");
+    const cfgDoc = expenses.find(x => x.id === "cc_cfg"), cfg = cfgDoc?.lat ? cfgDoc : Object.assign({}, cfgDoc || {}, CC_HOME);
     $("#ccLocTxt").innerHTML = cfg?.lat ? `📍 ${cfg.address ? `<b>${esc(cfg.address)}</b> – ` : ""}Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}${cfg.acc ? ` · sai số ±${cfg.acc} m` : ""}${cfg.setBy ? ` · ${esc(cfg.setBy)} ${fmtTime(cfg.updatedAt)}` : ""}). Phạm vi chấm công: <b>${ccRadius()} m</b> – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.`
       : `<div class="reason" style="background:var(--badbg);color:var(--bad);margin-top:6px">⚠️ <b>Chưa đặt vị trí công ty</b> – nhân viên chưa chấm công được. Hãy <b>đứng tại công ty</b> rồi bấm “📍 Đặt vị trí công ty”.</div>`;
     $("#ccMonth").onchange = e => { ccYm = e.target.value || iso(new Date()).slice(0, 7); drawCC(); };
@@ -4454,13 +4456,13 @@
       if (!m) { toast("Dán tọa độ dạng: 10.83456, 106.66789"); $("#ccLL").focus(); return; }
       const lat = Number(m[1].replace(",", ".")), lng = Number(m[2].replace(",", "."));
       if (!(lat > 8 && lat < 24 && lng > 102 && lng < 110)) { toast("Tọa độ không nằm ở Việt Nam – kiểm tra lại"); return; }
-      await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat, lng, acc: 0, address: $("#ccAddr").value.trim(), setBy: actor() + " (tọa độ Google Maps)", updatedAt: new Date().toISOString()}));
+      await put("ex", Object.assign({id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, cfgDoc || {}, {lat, lng, acc: 0, address: $("#ccAddr").value.trim(), setBy: actor() + " (tọa độ Google Maps)", updatedAt: new Date().toISOString()}));
       toast("Đã lưu tọa độ công ty"); drawCC(); };
     $("#ccLoc").onclick = () => { if (!navigator.geolocation) { toast("Máy không hỗ trợ định vị"); return; }
       if (!confirm("Bạn đang ĐỨNG TẠI CÔNG TY? Vị trí hiện tại của máy này sẽ là tâm phạm vi chấm công " + ccRadius() + " m.")) return;
       toast("📍 Đang lấy vị trí…");
       navigator.geolocation.getCurrentPosition(async p => { const acc = Math.round(p.coords.accuracy);
-        await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, acc, address: $("#ccAddr").value.trim() || cfg?.address || "", setBy: actor(), updatedAt: new Date().toISOString()}));
+        await put("ex", Object.assign({id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, cfgDoc || {}, {lat: p.coords.latitude, lng: p.coords.longitude, acc, address: $("#ccAddr").value.trim() || cfg?.address || "", setBy: actor(), updatedAt: new Date().toISOString()}));
         toast(acc > 30 ? `Đã lưu vị trí công ty – sai số ±${acc} m hơi lớn, nên ra gần cửa / chỗ thoáng rồi bấm đặt lại` : `Đã lưu vị trí công ty (sai số ±${acc} m)`); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
     // nhập lại file Excel bảng chấm công đã sửa (đúng mẫu file xuất ra): chỉ ghi những ô khác với hiện tại
