@@ -152,6 +152,14 @@
   .stat.late{background:var(--bad)!important;animation:pulse 1.6s infinite} .stat.late b,.stat.late span{color:#fff!important}
   @keyframes pulse{50%{opacity:.75}}
   .empty{text-align:center;color:var(--muted);padding:22px 10px;font-size:14px}
+  .ccppl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+  .ccp{position:relative;border:2px solid var(--line);background:var(--bg);border-radius:12px;padding:14px 6px;text-align:center;cursor:pointer;color:var(--ink);font-weight:700;font-size:17px}
+  .ccp small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ccp.sel{border-color:var(--brand);background:var(--brand);color:#fff}.ccp.sel small{color:#fff}
+  .ccp .tk{position:absolute;top:-7px;right:-5px;background:#16a34a;color:#fff;border-radius:99px;width:22px;height:22px;font-size:13px;line-height:22px}
+  .ccok{display:flex;flex-direction:column;align-items:center;text-align:center;padding:14px 8px;margin-top:10px;border-radius:14px;background:#dcfce7;color:#14532d;animation:ccpop .35s ease-out}
+  .ccok .big{width:84px;height:84px;border-radius:50%;background:#16a34a;color:#fff;font-size:52px;line-height:84px;font-weight:800;margin-bottom:8px;box-shadow:0 6px 18px rgba(22,163,74,.35)}
+  @keyframes ccpop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
   .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
   .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
   .chip.sel{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -3937,6 +3945,20 @@
     return s;
   }
   let ccYm = null;
+  // tên nhân viên chấm công (hệ thống nhận dạng theo tên gọi; khớp với tên đầy đủ trong danh mục nhân viên, ví dụ "LIÊU NGỌC ÁNH" = Ánh)
+  const CC_NAMES = ["Ánh", "Minh", "Danh", "Yến", "Thành", "Khang"];
+  const lastWord = n => String(n || "").trim().split(/\s+/).pop();
+  const ccShort = n => { const w = lastWord(n); return w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""; };
+  function ccPeople(){
+    const emps = plEmployees(), used = new Set(), out = [];
+    CC_NAMES.forEach(nm => { const e = emps.find(x => !used.has(x.id) && (norm(x.name) === norm(nm) || norm(lastWord(x.name)) === norm(nm)));
+      if (e) { used.add(e.id); out.push(e); } else out.push({id: "nv_" + norm(nm), name: nm, kind: "nhanvien", active: true, virtual: true}); });
+    emps.forEach(e => { if (!used.has(e.id)) out.push(e); });
+    return out;
+  }
+  // người chưa có trong danh mục nhân viên → tự thêm khi chấm công lần đầu (để Kế toán tính lương)
+  async function ccEnsure(pp){ if (!pp || !pp.virtual || expenses.some(x => x.id === pp.id)) return;
+    await put("ex", {id: pp.id, kind: "nhanvien", name: pp.name, title: "", base: 0, pc: 0, active: true, amount: 0, date: "", order: CC_NAMES.indexOf(pp.name), createdAt: new Date().toISOString()}); }
   const CC_RADIUS = 10;            // phạm vi chấm công: 10 m quanh vị trí công ty
   const CC_GPS_TOL = 20;           // sai số GPS tối đa được trừ (điện thoại trong nhà thường sai 5–20 m)
   const ccCfg = () => expenses.find(x => x.id === "cc_cfg");
@@ -3945,28 +3967,30 @@
     const host = $("#ccBox"); if (!host) return;
     const can = role === "ac" || boss; host.classList.toggle("hide", !can); if (!can) return;
     ccYm = ccYm || iso(new Date()).slice(0, 7);
-    const emps = plEmployees(), n = ccDays(ccYm), [y, m] = ccYm.split("-"), sh = ccSheet(ccYm), tdy = iso(new Date());
+    const emps = ccPeople(), n = ccDays(ccYm), [y, m] = ccYm.split("-"), sh = ccSheet(ccYm), tdy = iso(new Date());
     const wd = d => new Date(+y, +m - 1, d).getDay();
     host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">📅 Chấm công tháng ${m}/${y}</h3><input type="month" id="ccMonth" value="${ccYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
-      <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:var(--infobg);padding:0 4px;border-radius:4px">xanh</span> = nhân viên tự bấm vào ca trên app. Cột CN tô xám. Cột <b>Giờ</b> = tổng giờ tự chấm (60 phút = 1 giờ).</div>
+      <div class="sub" style="margin:6px 0">Bấm vào ô để đổi: <b>X</b> cả ngày · <b>½</b> nửa ngày · <b>P</b> phép · <b>L</b> lễ · <b>R</b> việc riêng (P, L, R có lương) · <b>K</b> không lương. Ô <span style="background:#dcfce7;color:#16a34a;padding:0 4px;border-radius:4px;font-weight:700">✔ xanh</span> = nhân viên tự chấm công thành công trên app. Cột CN tô xám. Cột <b>Giờ</b> = tổng giờ tự chấm (60 phút = 1 giờ).</div>
+      ${(() => { const L = emps.map(e => ({e, lg: expenses.find(x => x.kind === "cclog" && x.nvId === e.id && x.date === tdy)})), ok = L.filter(x => x.lg?.in).length;
+        return `<div class="found" style="margin:8px 0"><b>Hôm nay ${fmt(tdy)}: ${ok}/${L.length} người đã chấm công</b>${L.map(({e, lg}) => `<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)"><span>${lg?.in ? `<b style="color:#16a34a">✅</b>` : "⏳"} <b>${esc(ccShort(e.name))}</b>${norm(e.name) !== norm(ccShort(e.name)) ? ` <span class="sub">${esc(e.name)}</span>` : ""}</span><span class="sub" style="text-align:right">${lg?.in ? `vào ${tm(lg.in)}${lg.out ? ` · tan ${tm(lg.out)} · ${hDec(ccMin(lg)).toLocaleString("vi-VN")} giờ` : ""}${lg.inLoc?.dist != null ? ` · ${lg.inLoc.dist} m` : ""}` : "chưa chấm"}</span></div>`).join("")}</div>`; })()}
       ${emps.length ? `<div style="overflow-x:auto;margin:0 -4px"><table class="cctab" style="border-collapse:collapse;font-size:13px">
         <tr><th style="position:sticky;left:0;background:var(--card);text-align:left;min-width:110px;padding:4px">Nhân viên</th>${Array.from({length: n}, (_, i) => `<th style="padding:2px;min-width:30px;${wd(i + 1) === 0 ? "background:var(--line)" : ""}${`${ccYm}-${String(i + 1).padStart(2, "0")}` === tdy ? ";color:var(--brand)" : ""}">${i + 1}<div class="sub" style="font-size:10px">${["CN","T2","T3","T4","T5","T6","T7"][wd(i + 1)]}</div></th>`).join("")}<th style="padding:4px">Công</th><th style="padding:4px">Giờ</th><th style="padding:4px">Nghỉ</th><th style="padding:4px">K</th></tr>
         ${emps.map(e => { const s = ccSummary(ccYm, e.id); return `<tr><td style="position:sticky;left:0;background:var(--card);padding:4px;font-weight:600;white-space:nowrap">${esc(e.name)}<div class="sub"><button type="button" class="link" data-ccfill="${esc(e.id)}" style="padding:0;font-size:11px">✔ chấm đủ ngày thường</button></div></td>
           ${Array.from({length: n}, (_, i) => { const r = ccCode(ccYm, e.id, i + 1); return `<td class="cccell" data-nv="${esc(e.id)}" data-d="${i + 1}" title="${esc(r.lg ? `Vào ${tm(r.lg.in)}${r.lg.out ? " · ra " + tm(r.lg.out) + " · làm " + hm(ccMin(r.lg)) : ""}${r.lg.inLoc ? ` · cách công ty ${r.lg.inLoc.dist ?? "?"} m` : ""}` : CC_LABEL[r.c] || "Chưa chấm")}"
-            style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:var(--infobg);color:var(--info);" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${CC_SHOW[r.c] || ""}</td>`; }).join("")}
+            style="border:1px solid var(--line);text-align:center;cursor:pointer;height:34px;font-weight:700;${wd(i + 1) === 0 ? "background:var(--line);" : ""}${r.src === "nv" ? "background:#dcfce7;color:#16a34a;" : ""}${r.c === "K" ? "color:var(--bad);" : "PLR".includes(r.c) && r.c ? "color:var(--warn);" : ""}">${r.src === "nv" && r.c === "X" ? "✔" : CC_SHOW[r.c] || ""}</td>`; }).join("")}
           <td style="text-align:center;font-weight:700;padding:4px">${s.work}</td><td style="text-align:center;padding:4px" title="${s.mins ? hm(s.mins) : ""}">${s.mins ? hDec(s.mins) : ""}</td><td style="text-align:center;padding:4px">${s.leave}</td><td style="text-align:center;padding:4px;color:var(--bad)">${s.unpaid || ""}</td></tr>`; }).join("")}</table></div>`
-        : `<div class="empty">Chưa có nhân viên – thêm nhân viên ở “Bảng lương” bên dưới trước.</div>`}
+        : `<div class="empty">Chưa có nhân viên.</div>`}
       <div class="btns" style="flex-wrap:wrap"><button type="button" class="btn" id="ccXls">📊 Excel bảng chấm công</button><button type="button" class="btn" id="ccLoc">📍 Đặt vị trí công ty (để kiểm tra GPS)</button></div>
       <div class="sub" id="ccLocTxt"></div>`;
     const cfg = expenses.find(x => x.id === "cc_cfg");
     $("#ccLocTxt").textContent = cfg?.lat ? `Vị trí công ty đã đặt (${cfg.lat.toFixed(5)}, ${cfg.lng.toFixed(5)}). Phạm vi chấm công: ${ccRadius()} m – nhân viên chỉ bấm Vào ca / Tan ca được khi đứng trong phạm vi này.` : "Chưa đặt vị trí công ty.";
     $("#ccMonth").onchange = e => { ccYm = e.target.value || iso(new Date()).slice(0, 7); drawCC(); };
-    const saveCodes = async (mut) => { const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
+    const saveCodes = async (mut, nv) => { await ccEnsure(emps.find(x => x.id === nv)); const doc = JSON.parse(JSON.stringify(ccSheet(ccYm) || {id: "cc_" + ccYm, kind: "chamcong", month: ccYm, date: ccYm + "-01", amount: 0, codes: {}}));
       mut(doc.codes); doc.updatedAt = new Date().toISOString(); doc.by = actor(); await put("ex", doc); drawCC(); if (typeof drawPayroll === "function") { plDraft = null; drawPayroll(); } };
     host.querySelectorAll(".cccell").forEach(td => td.onclick = () => { const nv = td.dataset.nv, d = td.dataset.d, cur = ccSheet(ccYm)?.codes?.[nv]?.[d] || "";
-      const next = CC_CODES[(CC_CODES.indexOf(cur) + 1) % CC_CODES.length]; saveCodes(c => { c[nv] = c[nv] || {}; if (next) c[nv][d] = next; else delete c[nv][d]; }); });
+      const next = CC_CODES[(CC_CODES.indexOf(cur) + 1) % CC_CODES.length]; saveCodes(c => { c[nv] = c[nv] || {}; if (next) c[nv][d] = next; else delete c[nv][d]; }, nv); });
     host.querySelectorAll("[data-ccfill]").forEach(b => b.onclick = () => { const nv = b.dataset.ccfill;
-      saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
+      saveCodes(c => { c[nv] = c[nv] || {}; for (let d = 1; d <= n; d++) if (wd(d) !== 0 && !c[nv][d]) c[nv][d] = "X"; }, nv); toast("Đã chấm đủ các ngày thường (trừ Chủ nhật) – ngày nghỉ bấm vào ô để sửa"); });
     $("#ccLoc").onclick = () => { if (!navigator.geolocation) { toast("Máy không hỗ trợ định vị"); return; }
       navigator.geolocation.getCurrentPosition(async p => { await put("ex", Object.assign({}, cfg || {id: "cc_cfg", kind: "cc_cfg", date: "", amount: 0}, {lat: p.coords.latitude, lng: p.coords.longitude, updatedAt: new Date().toISOString()})); toast("Đã lưu vị trí công ty"); drawCC(); },
         () => toast("Không lấy được vị trí – cho phép định vị cho trình duyệt"), {enableHighAccuracy: true, timeout: 15000}); };
@@ -3983,7 +4007,7 @@
   const ccMe = () => { try { return localStorage.getItem("bh_ccme") || ""; } catch(e){ return ""; } };
   function distM(a, b){ const R = 6371000, r = x => x * Math.PI / 180, dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng), h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2; return Math.round(2 * R * Math.asin(Math.sqrt(h))); }
   function drawSelf(F, sheet){
-    const emps = plEmployees(), me = ccMe(), d = iso(new Date()), q = x => F.querySelector(x);
+    const emps = ccPeople(), me = emps.some(x => x.id === ccMe()) ? ccMe() : "", d = iso(new Date()), q = x => F.querySelector(x);
     const myLog = id => expenses.find(x => x.kind === "cclog" && x.nvId === id && x.date === d);
     const draw = () => { const st = q(".ccStat"); if (!st) return;
       const id = F.ccnv?.value || "", lg = id ? myLog(id) : null, ym = d.slice(0, 7), s = id ? ccSummary(ym, id) : null;
@@ -3991,22 +4015,24 @@
       if (s) st.innerHTML += `<br>Tháng ${ym.slice(5)}: <b>${s.work}</b> công · <b>${hDec(s.mins)}</b> giờ làm${s.leave ? ` · ${s.leave} ngày nghỉ có lương` : ""}${s.unpaid ? ` · ${s.unpaid} ngày không lương` : ""}`;
       q(".ccIn").disabled = !id || !!lg; q(".ccOut").disabled = !id || !lg || !!lg.out; };
     F.innerHTML = `${sheet ? `<div class="grab"></div>` : ""}<h2 style="margin:0 0 4px">🕘 Chấm công</h2><div class="sub">${fmt(d)} · ${tm(new Date())} · giờ làm tính theo phút, 60 phút = 1 giờ</div>
-      ${emps.length ? `<label>Bạn là</label><select name="ccnv"><option value="">— Chọn tên của bạn —</option>${emps.map(e => `<option value="${esc(e.id)}" ${e.id === me ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select>
+      ${emps.length ? `<label>Bấm vào đúng tên của bạn</label><input type="hidden" name="ccnv" value="${esc(me)}">
+        <div class="ccppl">${emps.map(e => `<button type="button" class="ccp ${e.id === me ? "sel" : ""}" data-ccp="${esc(e.id)}">${esc(ccShort(e.name))}${norm(e.name) !== norm(ccShort(e.name)) ? `<small>${esc(e.name)}</small>` : ""}${myLog(e.id)?.in ? `<span class="tk">✔</span>` : ""}</button>`).join("")}</div>
         ${ccCfg()?.lat ? `<div class="sub" style="margin-top:10px">📍 Cần bật định vị – chỉ chấm được khi bạn ở trong phạm vi <b>${ccRadius()} m</b> quanh công ty.</div><input type="checkbox" name="ccgps" checked hidden>`
           : `<label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" name="ccgps" checked style="width:auto;margin:0"> Kèm vị trí (GPS)</label>`}
-        <div class="found ccStat" style="margin-top:10px"></div>
+        <div class="ccOkBox"></div><div class="found ccStat" style="margin-top:10px"></div>
         <div class="btns"><button type="button" class="btn okb ccIn">▶ Vào ca</button><button type="button" class="btn pri ccOut">⏹ Tan ca</button></div>`
-      : `<div class="empty">Kế toán chưa thêm danh sách nhân viên (tab Kế toán → Bảng lương).</div>`}
+      : `<div class="empty">Chưa có danh sách nhân viên.</div>`}
       ${sheet ? `<div class="btns"><button type="button" class="btn" data-close="actBg">Đóng</button></div>` : ""}`;
     if (sheet) { actCtx = null; open("actBg"); }
     if (!emps.length) return;
-    F.ccnv.onchange = () => { try { localStorage.setItem("bh_ccme", F.ccnv.value); } catch(e){} draw(); }; draw();
+    F.querySelectorAll("[data-ccp]").forEach(b => b.onclick = () => { F.ccnv.value = b.dataset.ccp; try { localStorage.setItem("bh_ccme", b.dataset.ccp); } catch(e){}
+      F.querySelectorAll("[data-ccp]").forEach(x => x.classList.toggle("sel", x === b)); q(".ccOkBox").innerHTML = ""; draw(); }); draw();
     const getLoc = () => new Promise(ok => { if (!navigator.geolocation) return ok(ccCfg()?.lat ? {err: "máy không hỗ trợ định vị"} : null); if (!F.ccgps.checked) return ok(null);
       navigator.geolocation.getCurrentPosition(p => { const loc = {lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy)}, cfg = ccCfg();
         if (cfg?.lat) loc.dist = distM(loc, cfg); ok(loc); }, () => ok({err: "không lấy được vị trí"}), {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}); });
     const stamp = async kind => { const id = F.ccnv.value; if (!id) { toast("Chọn tên của bạn"); return; }
       const btn = q(kind === "in" ? ".ccIn" : ".ccOut"); btn.disabled = true; const t0 = btn.textContent; btn.textContent = "📍 Đang lấy vị trí…";
-      const e = emps.find(x => x.id === id), loc = await getLoc(), now = new Date().toISOString(), old = myLog(id); btn.textContent = t0; draw();
+      const e = emps.find(x => x.id === id), sh = ccShort(e.name), loc = await getLoc(), now = new Date().toISOString(), old = myLog(id); btn.textContent = t0; draw();
       const cfg = ccCfg();
       if (cfg?.lat) { const rad = ccRadius();
         if (!loc || loc.err) { toast("Không lấy được vị trí – bật định vị (GPS) và cho phép trình duyệt dùng vị trí rồi thử lại"); return; }
@@ -4014,11 +4040,19 @@
         if (!loc.ok) { toast(`Bạn đang cách công ty khoảng ${loc.dist} m (sai số ±${loc.acc} m) – ngoài phạm vi ${rad} m nên chưa chấm được. Đến gần công ty hơn rồi thử lại, hoặc báo Kế toán chấm tay.`); return; } }
       const doc = Object.assign({}, old || {id: `cl_${id}_${d}`, kind: "cclog", nvId: id, name: e.name, date: d, amount: 0}, kind === "in" ? {in: now, inLoc: loc} : {out: now, outLoc: loc}, {by: role ? actor() : "Nhân viên tự chấm"});
       if (kind === "out") { doc.mins = ccMin(doc); doc.hours = hDec(doc.mins); }
-      try { await put("ex", doc); toast(kind === "in" ? `Đã vào ca lúc ${tm(now)}${loc?.dist != null ? ` · cách công ty ${loc.dist} m` : ""}` : `Đã tan ca lúc ${tm(now)} · hôm nay làm ${hm(doc.mins)} (= ${doc.hours} giờ)`); draw(); } catch(err){} };
+      try { await ccEnsure(e); await put("ex", doc); } catch(err){ toast("Chưa chấm được – kiểm tra mạng rồi thử lại"); draw(); return; }
+      const msg = kind === "in" ? `vào ca lúc ${tm(now)}` : `tan ca lúc ${tm(now)} · hôm nay làm ${hm(doc.mins)} (= ${doc.hours.toLocaleString("vi-VN")} giờ)`;
+      q(".ccOkBox").innerHTML = `<div class="ccok"><div class="big">✓</div><b style="font-size:18px">Đã chấm công thành công!</b><div style="font-size:16px;margin-top:4px"><b>${esc(sh)}</b> – ${msg}</div><div class="sub" style="color:#166534;margin-top:4px">${loc?.dist != null ? `Cách công ty ${loc.dist} m · ` : ""}Đã báo Kế toán tính công</div></div>`;
+      F.querySelector(`[data-ccp="${CSS.escape(id)}"]`)?.insertAdjacentHTML("beforeend", F.querySelector(`[data-ccp="${CSS.escape(id)}"] .tk`) ? "" : `<span class="tk">✔</span>`);
+      const okb = q(".ccOkBox"); setTimeout(() => { if (okb.isConnected) okb.innerHTML = ""; }, 10000);
+      try { navigator.vibrate?.(120); } catch(err){}
+      toast(`✅ ${sh} đã chấm công thành công – ${kind === "in" ? "vào ca" : "tan ca"} ${tm(now)}`);
+      pushTo("ac", `🕘 Chấm công: ${sh} ${kind === "in" ? "vào ca" : "tan ca"} ${tm(now)}`, kind === "in" ? `${e.name} đã chấm công${loc?.dist != null ? ` (cách công ty ${loc.dist} m)` : ""}` : `${e.name} làm ${hm(doc.mins)} = ${doc.hours.toLocaleString("vi-VN")} giờ`, doc.id);
+      draw(); };
     q(".ccIn").onclick = () => stamp("in"); q(".ccOut").onclick = () => stamp("out");
   }
   const openCheckin = () => drawSelf($("#actForm"), true);
-  function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement)) drawSelf(F, false); drawCC(); $("#ccNote").classList.toggle("hide", role === "ac" || boss); }
+  function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement) && !F.querySelector(".ccok")) drawSelf(F, false); drawCC(); $("#ccNote").classList.toggle("hide", role === "ac" || boss); }
   function showCC(){ ccView = true;
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === "cc"));
     ["bh","gd","kt","vc","ac","sa","wh","cc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== "cc"));
