@@ -1500,7 +1500,7 @@
     const months = v => { const t = norm(String(v ?? "")).trim(); if (!t) return opt.emptyMonths; if (/^vv|vinh vien/.test(t)) return opt.vvMonths; if (/test/.test(t)) return 0; const n = parseInt(t); return isNaN(n) ? opt.emptyMonths : n; };
     // đầu / máy karaoke các loại: luôn bảo hành 12 tháng kể từ ngày mua (VV ở cột THỜI GIAN = mã kích hoạt vĩnh viễn)
     const isKara = p => /dau karaoke|may karaoke/.test(norm(p));
-    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, minD: "", maxD: ""};
+    const g = new Map(), stat = {rows: 0, withSn: 0, empty: 0, short: 0, std: 0, other: 0, dupSn: 0, ex: 0, kara: 0, act: 0, doi1: 0, minD: "", maxD: ""};
     rows.slice(hi + 1).forEach(r => {
       if (!r.some(c => String(c).trim())) return; stat.rows++;
       const s = String(r[C.sn] ?? "").trim().replace(/\s+/g, "").toUpperCase(); if (!s) { stat.empty++; return; }
@@ -1520,7 +1520,8 @@
       const sale = L.filter(x => SALE_RE.test(norm(x.type))), main = (sale.length ? sale : L).at(-1), ex = L.filter(x => x.ns).at(-1);
       if (/^525\d{5}$/.test(s)) stat.std++; else stat.other++;
       let m = main.m, n = main.type.replace(/\s+/g, " ").trim();
-      if (opt.kara12 && isKara(main.p)) { m = 12; stat.kara++; if (L.some(x => x.act)) { n += " · Mã kích hoạt: vĩnh viễn"; stat.act++; } }
+      if (parseInt(main.bh) === 1) { m = 1; n += " · Hàng đổi bảo hành (1 tháng)"; stat.doi1++; if (isKara(main.p) && L.some(x => x.act)) n += " · Mã kích hoạt: vĩnh viễn"; }   // ghi 1 tháng = hàng đổi bảo hành → giữ nguyên
+      else if (opt.kara12 && isKara(main.p)) { m = 12; stat.kara++; if (L.some(x => x.act)) { n += " · Mã kích hoạt: vĩnh viễn"; stat.act++; } }
       else if (main.bh && isNaN(parseInt(main.bh))) n += ` (BH: ${main.bh})`;
       const rec = {s, p: main.p, c: main.c, k: main.k, d: main.d, m, md: main.md, n};
       if (L.length > 1) rec.h = L.slice(-6).map(x => `${x.d ? fmt(x.d) : "?"} · ${x.type || "?"} · ${x.c}${x.bh ? " · BH " + x.bh : ""}`).join(" | ");
@@ -1569,6 +1570,7 @@
         <tr><td><b>Seri khác nhau sẽ nhập</b></td><td><b>${res.recs.length.toLocaleString("vi-VN")}</b></td></tr>
         <tr><td>· đúng chuẩn công ty (525 + 5 số)</td><td>${S.std.toLocaleString("vi-VN")}</td></tr><tr><td>· seri hãng khác / dạng khác</td><td>${S.other.toLocaleString("vi-VN")}</td></tr>
         <tr><td>· seri có nhiều dòng (lấy lần bán gần nhất)</td><td>${S.dupSn.toLocaleString("vi-VN")}</td></tr><tr><td>· có đổi hàng</td><td>${S.ex}</td></tr>
+        <tr><td>· ghi 1 tháng = hàng đổi bảo hành (giữ nguyên 1 tháng)</td><td>${S.doi1.toLocaleString("vi-VN")}</td></tr>
         <tr><td>· đầu / máy karaoke → 12 tháng${S.act ? ` (${S.act} có mã kích hoạt vĩnh viễn)` : ""}</td><td>${S.kara.toLocaleString("vi-VN")}</td></tr>
         <tr><td>· đã có trong sổ của app (giữ bản của app)</td><td>${inApp}</td></tr>
         <tr><td>Khoảng ngày</td><td style="white-space:nowrap">${S.minD ? fmt(S.minD) : "?"} – ${S.maxD ? fmt(S.maxD) : "?"}</td></tr></table>
@@ -1577,7 +1579,7 @@
     F.innerHTML = `<div class="grab"></div><h2>📥 Nhập sổ bảo hành từ file</h2><div class="sub">File: <b>${esc(f.name)}</b></div>
       <div class="two"><div><label>Cột bảo hành để trống</label><select name="em"><option value="0">Không bảo hành</option><option value="6">6 tháng</option><option value="12">12 tháng</option></select></div>
         <div><label>Bảo hành ghi "VV" (mã kích hoạt)</label><select name="vv"><option value="1200">Vĩnh viễn</option><option value="0">Không bảo hành</option><option value="12">12 tháng</option></select></div></div>
-      <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" name="k12" checked style="width:auto;margin:0"> Đầu / máy karaoke các loại: bảo hành <b>&nbsp;12 tháng&nbsp;</b> kể từ ngày mua</label>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px"><input type="checkbox" name="k12" checked style="width:auto;margin:0"> Đầu / máy karaoke các loại: bảo hành <b>&nbsp;12 tháng&nbsp;</b> kể từ ngày mua (trừ hàng ghi 1 tháng = hàng đổi bảo hành)</label>
       <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:4px"><input type="checkbox" name="ss" checked style="width:auto;margin:0"> Bỏ qua seri quá ngắn (dưới 5 ký tự)</label>
       <div class="sub">"VV" ở cột THỜI GIAN của đầu karaoke = mã kích hoạt vĩnh viễn (ghi chú kèm). "Bao test" tính là không bảo hành. Một seri có nhiều dòng → lấy <b>lần xuất bán gần nhất</b> làm ngày mua.</div>
       <div id="riPrev" style="margin-top:10px"></div><div class="sub" id="riRun" style="margin-top:6px"></div>
