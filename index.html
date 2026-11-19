@@ -321,8 +321,6 @@
         <div id="batchBox"></div>
         <h4 class="sechd" style="margin-top:6px">① Quét hoặc gõ số seri</h4>
         <label style="margin-top:4px">Số seri *</label><div class="snrow"><input name="serial" required placeholder="525xxxxx – quét hoặc gõ seri"><button type="button" class="scanbtn" data-scan="#recvForm [name=serial]" data-scankh="#recvForm [name=actCode]" data-scankh2="#recvForm [name=actCode2]" aria-label="Quét mã seri bằng camera">📷 Quét</button></div>
-        <label>Mã kích hoạt <span class="sub">(không bắt buộc – đầu karaoke: mã thứ 2 trên tem)</span></label><input name="actCode" inputmode="numeric" placeholder="VD: 233594" autocomplete="off">
-        <label>Mã kích hoạt mới <span class="sub">(không bắt buộc – mã thứ 3: mã cập nhật; có mã mới thì không lưu mã thứ 2)</span></label><input name="actCode2" inputmode="numeric" placeholder="Mã kích hoạt mới (nếu có)" autocomplete="off">
         <div class="sub" id="snWarn" style="color:var(--warn);margin-top:4px"></div>
         <div id="foundBox"></div>
         <div id="custKind"></div>
@@ -331,6 +329,11 @@
         <label>Tên khách hàng *</label><input name="customer" required>
         <label>Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label id="itemHead">Tên sản phẩm *</label><input name="product" required list="prodList">
+        <div id="actWrap" class="hide">
+          <div class="reason" style="margin-top:10px">🎤 <b>Đầu karaoke</b> (Okara, NAS, SmartK, VietK, VietKTV…): <b>gõ tay</b> số seri và mã kích hoạt theo tem (không quét). Mỗi đầu: 1 dòng số seri + 1 dòng mã kích hoạt.</div>
+          <label>Mã kích hoạt * <span class="sub">(mã thứ 2 trên tem)</span></label><input name="actCode" inputmode="numeric" placeholder="VD: 233594" autocomplete="off">
+          <label>Mã kích hoạt mới <span class="sub">(nếu có – mã thứ 3; có mã mới thì không lưu mã thứ 2)</span></label><input name="actCode2" inputmode="numeric" placeholder="Mã kích hoạt mới (nếu có)" autocomplete="off">
+        </div>
         </div>
 
         <div id="typeWrap" class="hide">
@@ -1416,6 +1419,10 @@
     const bad = sameDay.length || open.length;
     return `<div class="reason" style="margin-top:8px;${bad ? "background:var(--badbg);color:var(--bad)" : ""}"><b>${sameDay.length ? `⛔ HÔM NAY đã nhập ${sameDay.length} phiếu cho seri này – rất có thể trùng phiếu!` : open.length ? "⚠️ Seri này ĐANG có phiếu chưa xong – kiểm tra kẻo tạo trùng" : "ℹ️ Seri này từng nhận bảo hành / sửa chữa"}</b>${L.slice(0, 5).map(row).join("")}${L.length > 5 ? `<div class="sub">… và ${L.length - 5} phiếu cũ hơn</div>` : ""}</div>`;
   }
+  // ĐẦU KARAOKE: "đầu …", "máy karaoke", hoặc hãng Okara / NAS / SmartK / VietK / VietKTV (trừ loa, micro, vang, cục đẩy, HDMI, màn hình…)
+  const isHead = name => { const n = norm(name); if (!n) return false;
+    if (/may karaoke|\bdau\b/.test(n)) return !/dau (noi|day|chuyen|doc the)/.test(n);
+    return /\b(okara|nas|smartk|vietk|vietktv)\b/.test(n) && !/\b(loa|micro|mic|vang|cuc day|hdmi|man hinh|amply|tai nghe|day|remote|phu kien|op)\b/.test(n); };
   const F = $("#recvForm");
   function setTKind(v){ F.ttest.value = v ? "1" : ""; document.querySelectorAll("#tKind button").forEach(b => b.classList.toggle("on", b.dataset.tk === (v ? "1" : ""))); $("#tKindHint").classList.toggle("hide", !v); }
   document.querySelectorAll("#tKind button").forEach(b => b.onclick = () => setTKind(b.dataset.tk));
@@ -1423,6 +1430,9 @@
     const sn = F.serial.value.trim(), r = findReg(sn);
     // ① seri → phân loại khách cũ / khách mới; ② mới hiện ô thông tin khách
     const hasSn = sn.length >= 4;
+    const head = isHead(F.product.value || r?.product || "");
+    $("#actWrap").classList.toggle("hide", !head);
+    $("#recvForm .scanbtn").classList.toggle("hide", head);   // đầu karaoke: gõ tay, không quét
     $("#custWrap").classList.toggle("hide", !hasSn);
     if (!hasSn) $("#custKind").innerHTML = "";
     else if (r) { const S = wStatus(sn), m = Number(r.months);
@@ -1494,9 +1504,12 @@
   F.customer.addEventListener("input", () => { if (F.serial.value.trim()) refreshRecv(); });
   F.serial.addEventListener("input", () => {
     const r = findReg(F.serial.value);
-    if (r) { if (!F.customer.value) F.customer.value = r.customer || ""; if (!F.product.value) F.product.value = r.product || ""; if (!F.phone.value) F.phone.value = r.phone || ""; }
+    const fill = (el, v) => { if (!el.value || el.dataset.auto === "1") { el.value = v || ""; el.dataset.auto = v ? "1" : ""; } };
+    if (r) { fill(F.customer, r.customer); fill(F.product, r.product); fill(F.phone, r.phone); }
+    else [F.customer, F.product, F.phone].forEach(el => { if (el.dataset.auto === "1") { el.value = ""; el.dataset.auto = ""; } });
     refreshRecv();
   });
+  [F.customer, F.product, F.phone].forEach(el => el.addEventListener("input", () => { el.dataset.auto = ""; if (el === F.product) refreshRecv(); }));
   F.purchaseDate.addEventListener("input", refreshRecv); F.months.addEventListener("change", refreshRecv);
   document.querySelectorAll("#recvForm .opt[data-type]").forEach(o => o.onclick = () => { recvType = o.dataset.type; refreshRecv(); });
   document.querySelectorAll("#recvForm .opt[data-bm]").forEach(o => o.onclick = () => { bhMode = o.dataset.bm; refreshRecv(); if (bhMode === "doimoi") setTimeout(() => F.exNew.focus(), 50); });
@@ -1507,6 +1520,7 @@
     if (!recvType) return;
     const more = e.submitter && e.submitter.id === "recvMore";
     const issue = F.issue.value.trim(); if (!issue) { toast("Hãy nhập mô tả lỗi"); F.issue.focus(); return; }
+    if (isHead(F.product.value) && !F.actCode.value.trim() && !F.actCode2.value.trim()) { toast("Đầu karaoke: nhập mã kích hoạt (dòng thứ 2 trên tem)"); F.actCode.focus(); return; }
     { const L = dupTickets(F.serial.value), td = iso(new Date()), same = L.filter(t => iso(new Date(t.createdAt)) === td), op = L.filter(t => !CLOSED.includes(t.stage));
       const show = same.length ? same : op;
       if (show.length && !confirm(`${same.length ? "⛔ HÔM NAY đã nhập phiếu cho seri này" : "⚠️ Seri này đang có phiếu chưa xong"}:\n${show.slice(0, 3).map(t => `• ${t.code} – nhận ${fmtTime(t.createdAt)} – ${t.customer} – ${STAGES[t.stage]?.label || t.stage}`).join("\n")}\n\nVẫn tạo thêm phiếu mới? (Bấm Hủy nếu là phiếu trùng)`)) return; }
@@ -1553,7 +1567,7 @@
     recvBatch.items.push({product: t.product, serial: t.serial, text: label});
     if (more) {   // giữ tên khách & SĐT, xóa phần hàng để nhập hàng tiếp theo
       const c = F.customer.value, ph = F.phone.value;
-      const tk = F.ttest.value; F.reset(); setTKind(tk); F.exProduct.dataset.touched = ""; F.customer.value = c; F.phone.value = ph; recvType = null; bhMode = "sua"; refreshRecv();
+      const tk = F.ttest.value; F.reset(); setTKind(tk); F.exProduct.dataset.touched = ""; F.customer.value = c; F.phone.value = ph; F.customer.dataset.auto = ""; F.phone.dataset.auto = ""; F.product.dataset.auto = ""; recvType = null; bhMode = "sua"; refreshRecv();
       toast(`Đã lưu hàng ${recvBatch.items.length} (${label.replace(/^\S+\s/, "")}) – nhập hàng tiếp theo`);
       setTimeout(() => F.product.focus(), 50);
       return;
