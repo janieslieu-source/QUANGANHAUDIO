@@ -531,6 +531,7 @@
         <input type="date" id="dwDate" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="dwBody" style="margin-top:10px"></div>
         <div class="btns" style="flex-wrap:wrap"><button class="btn" id="dwFile">📊 Excel tuần – nhóm đang xem</button><button class="btn pri" id="dwFileAll">📊 Excel tuần – tất cả</button></div></div>
+      <div class="panel hide" id="plBox"></div>
       <div class="panel exbox" id="exAc"></div>
     </section>
 
@@ -3571,7 +3572,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (x.kind === "nhanvien" || x.kind === "bangluong") return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -3777,6 +3778,123 @@
     dlist("exRefList", [...orders, ...tickets].filter(x => x.stage !== "huy").sort((a,b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || "")).slice(0, 120).map(x => `<option value="${esc(x.code)}" label="${esc(x.customer)} · ${esc(fmt(x.saleDate || x.createdAt))}">`));
   }
 
+  /* ================= BẢNG LƯƠNG CÁN BỘ – CÔNG NHÂN VIÊN (Kế toán lập, Giám đốc duyệt) =================
+     Lương ngày = (Lương chức danh + PC trách nhiệm) ÷ ngày công chuẩn
+     (4) = (số ngày [– ngày nghỉ nếu đã gồm]) × lương ngày · (6) = ngày nghỉ × lương ngày · (8) ăn ca = đơn giá × số ngày
+     (12) Gross = 4+6+7+8+9+10+11 · (14) BHXH = (1+2) × 10,5% · (17) Thực lĩnh kỳ II = 12+13–14–15–16
+     Lưu trong bảng "expenses" (kind "nhanvien" / "bangluong") – không tính vào chi phí cho tới khi bấm "Ghi chi phí lương". */
+  const PL_FIELDS = [["base", "Lương chức danh"], ["pc", "PC trách nhiệm"], ["days", "Số ngày công"], ["leave", "Ngày nghỉ (L,P,R)"], ["hotline", "Trực hotline"], ["meal", "Tiền ăn giữa ca"],
+    ["phone", "Tiền điện thoại"], ["fuel", "Tiền xăng xe"], ["kpi", "Lương hiệu quả / KPI"], ["site", "Lương đi công trình"], ["tax", "Thuế TNCN tạm tính"], ["adv", "Trừ tạm ứng kỳ I"]];
+  const PL_ST = {nhap: "Nháp", cho_gd: "⏳ Chờ Giám đốc duyệt", duyet: "✔ Giám đốc đã duyệt"};
+  const plEmployees = () => expenses.filter(x => x.kind === "nhanvien" && x.active !== false).sort((a,b) => (a.order ?? 99) - (b.order ?? 99) || (a.name || "").localeCompare(b.name || "", "vi"));
+  const plSheet = ym => expenses.find(x => x.kind === "bangluong" && x.month === ym);
+  function plCalc(r, cfg){
+    const n = k => Number(r[k]) || 0, base = n("base"), pc = n("pc"), std = Number(cfg.stdDays) || 25, rate = (base + pc) / std;
+    const work = cfg.inclLeave ? Math.max(0, n("days") - n("leave")) : n("days");
+    const c4 = Math.round(work * rate), c6 = Math.round(n("leave") * rate), meal = r.meal === "" || r.meal == null ? Math.round(n("days") * (Number(cfg.mealRate) || 0)) : n("meal");
+    const gross = c4 + c6 + n("hotline") + meal + n("phone") + n("fuel") + n("kpi"), bhxh = Math.round((base + pc) * (Number(cfg.bhxh) || 10.5) / 100);
+    return {rate: Math.round(rate), work, c4, c6, meal, gross, bhxh, net: gross + n("site") - bhxh - n("tax") - n("adv")};
+  }
+  let plYm = null, plDraft = null;
+  function plLoad(ym){
+    const sh = plSheet(ym);
+    if (sh) return JSON.parse(JSON.stringify(sh));
+    const prev = expenses.filter(x => x.kind === "bangluong" && x.month < ym).sort((a,b) => b.month.localeCompare(a.month))[0];
+    const cfg = prev ? {stdDays: prev.stdDays, mealRate: prev.mealRate, inclLeave: prev.inclLeave, bhxh: prev.bhxh} : {stdDays: 25, mealRate: 40000, inclLeave: true, bhxh: 10.5};
+    return Object.assign({id: "bl_" + ym, kind: "bangluong", month: ym, status: "nhap", date: ym + "-28", amount: 0}, cfg, {rows: plEmployees().map(e => ({nvId: e.id, name: e.name, title: e.title || "", base: e.base || 0, pc: e.pc || 0, days: "", leave: 0,
+      hotline: e.hotline || 0, meal: "", phone: e.phone || 0, fuel: e.fuel || 0, kpi: 0, site: 0, tax: 0, adv: 0, bank: e.bank || ""}))});
+  }
+  const plTotals = d => d.rows.reduce((t, r) => { const c = plCalc(r, d); PL_FIELDS.forEach(([k]) => { if (k !== "meal") t[k] = (t[k] || 0) + (Number(r[k]) || 0); });
+    ["c4", "c6", "meal", "gross", "bhxh", "net"].forEach(k => t[k] = (t[k] || 0) + c[k]); return t; }, {});
+  function drawPayroll(){
+    const host = $("#plBox"); if (!host) return;
+    const can = role === "ac" || boss; host.classList.toggle("hide", !can); if (!can) return;
+    plYm = plYm || iso(new Date()).slice(0, 7);
+    if (!plDraft || plDraft.month !== plYm) plDraft = plLoad(plYm);
+    const d = plDraft, lock = d.status === "duyet" && !boss, T = plTotals(d), [y, m] = plYm.split("-");
+    const inp = (i, k, w) => `<input class="plin" data-i="${i}" data-k="${k}" inputmode="numeric" value="${d.rows[i][k] === "" || d.rows[i][k] == null ? "" : (["days", "leave"].includes(k) ? d.rows[i][k] : Number(d.rows[i][k]).toLocaleString("vi-VN"))}" ${lock ? "disabled" : ""} style="padding:8px;font-size:15px${w ? ";width:" + w : ""}" placeholder="${k === "meal" ? "tự tính" : "0"}">`;
+    host.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">👷 Bảng lương tháng ${m}/${y}</h3><input type="month" id="plMonth" value="${plYm}" style="width:auto;padding:7px 9px;font-size:14px"></div>
+      <div class="sub" style="margin:6px 0"><span class="badge ${d.status === "duyet" ? "b-ok" : d.status === "cho_gd" ? "b-info" : "b-warn"}">${PL_ST[d.status]}</span>${d.approvedBy ? ` · ${esc(d.approvedBy)} ${fmtTime(d.approvedAt)}` : ""}${d.expensed ? " · 💰 đã ghi chi phí lương" : ""}${plSheet(plYm) ? "" : " · <b>chưa lưu</b>"}</div>
+      <details style="margin:6px 0"><summary style="cursor:pointer;font-weight:600">⚙️ Cách tính</summary>
+        <div class="two"><div><label>Ngày công chuẩn / tháng</label><input id="plStd" type="number" value="${d.stdDays}" ${lock ? "disabled" : ""}></div><div><label>Tiền ăn ca / ngày (đ)</label><input id="plMeal" inputmode="numeric" value="${Number(d.mealRate).toLocaleString("vi-VN")}" ${lock ? "disabled" : ""}></div></div>
+        <div class="two"><div><label>BHXH người LĐ nộp (%)</label><input id="plBh" type="number" step="0.5" value="${d.bhxh}" ${lock ? "disabled" : ""}></div><div><label style="display:flex;gap:6px;align-items:center;margin-top:34px;color:var(--ink)"><input type="checkbox" id="plIncl" style="width:auto;margin:0" ${d.inclLeave ? "checked" : ""} ${lock ? "disabled" : ""}> Số ngày công đã gồm ngày nghỉ</label></div></div>
+        <div class="sub" style="margin-top:6px">Lương ngày = (Lương chức danh + PC) ÷ ngày công chuẩn · (4) = ${d.inclLeave ? "(số ngày – ngày nghỉ)" : "số ngày"} × lương ngày · (6) = ngày nghỉ × lương ngày · ăn ca = đơn giá × số ngày · Gross = 4+6+7+8+9+10+11 · BHXH = (1+2) × ${d.bhxh}% · Thực lĩnh kỳ II = Gross + công trình – BHXH – thuế – tạm ứng</div></details>
+      <div class="list" id="plRows">${d.rows.map((r, i) => { const c = plCalc(r, d); return `<div class="item" style="cursor:default">
+        <div class="row" style="align-items:center"><div style="flex:1"><input class="plin" data-i="${i}" data-k="name" value="${esc(r.name)}" ${lock ? "disabled" : ""} style="font-weight:700;padding:8px" placeholder="Họ và tên"></div>${lock ? "" : `<button type="button" class="btn sm danger" data-pldel="${i}" style="margin-left:6px">✕</button>`}</div>
+        <div class="two" style="margin-top:6px">${PL_FIELDS.map(([k, l]) => `<div><label style="margin:4px 0 2px">${l}${k === "meal" ? ` <span class="sub">(${money(c.meal)})</span>` : ""}</label>${inp(i, k)}</div>`).join("")}</div>
+        <label style="margin:6px 0 2px">Số TK ngân hàng</label><input class="plin" data-i="${i}" data-k="bank" value="${esc(r.bank || "")}" ${lock ? "disabled" : ""} placeholder="VD: 0721005079645 – VCB" style="padding:8px">
+        <div class="found" style="margin-top:8px">Lương ngày <b>${money(c.rate)}</b> · (4) đi làm ${c.work} ngày: <b>${money(c.c4)}</b> · (6) nghỉ: <b>${money(c.c6)}</b><br>
+          (12) Gross: <b>${money(c.gross)}</b> · (14) BHXH: <b>−${money(c.bhxh)}</b><br><b style="font-size:16px">(17) Thực lĩnh kỳ II: ${money(c.net)}</b></div></div>`; }).join("") || `<div class="empty">Chưa có nhân viên – bấm “Thêm nhân viên”.</div>`}</div>
+      ${lock ? "" : `<div class="btns"><button type="button" class="btn sm" id="plAdd">➕ Thêm nhân viên</button></div>`}
+      <div class="stats" style="grid-template-columns:repeat(2,1fr);margin-top:10px">
+        <div class="stat c-info"><b style="font-size:15px">${money(T.gross || 0)}</b><span>Tổng lương Gross</span></div><div class="stat c-ok"><b style="font-size:15px">${money(T.net || 0)}</b><span>Tổng thực lĩnh kỳ II</span></div>
+        <div class="stat"><b style="font-size:15px">${money(T.bhxh || 0)}</b><span>Tổng BHXH (người LĐ)</span></div><div class="stat"><b style="font-size:15px">${money(T.adv || 0)}</b><span>Tổng tạm ứng kỳ I</span></div></div>
+      <div class="btns" style="flex-wrap:wrap">
+        ${lock ? "" : `<button type="button" class="btn pri" id="plSave">💾 Lưu bảng lương</button>`}
+        ${!lock && d.status !== "duyet" && !boss ? `<button type="button" class="btn" id="plSend">👔 Gửi Giám đốc duyệt</button>` : ""}
+        ${boss && d.status !== "duyet" ? `<button type="button" class="btn okb" id="plOk">✔ Giám đốc duyệt</button>` : ""}
+        ${boss && d.status === "duyet" ? `<button type="button" class="btn" id="plReopen">↩ Mở lại để sửa</button>` : ""}
+        <button type="button" class="btn" id="plXls">📊 Excel bảng lương</button>
+        ${d.status === "duyet" && !d.expensed ? `<button type="button" class="btn" id="plExp">💰 Ghi chi phí lương (kỳ II)</button>` : ""}</div>`;
+    const num = v => Number(String(v).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".")) || 0;
+    host.querySelectorAll(".plin").forEach(el => el.addEventListener("change", () => { const i = +el.dataset.i, k = el.dataset.k;
+      d.rows[i][k] = ["name", "bank"].includes(k) ? el.value.trim() : (k === "meal" && el.value.trim() === "" ? "" : ["days", "leave"].includes(k) ? Number(String(el.value).replace(",", ".")) || 0 : num(el.value)); drawPayroll(); }));
+    host.querySelectorAll("[data-pldel]").forEach(b => b.onclick = () => { const r = d.rows[+b.dataset.pldel]; if (confirm(`Bỏ ${r.name || "dòng này"} khỏi bảng lương tháng này?`)) { d.rows.splice(+b.dataset.pldel, 1); drawPayroll(); } });
+    $("#plMonth").onchange = e => { plYm = e.target.value || iso(new Date()).slice(0, 7); plDraft = null; drawPayroll(); };
+    if (!lock) {
+      $("#plStd").onchange = e => { d.stdDays = Number(e.target.value) || 25; drawPayroll(); };
+      $("#plMeal").onchange = e => { d.mealRate = num(e.target.value); drawPayroll(); };
+      $("#plBh").onchange = e => { d.bhxh = Number(e.target.value) || 0; drawPayroll(); };
+      $("#plIncl").onchange = e => { d.inclLeave = e.target.checked; drawPayroll(); };
+      $("#plAdd").onclick = () => { d.rows.push({nvId: "", name: "", title: "", base: 0, pc: 0, days: "", leave: 0, hotline: 0, meal: "", phone: 0, fuel: 0, kpi: 0, site: 0, tax: 0, adv: 0, bank: ""}); drawPayroll(); setTimeout(() => host.querySelector(`.plin[data-i="${d.rows.length - 1}"][data-k="name"]`)?.focus(), 50); };
+    }
+    const save = async (patch, msg) => {
+      if (d.rows.some(r => !r.name)) { toast("Nhập đủ họ tên nhân viên"); return false; }
+      const now = new Date().toISOString(), emps = plEmployees();
+      // cập nhật danh mục nhân viên (lương cơ bản, PC, phụ cấp cố định, số TK) cho các tháng sau
+      const up = d.rows.map((r, i) => { const old = expenses.find(x => x.kind === "nhanvien" && (x.id === r.nvId || norm(x.name) === norm(r.name)));
+        const e = Object.assign({}, old || {id: "nv_" + uid(), kind: "nhanvien", date: "", amount: 0, at: now}, {name: r.name, base: Number(r.base) || 0, pc: Number(r.pc) || 0, hotline: Number(r.hotline) || 0, phone: Number(r.phone) || 0, fuel: Number(r.fuel) || 0, bank: r.bank || "", order: i, active: true, updatedAt: now});
+        r.nvId = e.id; return e; });
+      const gone = emps.filter(e => !up.some(u => u.id === e.id)).map(e => Object.assign({}, e, {active: false, updatedAt: now}));
+      await putMany("ex", up.concat(gone));
+      Object.assign(d, patch || {}, {updatedAt: now, by: d.by || actor(), lastBy: actor(), total: plTotals(d).net});
+      await put("ex", JSON.parse(JSON.stringify(d)));
+      toast(msg || "Đã lưu bảng lương"); plDraft = null; drawPayroll(); return true;
+    };
+    if ($("#plSave")) $("#plSave").onclick = () => save();
+    if ($("#plSend")) $("#plSend").onclick = async () => { if (await save({status: "cho_gd"}, "Đã gửi Giám đốc duyệt bảng lương")) pushTo("gd", `👔 Duyệt bảng lương tháng ${m}/${y}`, `Tổng thực lĩnh ${money(plTotals(d).net)}`, d.id); };
+    if ($("#plOk")) $("#plOk").onclick = () => save({status: "duyet", approvedBy: actor(), approvedAt: new Date().toISOString()}, "Giám đốc đã duyệt bảng lương");
+    if ($("#plReopen")) $("#plReopen").onclick = () => save({status: "nhap", approvedBy: "", approvedAt: ""}, "Đã mở lại bảng lương để sửa");
+    if ($("#plExp")) $("#plExp").onclick = async () => {
+      if (!confirm(`Ghi ${d.rows.length} khoản lương kỳ II (tổng ${money(plTotals(d).net)}) vào Chi phí công ty?`)) return;
+      const now = new Date().toISOString(), day = iso(new Date());
+      await putMany("ex", d.rows.map(r => ({id: "ex_" + uid(), kind: "luong", employee: r.name, month: d.month, amount: plCalc(r, d).net, date: day, note: `Lương kỳ II tháng ${m}/${y} (bảng lương)`, by: actor(), at: now, photos: []})));
+      await save({expensed: true}, "Đã ghi chi phí lương vào Chi phí công ty");
+    };
+    $("#plXls").onclick = () => plExcel(d);
+  }
+  async function plExcel(d){
+    try {
+      await loadScript(XLSX_URL);
+      const X = window.XLSX, [y, m] = d.month.split("-"), T = plTotals(d);
+      const H1 = ["STT", "Họ và tên", "Lương chức danh công việc", "PC trách nhiệm", "Lương ngày công đi làm thực tế", "", "Lương ngày nghỉ (L,P,R)", "", "Các khoản hỗ trợ", "", "", "", "Lương theo hiệu quả/KPI", "Tổng tiền lương tháng (lương Gross)", "Lương đi công trình", "Các khoản thu hộ", "", "Trừ tạm ứng Kỳ I", "Lương thực lĩnh Kỳ II", "Số TK ngân hàng"];
+      const H2 = ["", "", "", "", "Số ngày", "Thành tiền", "Số ngày", "Thành tiền", "Trực hotline", "Tiền ăn giữa ca", "Tiền điện thoại", "Tiền xăng xe", "", "", "", `Mức người LĐ nộp BHXH (${d.bhxh}%)`, "Thuế TNCN tạm tính", "", "", ""];
+      const H3 = ["", "", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12=(4+6+7+8+9+10+11)", "13", `14=(1+2)*${d.bhxh}%`, "15", "16", "17=(12+13-14-15-16)", ""];
+      const rows = d.rows.map((r, i) => { const c = plCalc(r, d), n = k => Number(r[k]) || 0;
+        return [i + 1, r.name, n("base"), n("pc"), n("days"), c.c4, n("leave"), c.c6, n("hotline"), c.meal, n("phone"), n("fuel"), n("kpi"), c.gross, n("site"), -c.bhxh, -n("tax"), -n("adv"), c.net, r.bank || ""]; });
+      const tot = ["", "TỔNG CỘNG", T.base || 0, T.pc || 0, T.days || 0, T.c4 || 0, T.leave || 0, T.c6 || 0, T.hotline || 0, T.meal || 0, T.phone || 0, T.fuel || 0, T.kpi || 0, T.gross || 0, T.site || 0, -(T.bhxh || 0), -(T.tax || 0), -(T.adv || 0), T.net || 0, ""];
+      const last = new Date(+y, +m, 0).getDate();
+      const aoa = [[COMPANY], ["BẢNG LƯƠNG CÁN BỘ - CÔNG NHÂN VIÊN"], [`THÁNG ${m}/${y}`], ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Đơn vị tính: đồng"], H1, H2, H3, ...rows, tot, [],
+        ["", "", "Giám đốc duyệt", "", "", "", "", "", "", "", "", "", "", "", "", `Ngày ${last} tháng ${m} năm ${y}`], ["", "", d.status === "duyet" ? `(Đã duyệt – ${d.approvedBy || ""} ${fmt(d.approvedAt)})` : "(Ký, ghi rõ họ tên)", "", "", "", "", "", "", "", "", "", "", "", "", "Người lập biểu"]];
+      const ws = X.utils.aoa_to_sheet(aoa), hr = 4;
+      Object.keys(ws).forEach(k => { if (k[0] !== "!" && typeof ws[k].v === "number") { const cc = X.utils.decode_cell(k); if (cc.r > hr + 2 && cc.c >= 2 && cc.c !== 4 && cc.c !== 6) ws[k].z = "#,##0;(#,##0);-"; } });
+      ws["!merges"] = [[0, 0, 0, 19], [1, 0, 1, 19], [2, 0, 2, 19], [hr, 4, hr, 5], [hr, 6, hr, 7], [hr, 8, hr, 11], [hr, 15, hr, 16], ...[0, 1, 2, 3, 12, 13, 14, 17, 18, 19].map(c => [hr, c, hr + 1, c])].map(([r1, c1, r2, c2]) => ({s: {r: r1, c: c1}, e: {r: r2, c: c2}}));
+      ws["!cols"] = [5, 24, 14, 13, 8, 13, 7, 12, 11, 12, 12, 11, 14, 16, 12, 14, 11, 14, 15, 24].map(w => ({wch: w}));
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, `Lương T${m}-${y}`);
+      await saveBlob(`Bang-luong_${d.month}.xlsx`, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu bảng lương Excel");
+    } catch(e){ toast("Không tạo được file Excel, kiểm tra mạng và thử lại"); }
+  }
+
   /* ================= KẾ TOÁN ================= */
   let acMonth = null;
   // ---- tuổi nợ & nhắc thu (quá 3 ngày, nhắc lại mỗi 3 ngày; không reo liên tục) ----
@@ -3833,7 +3951,7 @@
           if (x.lines) await advanceOrder(x, x.stage, msg, {pay}); else await advance(x, x.stage, msg, {pay});
           pushTo("gd", `👔 Kế toán gửi lại ${x.code} – ${x.customer}`, note, x.id); toast("Đã gửi lại Giám đốc"); }}); });
     $("#acList").querySelectorAll("[data-pay]").forEach(b => b.onclick = () => openPay(b.dataset.pay));
-    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc"));
+    drawDebt(); drawWeekDebt(); drawExpenses($("#exAc")); drawPayroll();
     $("#acMonth").value = acMonth;
     const paid = all.filter(t => t.stage === "da_tt" && (t.pay?.paidDate || "").startsWith(acMonth)).sort((a,b) => (b.pay.paidDate||"").localeCompare(a.pay.paidDate||""));
     $("#paidSum").textContent = money(paid.reduce((a,t) => a + (Number(t.pay.amount)||0), 0));
