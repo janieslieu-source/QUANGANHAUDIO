@@ -2986,7 +2986,7 @@
   let dxQ = "";
   /* ================= 🤝 MƯỢN HÀNG =================
      👤 Khách mượn: TẠM TRỪ KHO (seri → trạng thái "muon"; hàng không seri → dòng lịch sử "muon" âm), hạn trả mặc định 5 ngày, quá hạn nhắc lại; trả → cộng lại kho.
-     🏢 Công ty mượn (mượn của người / NCC khác): ghi mượn của ai, hạn trả – CỘNG TỒN KHO khi mượn, TRỪ KHO khi trả; gần hạn / quá hạn nhắc. */
+     🏢 Công ty mượn (mượn của người / NCC khác): mục RIÊNG – KHÔNG nhập kho; ghi mượn của ai, hạn trả mặc định 5 ngày, gần hạn / quá hạn nhắc. */
   const LOAN_DAYS = 5;
   const loans = () => expenses.filter(x => x.kind === "muon");
   const loanLeft = x => Math.round((new Date(x.due + "T00:00:00") - today()) / 864e5);
@@ -2995,14 +2995,14 @@
       <input class="mup" list="prodList" placeholder="Sản phẩm" autocomplete="off" value="${esc(v.product || "")}"><input class="muq" type="number" min="1" inputmode="numeric" value="${v.qty || 1}"><button type="button" class="rm" title="Xóa">✕</button>
       <input class="mus full" placeholder="Seri (nếu có – cách nhau dấu phẩy)" autocomplete="off" style="grid-column:1/-1" value="${esc((v.serials || []).join(", "))}"><div class="sub mustk full" style="grid-column:1/-1"></div></div>`);
     const el = $("#muLines").lastElementChild; el.querySelector(".rm").onclick = () => { el.remove(); if (!$("#muLines").children.length) muLine(); };
-    const upd = () => { const p = el.querySelector(".mup").value.trim(); el.querySelector(".mustk").innerHTML = p ? `Tồn kho: <b>${stockOf(p) ?? 0}</b>${muType === "cty" ? " → mượn xong tự cộng thêm" : ""}` : ""; };
+    const upd = () => { const p = el.querySelector(".mup").value.trim(); el.querySelector(".mustk").innerHTML = p && muType === "khach" ? `Tồn kho: <b>${stockOf(p) ?? 0}</b>` : ""; };
     el.querySelector(".mup").addEventListener("input", upd); upd(); }
   function muReset(){ $("#muWho").value = ""; $("#muPhone").value = ""; $("#muNote").value = ""; $("#muLines").innerHTML = ""; muLine();
     $("#muDate").value = iso(new Date()); $("#muDue").value = iso(new Date(Date.now() + LOAN_DAYS * 864e5)); }
   function muSyncType(){ document.querySelectorAll("#muType button").forEach(b => b.classList.toggle("on", b.dataset.t === muType));
     $("#muWhoL").textContent = muType === "khach" ? "Tên khách mượn *" : "Công ty mượn của ai * (người / NCC)";
-    $("#muDueL").textContent = muType === "khach" ? `Hạn trả (mặc định ${LOAN_DAYS} ngày)` : "Hạn phải trả *";
-    $("#muHint").innerHTML = muType === "khach" ? `👤 Khách mượn hàng của công ty → <b>tạm trừ tồn kho</b>. Quá hạn ${LOAN_DAYS} ngày app nhắc lại. Khách trả → bấm “✅ Đã trả”, kho tự cộng lại.` : `🏢 Công ty mượn hàng của người / NCC khác → <b>tự cộng tồn kho</b>. Trả hàng → bấm “✅ Công ty đã trả”, kho <b>tự trừ</b>. Gần hạn / quá hạn app nhắc.`;
+    $("#muDueL").textContent = muType === "khach" ? `Hạn trả (mặc định ${LOAN_DAYS} ngày)` : `Hạn phải trả (mặc định ${LOAN_DAYS} ngày)`;
+    $("#muHint").innerHTML = muType === "khach" ? `👤 Khách mượn hàng của công ty → <b>tạm trừ tồn kho</b>. Quá hạn ${LOAN_DAYS} ngày app nhắc lại và hiện nút <b>🛒 Khách mua luôn</b> (gọi hỏi khách mua hay trả). Khách trả → bấm “✅ Khách đã trả”, kho tự cộng lại.` : `🏢 Công ty mượn hàng của người / NCC khác → <b>theo dõi riêng, KHÔNG nhập kho</b>. Hạn trả mặc định ${LOAN_DAYS} ngày, gần hạn / quá hạn app nhắc. Trả xong bấm “✅ Công ty đã trả”.`;
     $("#muWhoList").innerHTML = [...new Set((muType === "khach" ? [...orders, ...tickets].map(x => x.customer) : loans().filter(x => x.type === "cty").map(x => x.who)).filter(Boolean))].slice(0, 300).map(n => `<option value="${esc(n)}">`).join("");
     $("#muLines").querySelectorAll(".mup").forEach(i => i.dispatchEvent(new Event("input"))); }
   document.querySelectorAll("#muType button").forEach(b => b.onclick = () => { muType = b.dataset.t; muSyncType(); });
@@ -3015,7 +3015,7 @@
     for (const l of lines) { if (l.serials.length > l.qty) l.qty = l.serials.length;
       if (muType === "khach") { const bad = l.serials.find(sn => { const x = findStock(sn); return !x || x.status !== "in"; });
         if (bad) { const x = findStock(bad); toast(`Seri ${bad} ${!x ? "không có trong kho" : "không còn trong kho (" + (x.status === "muon" ? "đang cho mượn" : "đã xuất") + ")"}`); return; } }
-      else { const dup = l.serials.find(sn => findStock(sn)?.status === "in"); if (dup) { toast(`Seri ${dup} đang có trong kho rồi – kiểm tra lại`); return; } } }
+    }
     const now = new Date().toISOString(), code = "MU" + iso(new Date()).replace(/-/g, "").slice(2) + "-" + Math.random().toString(36).slice(2, 5).toUpperCase();
     const rec = {id: "mu_" + uid(), kind: "muon", code, type: muType, who, phone: $("#muPhone").value.trim(), lines, date: $("#muDate").value || iso(new Date()), due: $("#muDue").value, note: $("#muNote").value.trim(), status: "dang", amount: 0, createdAt: now, by: actor()};
     const b = $("#muGo"); b.disabled = true;
@@ -3025,15 +3025,9 @@
         if (st.length) await putMany("st", st);
         const mv = lines.map(l => ({l, n: l.qty - l.serials.length})).filter(x => x.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: -n, at: now, kind: "muon", ref: code, note: `Khách mượn: ${who}`, by: actor()}));
         if (mv.length) await putMany("mv", mv);
-      } else {   // công ty mượn: cộng tồn kho
-        const st = lines.flatMap(l => l.serials.map(sn => { const old = findStock(sn), p0 = findProduct(l.product);
-          const c = Object.assign({}, old || {}, {id: old ? old.id : stId(sn), serial: sn, product: l.product, months: p0?.months ?? 12, status: "in", importedAt: now, ref: `Mượn của ${who}`, borrowCode: code, by: actor()}); delete c.orderCode; delete c.outAt; delete c.customer; return c; }));
-        if (st.length) await putMany("st", st);
-        const mv = lines.map(l => ({l, n: l.qty - l.serials.length})).filter(x => x.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: n, at: now, kind: "muon_cty", ref: code, note: `Công ty mượn của ${who}`, by: actor()}));
-        if (mv.length) await putMany("mv", mv);
-      }
+      }   // công ty mượn: chỉ theo dõi, KHÔNG nhập kho
       await put("ex", rec);
-      toast(muType === "khach" ? `Đã lưu phiếu mượn ${code} – đã tạm trừ kho, hạn trả ${fmt(rec.due)}` : `Đã lưu: công ty mượn của ${who} – đã cộng tồn kho, hạn trả ${fmt(rec.due)}`); muReset(); drawLoans();
+      toast(muType === "khach" ? `Đã lưu phiếu mượn ${code} – đã tạm trừ kho, hạn trả ${fmt(rec.due)}` : `Đã lưu: công ty mượn của ${who} (không nhập kho), hạn trả ${fmt(rec.due)}`); muReset(); drawLoans();
     } catch(e){} finally { b.disabled = false; }
   };
   async function loanRestock(x, now){   // khách trả / chuyển mua: hoàn lại phần tạm trừ kho
@@ -3076,19 +3070,21 @@
   }
   async function loanReturn(id){
     const x = loans().find(y => y.id === id); if (!x || x.status !== "dang") return;
-    if (!confirm(`${x.type === "khach" ? `Khách ${x.who} đã trả hàng mượn` : `Công ty đã trả hàng cho ${x.who}`}?\n${x.lines.map(l => `• ${l.product} × ${l.qty}`).join("\n")}${x.type === "khach" ? "\n\nKho sẽ tự cộng lại." : "\n\nKho sẽ tự trừ số hàng này."}`)) return;
+    if (!confirm(`${x.type === "khach" ? `Khách ${x.who} đã trả hàng mượn` : `Công ty đã trả hàng cho ${x.who}`}?\n${x.lines.map(l => `• ${l.product} × ${l.qty}`).join("\n")}${x.type === "khach" ? "\n\nKho sẽ tự cộng lại." : ""}`)) return;
     const now = new Date().toISOString();
     if (x.type === "khach") await loanRestock(x, now);
     else {   // công ty trả hàng đã mượn: trừ kho
+      const legacy = stock.some(z => z.borrowCode === x.code) || moves.some(m => m.kind === "muon_cty" && m.ref === x.code);   // phiếu cũ đã lỡ cộng kho
+      if (legacy) {
       const sold = stock.filter(z => z.borrowCode === x.code && z.status !== "in");
       if (sold.length && !confirm(`Seri ${sold.map(z => z.serial).join(", ")} đã xuất / cho mượn – không còn trong kho. Vẫn ghi đã trả?`)) return;
       const st = stock.filter(z => z.borrowCode === x.code && z.status === "in").map(z => Object.assign({}, z, {status: "tra_ncc", outAt: now, returnNote: `Trả hàng mượn cho ${x.who}`}));
       if (st.length) await putMany("st", st);
-      const mv = x.lines.map(l => ({l, n: l.qty - (l.serials || []).length})).filter(y => y.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: -n, at: now, kind: "muon_cty_tra", ref: x.code, note: `Công ty trả hàng mượn cho ${x.who}`, by: actor()}));
-      if (mv.length) await putMany("mv", mv);
+      const mv = moves.filter(m => m.kind === "muon_cty" && m.ref === x.code).map(m => ({id: "mv_" + uid(), product: m.product, qty: -Number(m.qty), at: now, kind: "muon_cty_tra", ref: x.code, note: `Công ty trả hàng mượn cho ${x.who}`, by: actor()}));
+      if (mv.length) await putMany("mv", mv); }
     }
     await put("ex", Object.assign({}, x, {status: "tra", returnedAt: now, returnBy: actor()}));
-    toast(x.type === "khach" ? `Đã nhận lại hàng – kho đã cộng lại (${x.code})` : `Đã trả hàng cho ${x.who} – kho đã trừ (${x.code})`);
+    toast(x.type === "khach" ? `Đã nhận lại hàng – kho đã cộng lại (${x.code})` : `Đã ghi: công ty đã trả hàng cho ${x.who} (${x.code})`);
   }
   function loanCard(x){ const d = loanLeft(x), open = x.status === "dang";
     return `<div class="item ${open && d < 0 ? "lateitem" : ""}" style="cursor:default"><div class="row"><div><div class="pname"><span class="tag ${x.type === "khach" ? "bh" : "vc"}">${x.type === "khach" ? "👤 Khách mượn" : "🏢 Công ty mượn"}</span>${esc(x.who)}</div>
@@ -3096,8 +3092,9 @@
       <div style="font-size:14px;margin-top:4px">${x.lines.map(l => `• <b>${esc(l.product)}</b> × ${l.qty}${(l.serials || []).length ? ` <span class="sub">SN ${l.serials.map(esc).join(", ")}</span>` : ""}`).join("<br>")}</div>
       ${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
       <span class="badge ${!open ? "b-ok" : d < 0 ? "b-bad" : d <= 1 ? "b-warn" : "b-info"}">${!open ? (x.status === "ban" ? "Đã mua" : "Đã trả") : d < 0 ? `Quá hạn ${-d} ngày` : d === 0 ? "Hạn hôm nay" : `Còn ${d} ngày`}</span></div>
-      <div class="sub" style="margin-top:4px">${open ? `⏰ Hạn trả <b>${fmt(x.due)}</b>${x.type === "khach" ? " · đang tạm trừ kho" : " · đã cộng kho – trả thì tự trừ"}` : x.status === "ban" ? `🛒 Khách mua luôn ${fmtTime(x.returnedAt)} → đơn <b>${esc(x.orderCode || "")}</b> · ${money(x.total || 0)}` : `✅ Đã trả ${fmtTime(x.returnedAt)}${x.returnBy ? " · " + esc(x.returnBy) : ""}`}</div>
-      ${open ? `<div class="cardbtns">${x.type === "khach" ? `<button type="button" class="btn pri" data-mubuy="${esc(x.id)}">🛒 Khách mua luôn</button>` : ""}<button type="button" class="btn okb" data-muret="${esc(x.id)}">✅ ${x.type === "khach" ? "Khách đã trả" : "Công ty đã trả"}</button></div>` : ""}</div>`; }
+      <div class="sub" style="margin-top:4px">${open ? `⏰ Hạn trả <b>${fmt(x.due)}</b>${x.type === "khach" ? " · đang tạm trừ kho" : " · không nhập kho – nhớ trả đúng hạn"}` : x.status === "ban" ? `🛒 Khách mua luôn ${fmtTime(x.returnedAt)} → đơn <b>${esc(x.orderCode || "")}</b> · ${money(x.total || 0)}` : `✅ Đã trả ${fmtTime(x.returnedAt)}${x.returnBy ? " · " + esc(x.returnBy) : ""}`}</div>
+      ${open && x.type === "khach" && d < 0 ? `<div class="reason" style="margin-top:6px;background:var(--badbg);color:var(--bad)">📞 Quá hạn trả – gọi hỏi khách: <b>mua luôn</b> hay <b>trả hàng</b>?</div>` : ""}
+      ${open ? `<div class="cardbtns">${x.type === "khach" && d < 0 ? `<button type="button" class="btn pri" data-mubuy="${esc(x.id)}">🛒 Khách mua luôn</button>` : ""}<button type="button" class="btn okb" data-muret="${esc(x.id)}">✅ ${x.type === "khach" ? "Khách đã trả" : "Công ty đã trả"}</button></div>` : ""}</div>`; }
   function drawLoans(){
     if (!$("#muLines")) return; if (!$("#muLines").children.length) { muReset(); muSyncType(); }
     const L = loans(), op = L.filter(x => x.status === "dang").sort((a, b) => a.due.localeCompare(b.due)), late = op.filter(x => loanLeft(x) < 0).length;
