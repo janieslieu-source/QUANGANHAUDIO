@@ -1230,7 +1230,7 @@
       <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}
+      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
@@ -2311,6 +2311,7 @@
     if (st.length) await putMany("st", st);
     return {kho, thao, ngoai};
   }
+  const KTV_NAMES = ["Danh", "Khang", "Minh", "Thành"];   // kỹ thuật viên nhận sửa
   function openJob(id){
     const t = tickets.find(x => x.id === id); if (!t) return;
     const isBH = t.type === "bh";
@@ -2349,7 +2350,8 @@
         <div class="sub">Gõ tên linh kiện: <b>có trong kho → tự trừ kho</b>; <b>không có tên trong kho → trừ vào danh mục 🧩 Linh kiện ngoài</b>. Kho có tên nhưng hết hàng → chọn 🔩 Tháo từ máy (nhập seri máy bị tháo).</div>
         <div id="prows"></div>
         <button type="button" class="btn sm" id="addPart" style="margin-top:8px">+ Thêm linh kiện</button>
-        <label>Kỹ thuật viên</label><input name="tech" value="${esc(t.tech || lastTech)}">
+        <label>Kỹ thuật viên sửa * <span class="sub">(ai sửa người đó bấm chọn)</span></label><input type="hidden" name="tech" value="${esc(t.tech || "")}">
+        <div class="ccppl ktvpick" style="grid-template-columns:repeat(4,1fr)">${[...new Set([...KTV_NAMES, ...(t.tech && !KTV_NAMES.includes(t.tech) ? [t.tech] : [])])].map(n => `<button type="button" class="ccp ${n === t.tech ? "sel" : ""}" data-ktv="${esc(n)}" style="padding:12px 4px;font-size:16px">${esc(n)}</button>`).join("")}</div>
         <label>Ghi chú</label><textarea name="techNote">${esc(t.techNote)}</textarea>
       </div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri" id="jobOk">Bắt đầu xử lý</button></div>`;
@@ -2367,6 +2369,8 @@
       $("#jobOk").disabled = !jobAction;
       $("#jobOk").textContent = t.stage === "dang_sua" ? "Lưu" : "Bắt đầu xử lý";
     };
+    // ---- chọn kỹ thuật viên ----
+    F2.querySelectorAll("[data-ktv]").forEach(b => b.onclick = () => { F2.tech.value = b.dataset.ktv; F2.querySelectorAll("[data-ktv]").forEach(x => x.classList.toggle("sel", x === b)); });
     // ---- dòng linh kiện ----
     const addPart = p => {
       p = p || {};
@@ -2429,6 +2433,7 @@
         }
       }
       const parts = used.map(u => `${u.name} x${u.qty}`).join(", ");
+      if (!F2.tech.value.trim()) { toast("Chọn kỹ thuật viên sửa máy này"); F2.querySelector(".ktvpick").scrollIntoView({block: "center"}); throw new Error("x"); }
       const extra = {action: jobAction, parts, partsUsed: used, tech: F2.tech.value.trim(), techNote: F2.techNote.value.trim()};
       let note;
       if (jobAction === "doimoi") {
