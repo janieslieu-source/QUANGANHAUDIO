@@ -538,7 +538,7 @@
         <div class="sub" style="margin-bottom:6px">Tồn kho đã tự trừ hàng xuất bán / linh kiện / đổi bảo hành. File gồm: tồn đầu ngày, nhập, xuất trong ngày, tồn cuối ngày, danh sách seri còn trong kho, chi tiết hàng xuất.</div>
         <input type="file" id="stockFile" accept=".xlsx,.xls,.csv,text/csv" style="display:none">
         <div class="sub" style="margin:8px 0">File Excel chỉ cần 2 cột: <b>Tên sản phẩm · Số lượng</b>. Seri do Kho điền khi xuất hàng. (Có thể thêm cột Bảo hành (tháng), Mã hàng, <b>Link tham khảo</b> nếu muốn.)</div>
-        <input id="stQ" type="search" placeholder="Tìm sản phẩm hoặc seri trong kho…" autocomplete="off">
+        <input id="stQ" type="search" placeholder="Tìm model, hãng, tên SP hoặc seri…" autocomplete="off">
         <div id="stockTable" style="margin-top:10px"></div>
         <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:600">🔀 Gộp tên sản phẩm bị trùng</summary>
           <div class="sub" style="margin:6px 0">Hai tên là cùng một sản phẩm → gộp về 1 tên: tồn kho, seri, lịch sử nhập/xuất, đơn hàng, sổ bảo hành đều chuyển sang tên đúng.</div>
@@ -2637,7 +2637,7 @@
     return `<div class="oline ${gift ? "giftline" : ""}" ${gift ? 'data-gift="1"' : ""}>
       <button type="button" class="rm" title="Xóa dòng">✕</button>
       <div class="full"><label style="margin-top:0;display:flex;justify-content:space-between;gap:8px"><span>Tên sản phẩm · Số lượng</span><span class="lstk"></span></label></div>
-      <div style="position:relative"><input class="lp" value="${esc(l.product||"")}" placeholder="Bấm để chọn hoặc gõ tên" autocomplete="off">
+      <div style="position:relative"><input class="lp" value="${esc(l.product||"")}" placeholder="Gõ model, hãng hoặc tên SP" autocomplete="off">
         <div class="sugg hide"></div><div class="lsim chips" style="flex-wrap:wrap;margin-top:6px"></div></div>
       <div><input class="lq" type="number" min="1" inputmode="numeric" value="${l.qty || 1}" title="Số lượng"></div>
       ${gift ? `<div class="full sub" style="color:#be185d">🎁 Hàng tặng</div>`
@@ -2660,12 +2660,12 @@
     // danh sách gợi ý: tên sản phẩm + tồn kho
     const sg = el.querySelector(".sugg");
     const showSugg = () => {
-      const q = norm(lp.value), all = productNames();
-      const list = (q ? all.filter(n => norm(n).includes(q)) : all).slice(0, 40);
+      const q = norm(lp.value).trim(), hits = rankProducts(productNames(), lp.value), kindOf = {}; hits.forEach(x => kindOf[x.n] = x.kinds);
+      const list = hits.slice(0, 40).map(x => x.n);
       if (!list.length) { sg.classList.add("hide"); return; }
       // thứ tự cột: Tên sản phẩm · Tồn kho · Link tham khảo
-      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${(q ? all.filter(n => norm(n).includes(q)) : all).length > list.length ? "+" : ""})</b>${list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k = stockOf(n), u = linkOf(n);
-        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
+      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${hits.length > list.length ? "+" : ""})</b>${q ? " · Model → Hãng → Tên" : list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k = stockOf(n), u = linkOf(n);
+        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${kindTags(kindOf[n] || [])}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
       sg.classList.remove("hide");
       // chọn bằng "chạm" (click) – kéo để cuộn danh sách không bị chọn nhầm
       sg.querySelectorAll(".sg").forEach(b => b.addEventListener("click", e => { if (e.target.closest("a,.cpy")) return; lp.value = b.dataset.n; sg.classList.add("hide"); onPick(); el.querySelector(".lq").focus(); }));
@@ -2708,23 +2708,44 @@
     if (nn.startsWith(norm(query).trim())) sc += 10;
     return {sc, kinds: [...kinds]};
   }
-  function attachPicker(inp, sg, onPick, parts){
+  // xếp hạng danh sách tên sản phẩm theo chữ gõ: Model → Hãng → Tên; cùng mức thì hàng còn tồn trước
+  // Kỹ thuật: linh kiện (LK ngoài, LK đã từng dùng sửa máy, tên bắt đầu bằng loại linh kiện) được ưu tiên lên đầu
+  const LK_WORDS = /^(linh kien|lk|cu loa|ic|tu|tu dien|mach|bo mach|board|chip|mang loa|coil|nguon|so|so cong suat|bien ap|jack|chiet ap|cong tac|quat|led|pin|dien tro|diode|relay|role|cau chi|transistor|mosfet|op amp|vr|volume|day|cap|socket|cong|man hinh|loa treble|loa bass|treble|bass)\b/;
+  const lkSet = () => { const st = new Set(extNames().map(norm)); sumParts(tickets).forEach(p => st.add(norm(p.name))); return st; };
+  function rankProducts(all, query, lk){
+    const isLk = n => lk && (lk.has(norm(n)) || LK_WORDS.test(norm(n)));
+    if (!norm(query).trim()) return lk ? all.map(n => ({n, kinds: isLk(n) ? ["lk"] : []})).sort((a,b) => b.kinds.length - a.kinds.length) : all.map(n => ({n, kinds: []}));
+    return all.map(n => { const r = pickScore(n, findProduct(n)?.code, query); if (r && isLk(n)) { r.sc += 500; r.kinds.unshift("lk"); } return {n, r}; }).filter(x => x.r)
+      .sort((a,b) => b.r.sc - a.r.sc || ((stockOf(b.n) || 0) > 0) - ((stockOf(a.n) || 0) > 0) || a.n.localeCompare(b.n, "vi")).map(x => ({n: x.n, kinds: x.r.kinds}));
+  }
+  const kindTags = k => (k.includes("lk") ? ' <span class="sgk" style="color:#7c3aed;background:rgba(124,58,237,.1)">🔩 Linh kiện</span>' : "") + (k.includes("model") ? ' <span class="sgk">🔢 Model</span>' : "") + (k.includes("brand") ? ' <span class="sgk">🏷️ Hãng</span>' : "");
+  function attachPicker(inp, sg, onPick, parts, pickOnly){
     const show = () => {
       const q = norm(inp.value), all = parts ? [...new Map([...productNames(), ...extNames()].map(n => [norm(n), n])).values()].sort((a,b) => a.localeCompare(b, "vi")) : productNames();
-      const hits = q ? all.map(n => ({n, r: pickScore(n, findProduct(n)?.code, inp.value)})).filter(x => x.r)
-          .sort((a,b) => b.r.sc - a.r.sc || ((stockOf(b.n) || 0) > 0) - ((stockOf(a.n) || 0) > 0) || a.n.localeCompare(b.n, "vi")) : all.map(n => ({n, r: null}));
-      const kindOf = {}; hits.forEach(x => kindOf[x.n] = x.r ? x.r.kinds : []);
+      const hits = rankProducts(all, inp.value, parts ? lkSet() : null);
+      const kindOf = {}; hits.forEach(x => kindOf[x.n] = x.kinds);
       const list = hits.slice(0, 40).map(x => x.n);
       if (!list.length) { sg.classList.add("hide"); return; }
-      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${hits.length > list.length ? "+" : ""})</b>${q ? " · Model → Hãng → Tên" : list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
-        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${ex != null ? ' <span class="sub">🧩 LK ngoài</span>' : ""}${(kindOf[n] || []).includes("model") ? ' <span class="sgk">🔢 Model</span>' : ""}${(kindOf[n] || []).includes("brand") ? ' <span class="sgk">🏷️ Hãng</span>' : ""}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
+      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${hits.length > list.length ? "+" : ""})</b>${q ? (parts ? " · Linh kiện → Model → Hãng → Tên" : " · Model → Hãng → Tên") : list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
+        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${ex != null ? ' <span class="sub">🧩 LK ngoài</span>' : ""}${kindTags(kindOf[n] || [])}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
       sg.classList.remove("hide");
       sg.querySelectorAll(".sg").forEach(b => b.addEventListener("click", e => { if (e.target.closest("a,.cpy")) return; inp.value = b.dataset.n; sg.classList.add("hide"); onPick && onPick(); }));
       sg.querySelectorAll(".sgl a").forEach(a => a.addEventListener("click", e => { e.stopPropagation(); }));
     };
-    inp.addEventListener("focus", show); inp.addEventListener("input", () => { show(); onPick && onPick(); });
+    inp.addEventListener("focus", show); inp.addEventListener("input", () => { if (inp._picking) return; show(); if (!pickOnly) onPick && onPick(); });
     keepSugg(sg); inp.addEventListener("blur", () => setTimeout(() => { if (!suggBusy(sg)) sg.classList.add("hide"); }, 150));
   }
+  // mọi ô gõ tên sản phẩm (trước dùng datalist) -> danh sách gợi ý thông minh có tồn kho
+  function upgradeProdInputs(root){
+    (root.querySelectorAll ? root.querySelectorAll('input[list="prodList"]') : []).forEach(inp => {
+      inp.removeAttribute("list"); inp.autocomplete = "off"; if (!inp.placeholder || /^(Tên sản phẩm|Sản phẩm)$/.test(inp.placeholder)) inp.placeholder = "Gõ model, hãng hoặc tên SP";
+      const w = document.createElement("div"); w.style.position = "relative"; w.style.minWidth = "0"; inp.parentNode.insertBefore(w, inp); w.appendChild(inp);
+      const sg = document.createElement("div"); sg.className = "sugg hide"; w.appendChild(sg);
+      attachPicker(inp, sg, () => { inp._picking = true; inp.dispatchEvent(new Event("input", {bubbles: true})); inp._picking = false; inp.dispatchEvent(new Event("change", {bubbles: true})); }, false, true);
+    });
+  }
+  upgradeProdInputs(document);
+  new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 && (n.matches?.('input[list="prodList"]') ? upgradeProdInputs(n.parentNode) : upgradeProdInputs(n))))).observe(document.body, {childList: true, subtree: true});
   const allLineEls = () => [...$("#olines").children, ...$("#glines").children];
   function refreshAllLineStock(){ allLineEls().forEach(showLineStock); }
   function showLineStock(el){
@@ -3578,7 +3599,7 @@
   document.addEventListener("click", e => { const b = e.target.closest("[data-copy]"); if (b) { e.preventDefault(); e.stopPropagation(); copyText(b.dataset.copy); } }, true);
   const copyBtn = (name, txt) => { const u = linkOf(name); return u ? `<button type="button" class="cpy" data-copy="${esc(u)}">${txt || "📋"}</button>` : ""; };
   // gợi ý tên gần đúng: mọi chữ gõ vào đều có trong tên sản phẩm
-  const similar = (q, max = 3) => { const w = norm(q).split(/\s+/).filter(Boolean); return w.length ? productNames().filter(p => { const n = norm(p); return w.every(x => n.includes(x)); }).slice(0, max) : []; };
+  const similar = (q, max = 3) => rankProducts(productNames(), q).slice(0, max).map(x => x.n);
   const linkA = (name, txt) => { const u = linkOf(name); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener" class="plink" onclick="event.stopPropagation()">${txt || "🔗"}</a>` : ""; };
   // tồn theo số lượng (hàng nhập không seri); null nếu chưa từng nhập theo số lượng
   // tổng tồn = seri còn trong kho + hàng theo số lượng; null nếu sản phẩm chưa từng nhập kho
@@ -3607,13 +3628,15 @@
     products.forEach(p => { const k = norm(p.name); if (!g.has(k)) g.set(k, {name: p.name, inn: 0, out: 0, months: p.months, code: p.code}); });
     moves.forEach(m => { if (m.kind === "seed" || m.ext) return; const k = norm(m.product); if (!g.has(k)) g.set(k, {name: m.product, inn: 0, out: 0}); const r = g.get(k); r.inn += Number(m.qty) || 0; if (m.qty < 0 && m.kind !== "kiemke") r.out -= m.qty; });
     let rows = [...g.values()];
-    if (q) rows = rows.filter(r => norm(r.name + " " + (r.code||"")).includes(q) || stock.some(x => norm(x.product) === norm(r.name) && norm(x.serial).includes(q)));
-    rows.sort((a,b) => b.inn - a.inn || a.name.localeCompare(b.name, "vi"));
+    if (q) { rows.forEach(r => { const ps = pickScore(r.name, r.code, $("#stQ").value), sn = stock.some(x => norm(x.product) === norm(r.name) && norm(x.serial).includes(q.trim()));
+        r.sc = sn ? 1000 : ps ? ps.sc : -1; r.kinds = ps ? ps.kinds : []; });
+      rows = rows.filter(r => r.sc >= 0).sort((a,b) => b.sc - a.sc || (b.inn > 0) - (a.inn > 0) || b.inn - a.inn || a.name.localeCompare(b.name, "vi")); }
+    else rows.sort((a,b) => b.inn - a.inn || a.name.localeCompare(b.name, "vi"));
     const totalIn = [...g.values()].reduce((a,r) => a + Math.max(0, r.inn), 0);
     $("#stockSum").textContent = stock.length || products.length ? `Tồn ${totalIn} · ${g.size} mặt hàng` : "";
     const more = rows.length - 100; rows = rows.slice(0, 100);
     $("#stockTable").innerHTML = rows.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Tồn</th><th>Đã xuất</th></tr>
-      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b></td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
+      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b></td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng tồn. Bấm “Nhập hàng từ file Excel” để tải danh sách lên."}</div>`;
     $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout]")) return; showStockOf(tr.dataset.p); });
     $("#stockTable").querySelectorAll("[data-stout]").forEach(b => b.onclick = e => { e.stopPropagation(); showOutStats(b.dataset.stout); });
