@@ -484,7 +484,7 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="ls">📜 Lịch sử</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
@@ -529,6 +529,17 @@
         <div class="row" style="margin-top:8px;gap:8px"><input id="lsQ" type="search" placeholder="Tìm khách hàng, seri, mã đơn, NCC…" autocomplete="off" style="flex:1"><button type="button" class="btn sm" id="lsAll">Toàn bộ thời gian</button></div>
         <div id="lsBody"></div>
         <div class="btns"><button class="btn" id="lsFile" type="button">📊 Excel lịch sử kho</button></div></div>
+      <div class="panel" data-w="muon"><h3>🤝 Mượn hàng</h3>
+        <div class="seg" id="muType" style="margin:6px 0"><button type="button" data-t="khach" class="on">👤 Khách mượn</button><button type="button" data-t="cty">🏢 Công ty mượn</button></div>
+        <div class="sub" id="muHint"></div>
+        <label id="muWhoL">Tên khách mượn *</label><input id="muWho" autocomplete="off" list="muWhoList"><datalist id="muWhoList"></datalist>
+        <label>Số điện thoại</label><input id="muPhone" inputmode="tel" autocomplete="off">
+        <div id="muLines"></div><button type="button" class="btn sm" id="muAdd" style="margin-top:6px">+ Thêm sản phẩm</button>
+        <div class="two"><div><label>Ngày mượn</label><input id="muDate" type="date"></div><div><label id="muDueL">Hạn trả (mặc định 5 ngày)</label><input id="muDue" type="date"></div></div>
+        <label>Ghi chú</label><input id="muNote" autocomplete="off" placeholder="VD: mượn dùng thử, mượn trưng bày…">
+        <div class="btns"><button type="button" class="btn pri" id="muGo">💾 Lưu phiếu mượn</button></div>
+        <h3 style="margin-top:16px">📋 Đang mượn <span class="sub" id="muOpenCnt"></span></h3><div class="list" id="muOpen"></div>
+        <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:650">✅ Đã trả gần đây</summary><div class="list" id="muDone" style="margin-top:6px"></div></details></div>
       <div class="panel" data-w="doi"><h3>🔄 Hàng đổi cho khách <span class="sub" id="dxCnt"></span></h3>
         <div class="sub" style="margin-bottom:8px">Máy đổi mới bảo hành: <b>seri cũ</b> (máy thu hồi) → <b>seri mới</b> (máy giao khách). Nhập trùng các seri này ở bất kỳ đâu, hệ thống sẽ cảnh báo và chuyển Kho duyệt.</div>
         <input id="dxQ" type="search" placeholder="Tìm seri cũ / mới, khách hàng, sản phẩm, mã phiếu…" autocomplete="off">
@@ -1198,7 +1209,7 @@
   /* ================= RENDER CHUNG ================= */
   function renderAll(){
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder();
+    updateBell(); updateUrgent(); debtReminder(); loanReminder();
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
@@ -2870,7 +2881,7 @@
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
-  const MV_KIND = {nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành",
+  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành",
     doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
   const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
   function buildLedgers(){
@@ -2968,6 +2979,93 @@
   const hitText = h => `Seri ${h.side === "new" ? h.newSn : h.oldSn} ${h.side === "new" ? "đã ĐỔI GIAO cho khách" : "là máy CŨ đã thu hồi khi đổi cho khách"} ${h.customer} ngày ${fmt(h.date)} (SN ${h.oldSn} → ${h.newSn}, phiếu ${h.t.code})`;
   const hitBox = (hits, extra) => hits.length ? `<div class="found" style="background:var(--badbg);color:var(--bad);margin-top:6px">⚠️ <b>CẢNH BÁO SERI TRÙNG</b><br>${hits.map(h => "• " + esc(hitText(h))).join("<br>")}${extra ? "<br>" + extra : ""}</div>` : "";
   let dxQ = "";
+  /* ================= 🤝 MƯỢN HÀNG =================
+     👤 Khách mượn: TẠM TRỪ KHO (seri → trạng thái "muon"; hàng không seri → dòng lịch sử "muon" âm), hạn trả mặc định 5 ngày, quá hạn nhắc lại; trả → cộng lại kho.
+     🏢 Công ty mượn (mượn của người / NCC khác): ghi mượn của ai, hạn trả – không cộng vào tồn kho, gần hạn / quá hạn nhắc. */
+  const LOAN_DAYS = 5;
+  const loans = () => expenses.filter(x => x.kind === "muon");
+  const loanLeft = x => Math.round((new Date(x.due + "T00:00:00") - today()) / 864e5);
+  let muType = "khach";
+  function muLine(v = {}){ $("#muLines").insertAdjacentHTML("beforeend", `<div class="oline mul" style="grid-template-columns:1fr 70px 34px;margin-top:6px">
+      <input class="mup" list="prodList" placeholder="Sản phẩm" autocomplete="off" value="${esc(v.product || "")}"><input class="muq" type="number" min="1" inputmode="numeric" value="${v.qty || 1}"><button type="button" class="rm" title="Xóa">✕</button>
+      <input class="mus full" placeholder="Seri (nếu có – cách nhau dấu phẩy)" autocomplete="off" style="grid-column:1/-1" value="${esc((v.serials || []).join(", "))}"><div class="sub mustk full" style="grid-column:1/-1"></div></div>`);
+    const el = $("#muLines").lastElementChild; el.querySelector(".rm").onclick = () => { el.remove(); if (!$("#muLines").children.length) muLine(); };
+    const upd = () => { const p = el.querySelector(".mup").value.trim(); el.querySelector(".mustk").innerHTML = p && muType === "khach" ? `Tồn kho: <b>${stockOf(p) ?? 0}</b>` : ""; };
+    el.querySelector(".mup").addEventListener("input", upd); upd(); }
+  function muReset(){ $("#muWho").value = ""; $("#muPhone").value = ""; $("#muNote").value = ""; $("#muLines").innerHTML = ""; muLine();
+    $("#muDate").value = iso(new Date()); $("#muDue").value = iso(new Date(Date.now() + LOAN_DAYS * 864e5)); }
+  function muSyncType(){ document.querySelectorAll("#muType button").forEach(b => b.classList.toggle("on", b.dataset.t === muType));
+    $("#muWhoL").textContent = muType === "khach" ? "Tên khách mượn *" : "Công ty mượn của ai * (người / NCC)";
+    $("#muDueL").textContent = muType === "khach" ? `Hạn trả (mặc định ${LOAN_DAYS} ngày)` : "Hạn phải trả *";
+    $("#muHint").innerHTML = muType === "khach" ? `👤 Khách mượn hàng của công ty → <b>tạm trừ tồn kho</b>. Quá hạn ${LOAN_DAYS} ngày app nhắc lại. Khách trả → bấm “✅ Đã trả”, kho tự cộng lại.` : `🏢 Công ty mượn hàng của người / NCC khác → ghi lại để nhớ trả đúng hạn (không cộng vào tồn kho). Gần hạn / quá hạn app nhắc.`;
+    $("#muWhoList").innerHTML = [...new Set((muType === "khach" ? [...orders, ...tickets].map(x => x.customer) : loans().filter(x => x.type === "cty").map(x => x.who)).filter(Boolean))].slice(0, 300).map(n => `<option value="${esc(n)}">`).join("");
+    $("#muLines").querySelectorAll(".mup").forEach(i => i.dispatchEvent(new Event("input"))); }
+  document.querySelectorAll("#muType button").forEach(b => b.onclick = () => { muType = b.dataset.t; muSyncType(); });
+  $("#muAdd").onclick = () => muLine();
+  $("#muGo").onclick = async () => {
+    const who = $("#muWho").value.trim(), lines = [...$("#muLines").children].map(el => ({product: el.querySelector(".mup").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".muq").value) || 1), serials: el.querySelector(".mus").value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean)})).filter(l => l.product);
+    if (!who) { toast(muType === "khach" ? "Nhập tên khách mượn" : "Nhập công ty mượn của ai"); $("#muWho").focus(); return; }
+    if (!lines.length) { toast("Nhập sản phẩm mượn"); return; }
+    if (!$("#muDue").value) { toast("Chọn hạn trả"); $("#muDue").focus(); return; }
+    for (const l of lines) { if (l.serials.length > l.qty) l.qty = l.serials.length;
+      if (muType === "khach") { const bad = l.serials.find(sn => { const x = findStock(sn); return !x || x.status !== "in"; });
+        if (bad) { const x = findStock(bad); toast(`Seri ${bad} ${!x ? "không có trong kho" : "không còn trong kho (" + (x.status === "muon" ? "đang cho mượn" : "đã xuất") + ")"}`); return; } } }
+    const now = new Date().toISOString(), code = "MU" + iso(new Date()).replace(/-/g, "").slice(2) + "-" + Math.random().toString(36).slice(2, 5).toUpperCase();
+    const rec = {id: "mu_" + uid(), kind: "muon", code, type: muType, who, phone: $("#muPhone").value.trim(), lines, date: $("#muDate").value || iso(new Date()), due: $("#muDue").value, note: $("#muNote").value.trim(), status: "dang", amount: 0, createdAt: now, by: actor()};
+    const b = $("#muGo"); b.disabled = true;
+    try {
+      if (muType === "khach") {   // tạm trừ kho
+        const st = lines.flatMap(l => l.serials.map(sn => Object.assign({}, findStock(sn), {status: "muon", loanCode: code, loanAt: now, customer: who})));
+        if (st.length) await putMany("st", st);
+        const mv = lines.map(l => ({l, n: l.qty - l.serials.length})).filter(x => x.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: -n, at: now, kind: "muon", ref: code, note: `Khách mượn: ${who}`, by: actor()}));
+        if (mv.length) await putMany("mv", mv);
+      }
+      await put("ex", rec);
+      toast(muType === "khach" ? `Đã lưu phiếu mượn ${code} – đã tạm trừ kho, hạn trả ${fmt(rec.due)}` : `Đã lưu: công ty mượn của ${who}, hạn trả ${fmt(rec.due)}`); muReset(); drawLoans();
+    } catch(e){} finally { b.disabled = false; }
+  };
+  async function loanReturn(id){
+    const x = loans().find(y => y.id === id); if (!x || x.status !== "dang") return;
+    if (!confirm(`${x.type === "khach" ? `Khách ${x.who} đã trả hàng mượn` : `Công ty đã trả hàng cho ${x.who}`}?\n${x.lines.map(l => `• ${l.product} × ${l.qty}`).join("\n")}${x.type === "khach" ? "\n\nKho sẽ tự cộng lại." : ""}`)) return;
+    const now = new Date().toISOString();
+    if (x.type === "khach") {
+      const st = stock.filter(z => z.loanCode === x.code && z.status === "muon").map(z => { const c = Object.assign({}, z, {status: "in", loanReturnedAt: now}); delete c.loanCode; delete c.loanAt; delete c.customer; return c; });
+      if (st.length) await putMany("st", st);
+      const mv = x.lines.map(l => ({l, n: l.qty - (l.serials || []).length})).filter(y => y.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: n, at: now, kind: "muon_tra", ref: x.code, note: `Khách trả hàng mượn: ${x.who}`, by: actor()}));
+      if (mv.length) await putMany("mv", mv);
+    }
+    await put("ex", Object.assign({}, x, {status: "tra", returnedAt: now, returnBy: actor()}));
+    toast(x.type === "khach" ? `Đã nhận lại hàng – kho đã cộng lại (${x.code})` : `Đã ghi: công ty đã trả hàng cho ${x.who}`);
+  }
+  function loanCard(x){ const d = loanLeft(x), open = x.status === "dang";
+    return `<div class="item ${open && d < 0 ? "lateitem" : ""}" style="cursor:default"><div class="row"><div><div class="pname"><span class="tag ${x.type === "khach" ? "bh" : "vc"}">${x.type === "khach" ? "👤 Khách mượn" : "🏢 Công ty mượn"}</span>${esc(x.who)}</div>
+      <div class="sub">${esc(x.code)}${x.phone ? " · 📞 " + esc(x.phone) : ""} · mượn ${fmt(x.date)}</div>
+      <div style="font-size:14px;margin-top:4px">${x.lines.map(l => `• <b>${esc(l.product)}</b> × ${l.qty}${(l.serials || []).length ? ` <span class="sub">SN ${l.serials.map(esc).join(", ")}</span>` : ""}`).join("<br>")}</div>
+      ${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
+      <span class="badge ${!open ? "b-ok" : d < 0 ? "b-bad" : d <= 1 ? "b-warn" : "b-info"}">${!open ? "Đã trả" : d < 0 ? `Quá hạn ${-d} ngày` : d === 0 ? "Hạn hôm nay" : `Còn ${d} ngày`}</span></div>
+      <div class="sub" style="margin-top:4px">${open ? `⏰ Hạn trả <b>${fmt(x.due)}</b>${x.type === "khach" ? " · đang tạm trừ kho" : " · công ty phải trả"}` : `✅ Đã trả ${fmtTime(x.returnedAt)}${x.returnBy ? " · " + esc(x.returnBy) : ""}`}</div>
+      ${open ? `<div class="cardbtns"><button type="button" class="btn okb" data-muret="${esc(x.id)}">✅ ${x.type === "khach" ? "Khách đã trả" : "Công ty đã trả"}</button></div>` : ""}</div>`; }
+  function drawLoans(){
+    if (!$("#muLines")) return; if (!$("#muLines").children.length) { muReset(); muSyncType(); }
+    const L = loans(), op = L.filter(x => x.status === "dang").sort((a, b) => a.due.localeCompare(b.due)), late = op.filter(x => loanLeft(x) < 0).length;
+    $("#muOpenCnt").textContent = op.length ? `(${op.length}${late ? ` · ⚠️ ${late} quá hạn` : ""})` : "";
+    $("#muonCnt").textContent = late || ""; $("#muonCnt").classList.toggle("hide", !late);
+    $("#muOpen").innerHTML = op.length ? op.map(loanCard).join("") : `<div class="empty">Không có hàng đang mượn.</div>`;
+    $("#muDone").innerHTML = L.filter(x => x.status === "tra").sort((a, b) => String(b.returnedAt).localeCompare(String(a.returnedAt))).slice(0, 20).map(loanCard).join("") || `<div class="empty">Chưa có.</div>`;
+    document.querySelectorAll("[data-muret]").forEach(b => b.onclick = () => loanReturn(b.dataset.muret));
+  }
+  // nhắc mượn hàng: khách quá hạn (5 ngày) / công ty gần hạn – quá hạn; mỗi phiếu nhắc 1 lần mỗi ngày
+  function loanReminder(){
+    if (!(boss || ["wh", "sa", "ac"].includes(role)) || $("#app").classList.contains("hide")) return;
+    const op = loans().filter(x => x.status === "dang"), kl = op.filter(x => x.type === "khach" && loanLeft(x) < 0), cl = op.filter(x => x.type === "cty" && loanLeft(x) <= 1);
+    if (!kl.length && !cl.length) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_loan_rem") || "[]"); } catch(e){}
+    const day = iso(new Date()), keys = [...kl, ...cl].map(x => x.id + ":" + day), fresh = keys.filter(k => !seen.includes(k)); if (!fresh.length) return;
+    try { localStorage.setItem("bh_loan_rem", JSON.stringify(seen.concat(fresh).slice(-300))); } catch(e){}
+    if (kl.length) bannerQ.push({id: "loank", title: `🤝 ${kl.length} khách mượn hàng quá hạn trả`, text: kl.slice(0, 3).map(x => `${x.who} – ${x.lines.map(l => l.product).join(", ")} (quá ${-loanLeft(x)} ngày)`).join("; ") + (kl.length > 3 ? "…" : ""), to: "wh"});
+    if (cl.length) bannerQ.push({id: "loanc", title: `🏢 Công ty mượn hàng – ${cl.filter(x => loanLeft(x) < 0).length ? "QUÁ HẠN trả" : "sắp tới hạn trả"}`, text: cl.slice(0, 3).map(x => `${x.who}: ${x.lines.map(l => l.product).join(", ")} – hạn ${fmt(x.due)}`).join("; "), to: "wh"});
+    if (!bannerOn) nextBanner();
+  }
   function drawExchanges(){
     const q = norm(dxQ), all = exchanges(), L = q ? all.filter(t => norm([t.exchange.oldSerial, t.exchange.newSerial, t.customer, t.phone, t.product, t.exchange.newProduct, t.code].join(" ")).includes(q)) : all;
     $("#dxCnt").textContent = all.length ? `(${all.length})` : "";
@@ -2994,7 +3092,7 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt(); drawExchanges(); if (whTab === "ls") drawLedger();
+    drawThao(); drawExt(); drawExchanges(); drawLoans(); if (whTab === "ls") drawLedger();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
@@ -3388,7 +3486,8 @@
     // thay đổi tồn: hàng không seri theo lịch sử nhập / xuất; hàng có seri: ngày nhập (+1), ngày xuất (−1)
     const ev = []; moves.forEach(m => { if (m.kind === "seed" || m.ext || !Number(m.qty)) return; ev.push({k: norm(m.product), d: dayOfT(m.at), q: Number(m.qty), kind: m.kind, ref: m.ref, note: m.note}); });
     stock.forEach(x => { if (x.importedAt) ev.push({k: norm(x.product), d: dayOfT(x.importedAt), q: 1, kind: "nhap", sn: x.serial, ref: x.ref});
-      if (x.status !== "in" && x.outAt) ev.push({k: norm(x.product), d: dayOfT(x.outAt), q: -1, kind: "xuat", sn: x.serial, ref: x.orderCode, cus: x.customer}); });
+      if (x.status === "muon" && x.loanAt) ev.push({k: norm(x.product), d: dayOfT(x.loanAt), q: -1, kind: "muon", sn: x.serial, ref: x.loanCode, cus: x.customer});
+      else if (x.status !== "in" && x.outAt) ev.push({k: norm(x.product), d: dayOfT(x.outAt), q: -1, kind: "xuat", sn: x.serial, ref: x.orderCode, cus: x.customer}); });
     const rows = [...names.entries()].map(([k, n]) => { const p = findProduct(n), now = stockOf(n) || 0, E = ev.filter(e => e.k === k);
       const after = E.filter(e => e.d > D).reduce((a, e) => a + e.q, 0), end = now - after, inD = E.filter(e => e.d === D && e.q > 0 && e.kind !== "kiemke").reduce((a, e) => a + e.q, 0), outD = -E.filter(e => e.d === D && e.q < 0 && e.kind !== "kiemke").reduce((a, e) => a + e.q, 0), adj = E.filter(e => e.d === D && e.kind === "kiemke").reduce((a, e) => a + e.q, 0);
       return {n, code: p?.code || stock.find(x => norm(x.product) === k)?.code || "", m: p?.months ?? "", start: end - inD + outD - adj, inD, outD, end}; })
@@ -4122,7 +4221,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
