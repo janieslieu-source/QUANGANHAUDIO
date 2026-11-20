@@ -504,6 +504,8 @@
           <label class="btn pri" for="stockFile" style="text-align:center">📥 Nhập hàng từ file Excel</label>
           <button class="btn" id="stockTpl" type="button">📄 Tải file mẫu</button>
         </div>
+        <div class="row" style="align-items:center;gap:8px;margin:6px 0 4px"><input type="date" id="stXlsDay" style="width:auto;padding:7px 9px;font-size:14px"><button class="btn pri" id="stXls" type="button" style="flex:1">📊 Xuất Excel tồn kho cuối ngày</button></div>
+        <div class="sub" style="margin-bottom:6px">Tồn kho đã tự trừ hàng xuất bán / linh kiện / đổi bảo hành. File gồm: tồn đầu ngày, nhập, xuất trong ngày, tồn cuối ngày, danh sách seri còn trong kho, chi tiết hàng xuất.</div>
         <input type="file" id="stockFile" accept=".xlsx,.xls,.csv,text/csv" style="display:none">
         <div class="sub" style="margin:8px 0">File Excel chỉ cần 2 cột: <b>Tên sản phẩm · Số lượng</b>. Seri do Kho điền khi xuất hàng. (Có thể thêm cột Bảo hành (tháng), Mã hàng, <b>Link tham khảo</b> nếu muốn.)</div>
         <input id="stQ" type="search" placeholder="Tìm sản phẩm hoặc seri trong kho…" autocomplete="off">
@@ -3351,6 +3353,33 @@
     };
     open("detailBg");
   }
+  // 📊 Excel tồn kho cuối ngày (đã tự trừ kho): tồn đầu · nhập · xuất trong ngày · tồn cuối + seri còn trong kho + chi tiết xuất
+  $("#stXlsDay").value = iso(new Date());
+  $("#stXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX, D = $("#stXlsDay").value || iso(new Date());
+    const dayOfT = t => t ? iso(new Date(t)) : "", names = new Map(), add = n => { const k = norm(n); if (n && !names.has(k)) names.set(k, n); };
+    stock.forEach(x => add(x.product)); products.forEach(p => add(p.name)); moves.forEach(m => { if (m.kind !== "seed" && !m.ext) add(m.product); });
+    // thay đổi tồn: hàng không seri theo lịch sử nhập / xuất; hàng có seri: ngày nhập (+1), ngày xuất (−1)
+    const ev = []; moves.forEach(m => { if (m.kind === "seed" || m.ext || !Number(m.qty)) return; ev.push({k: norm(m.product), d: dayOfT(m.at), q: Number(m.qty), kind: m.kind, ref: m.ref, note: m.note}); });
+    stock.forEach(x => { if (x.importedAt) ev.push({k: norm(x.product), d: dayOfT(x.importedAt), q: 1, kind: "nhap", sn: x.serial, ref: x.ref});
+      if (x.status !== "in" && x.outAt) ev.push({k: norm(x.product), d: dayOfT(x.outAt), q: -1, kind: "xuat", sn: x.serial, ref: x.orderCode, cus: x.customer}); });
+    const rows = [...names.entries()].map(([k, n]) => { const p = findProduct(n), now = stockOf(n) || 0, E = ev.filter(e => e.k === k);
+      const after = E.filter(e => e.d > D).reduce((a, e) => a + e.q, 0), end = now - after, inD = E.filter(e => e.d === D && e.q > 0 && e.kind !== "kiemke").reduce((a, e) => a + e.q, 0), outD = -E.filter(e => e.d === D && e.q < 0 && e.kind !== "kiemke").reduce((a, e) => a + e.q, 0), adj = E.filter(e => e.d === D && e.kind === "kiemke").reduce((a, e) => a + e.q, 0);
+      return {n, code: p?.code || stock.find(x => norm(x.product) === k)?.code || "", m: p?.months ?? "", start: end - inD + outD - adj, inD, outD, end}; })
+      .filter(r => r.start || r.inD || r.outD || r.end).sort((a, b) => b.end - a.end || a.n.localeCompare(b.n, "vi"));
+    const T = rows.reduce((a, r) => ({start: a.start + r.start, inD: a.inD + r.inD, outD: a.outD + r.outD, end: a.end + r.end}), {start: 0, inD: 0, outD: 0, end: 0});
+    const head = [[COMPANY], [`BÁO CÁO TỒN KHO CUỐI NGÀY ${fmt(D)}`], [`Xuất lúc ${fmtTime(new Date().toISOString())} – tồn kho đã tự trừ hàng xuất bán, linh kiện sửa chữa, đổi bảo hành`], []];
+    const s1 = X.utils.aoa_to_sheet([...head, ["STT", "Sản phẩm", "Mã hàng", "BH (tháng)", "Tồn đầu ngày", "Nhập trong ngày", "Xuất trong ngày", "Tồn cuối ngày"], ...rows.map((r, i) => [i + 1, r.n, r.code, r.m, r.start, r.inD, r.outD, r.end]), [], ["", "TỔNG", "", "", T.start, T.inD, T.outD, T.end]]);
+    s1["!cols"] = [{wch: 5}, {wch: 42}, {wch: 12}, {wch: 9}, {wch: 12}, {wch: 13}, {wch: 13}, {wch: 13}];
+    const inSn = stock.filter(x => x.status === "in" && dayOfT(x.importedAt) <= D).sort((a, b) => a.product.localeCompare(b.product, "vi") || String(a.serial).localeCompare(String(b.serial)));
+    const s2 = X.utils.aoa_to_sheet([...head.slice(0, 2), [`Seri còn trong kho (${inSn.length})`], [], ["STT", "Sản phẩm", "Số seri", "Seri kèm (hàng bộ)", "Ngày nhập", "Lô / NCC"], ...inSn.map((x, i) => [i + 1, x.product, x.serial, (x.subSerials || []).join(", "), fmt(dayOfT(x.importedAt)), x.ref || ""])]);
+    s2["!cols"] = [{wch: 5}, {wch: 40}, {wch: 12}, {wch: 24}, {wch: 11}, {wch: 30}];
+    const outs = ev.filter(e => e.d === D && e.q < 0 && e.kind !== "kiemke"), nm = k => names.get(k) || k;
+    const s3 = X.utils.aoa_to_sheet([...head.slice(0, 2), [`Hàng xuất trong ngày (${outs.reduce((a, e) => a - e.q, 0)})`], [], ["STT", "Sản phẩm", "SL", "Seri", "Loại", "Mã đơn / phiếu", "Khách"],
+      ...outs.map((e, i) => { const doc = e.ref ? (orders.find(o => o.code === e.ref) || tickets.find(t => t.code === e.ref)) : null; return [i + 1, nm(e.k), -e.q, e.sn || "", MV_KIND[e.kind] || e.kind || "", e.ref || "", e.cus || doc?.customer || ""]; })]);
+    s3["!cols"] = [{wch: 5}, {wch: 40}, {wch: 5}, {wch: 12}, {wch: 20}, {wch: 16}, {wch: 24}];
+    const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, s1, "Ton kho"); X.utils.book_append_sheet(wb, s2, "Seri trong kho"); X.utils.book_append_sheet(wb, s3, "Xuat trong ngay");
+    await saveBlob(`Ton-kho_${D}.xlsx`, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), `Đã lưu file tồn kho ngày ${fmt(D)}`);
+  } catch(e){ toast("Không tạo được file Excel"); } };
   $("#stockTpl").onclick = () => {
     const csv = "\uFEFF" + ["Tên sản phẩm,Số lượng", "Loa smartk mini,20", "Micro không dây,15", "Dây loa 2m,100"].join("\r\n");
     saveBlob("Mau-nhap-ton-kho.csv", new Blob([csv], {type: "text/csv"}), "Đã lưu file mẫu");
