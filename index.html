@@ -272,7 +272,7 @@
     <h1>🛡️ Quản lý bảo hành</h1>
     <p>Chọn bộ phận và nhập mật mã</p>
     <div class="depts">
-      <button type="button" class="dept sel" data-role="bh"><span class="ic">🧾</span><b>Bảo hành</b></button>
+      <button type="button" class="dept sel" data-role="bh"><span class="ic">🧾</span><b>Bảo hành sửa chữa</b></button>
       <button type="button" class="dept" data-role="gd"><span class="ic">👔</span><b>Giám đốc</b></button>
       <button type="button" class="dept" data-role="kt"><span class="ic">🔧</span><b>Kỹ thuật</b></button>
       <button type="button" class="dept" data-role="vc"><span class="ic">🚚</span><b>Vận chuyển</b></button>
@@ -291,7 +291,7 @@
 <div id="app" class="hide">
   <header>
     <div class="top">
-      <h1 class="t" id="appTitle">Bảo hành</h1>
+      <h1 class="t" id="appTitle">Bảo hành sửa chữa</h1>
       <div class="hright">
         <div class="sync"><span class="dot" id="dot"></span><span id="syncTxt">…</span></div>
         <button class="iconbtn" id="bell" aria-label="Thông báo">🔔<span class="cnt hide" id="bellCnt">0</span></button>
@@ -299,7 +299,7 @@
       </div>
     </div>
     <nav class="tabs">
-      <button class="tab" data-tab="bh"><span class="ti">🧾</span>Bảo hành<span class="cnt hide"></span></button>
+      <button class="tab" data-tab="bh"><span class="ti">🧾</span>Bảo hành sửa chữa<span class="cnt hide"></span></button>
       <button class="tab" data-tab="gd"><span class="ti">👔</span>Giám đốc<span class="cnt hide"></span></button>
       <button class="tab" data-tab="kt"><span class="ti">🔧</span>Kỹ thuật<span class="cnt hide"></span></button>
       <button class="tab" data-tab="vc"><span class="ti">🚚</span>Vận chuyển<span class="cnt hide"></span></button>
@@ -388,7 +388,7 @@
       <div class="panel"><h3>⏳ Đang xử lý</h3><div class="list" id="trackList"></div></div>
       <div class="panel"><div class="row"><h3>✅ Đã trả khách</h3></div><div class="list" id="doneList"></div></div>
       <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành từ file Excel</h3>
-        <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
+        <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành sửa chữa</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
         <div class="btns" style="margin-top:0"><label class="btn pri" for="riFile" style="text-align:center">📥 Chọn file Excel để nhập</label></div>
         <input type="file" id="riFile" accept=".xlsx,.xls,.csv" style="display:none">
         <div class="sub" id="riProg" style="margin-top:6px"></div>
@@ -650,7 +650,7 @@
   /* ---------- Bộ phận & mật mã (lưu dạng mã băm) ---------- */
   const SALT = "bh2026:";
   const ROLES = {
-    bh: {name:"Bảo hành", icon:"🧾", hash:"c5329f777464ed051d1035380083d2de5d0ec477019e11b49c8da2db31dba77f"},
+    bh: {name:"Bảo hành sửa chữa", icon:"🧾", hash:"c5329f777464ed051d1035380083d2de5d0ec477019e11b49c8da2db31dba77f"},
     gd: {name:"Giám đốc", icon:"👔", hash:"add91a0b16f18161cbfdb541afc919fd02be27543ff919cca2ac5fd1f44d76b5"},
     kt: {name:"Kỹ thuật", icon:"🔧", hash:"0fc3527e9b0bb475795e0ed5883e5da9a38082cdf2e3fdff843f5cafb9b19f3c"},
     vc: {name:"Vận chuyển", icon:"🚚", hash:"cf0189e746365fc75be81d4571d9ef049f508fdebdb8f98d7c6b0ac6c3dffddd"},
@@ -679,7 +679,7 @@
   const TYPE = {bh:"Bảo hành", sc:"Sửa chữa"};
   const ACTION = {sua:"Sửa chữa", thaymoi:"Thay mới", doimoi:"Đổi mới"};
   const exText = t => t.exchange ? `SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
-  const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp"};
+  const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)"};
   // Quy định seri hàng công ty: bắt đầu bằng 525, tổng cộng 8 chữ số (VD: 52526789)
   const SN_RULE = /^525\d{5}$/, SN_HINT = "8 chữ số, bắt đầu bằng 525";
   const snOk = sn => SN_RULE.test(String(sn || "").trim());
@@ -3031,16 +3031,50 @@
       toast(muType === "khach" ? `Đã lưu phiếu mượn ${code} – đã tạm trừ kho, hạn trả ${fmt(rec.due)}` : `Đã lưu: công ty mượn của ${who} – đã cộng tồn kho, hạn trả ${fmt(rec.due)}`); muReset(); drawLoans();
     } catch(e){} finally { b.disabled = false; }
   };
+  async function loanRestock(x, now){   // khách trả / chuyển mua: hoàn lại phần tạm trừ kho
+    const st = stock.filter(z => z.loanCode === x.code && z.status === "muon").map(z => { const c = Object.assign({}, z, {status: "in", loanReturnedAt: now}); delete c.loanCode; delete c.loanAt; delete c.customer; return c; });
+    if (st.length) await putMany("st", st);
+    const mv = x.lines.map(l => ({l, n: l.qty - (l.serials || []).length})).filter(y => y.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: n, at: now, kind: "muon_tra", ref: x.code, note: `Hoàn tạm trừ – ${x.who}`, by: actor()}));
+    if (mv.length) await putMany("mv", mv);
+  }
+  // 🛒 khách mượn → mua luôn: điền giá → tạo ĐƠN BÁN MỚI chạy đúng quy trình (Kho xuất → Vận chuyển → Kế toán ghi công nợ → Giám đốc duyệt)
+  function loanBuy(id){
+    const x = loans().find(y => y.id === id); if (!x || x.status !== "dang" || x.type !== "khach") return; const F = $("#actForm");
+    const n0 = v => Number(String(v || "").replace(/[^\d]/g, "")) || 0;
+    F.innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">🛒 Khách mua luôn – ${esc(x.who)}</h2><div class="sub">Phiếu mượn ${esc(x.code)} · mượn ${fmt(x.date)}</div>
+      <div class="reason" style="margin-top:8px">Điền giá từng sản phẩm → app tạo <b>đơn bán mới</b> chạy đúng quy trình: Kho xuất kho → Vận chuyển → Kế toán ghi công nợ / thanh toán → Giám đốc duyệt. Phần tạm trừ của phiếu mượn được chuyển sang đơn (không trừ kho 2 lần).</div>
+      ${x.lines.map((l, i) => `<div class="oline" style="grid-template-columns:1fr 64px;margin-top:8px"><div class="full"><b>${esc(l.product)}</b>${(l.serials || []).length ? ` <span class="sub">SN ${l.serials.map(esc).join(", ")}</span>` : ""}</div>
+        <div><label style="margin-top:0">Đơn giá (đ)</label><input class="lbp" data-i="${i}" inputmode="numeric" placeholder="VD: 1.500.000"></div><div><label style="margin-top:0">SL</label><input class="lbq" data-i="${i}" type="number" min="1" max="${l.qty}" value="${l.qty}" ${(l.serials || []).length ? "readonly" : ""}></div>
+        <div><label style="margin-top:0">Bảo hành</label><select class="lbm" data-i="${i}">${[0, 3, 6, 12, 18, 24, 36].map(m => `<option value="${m}" ${m === (findProduct(l.product)?.months ?? 12) ? "selected" : ""}>${m ? m + " tháng" : "Không BH"}</option>`).join("")}</select></div><div class="sub lbt" data-i="${i}" style="align-self:end"></div></div>`).join("")}
+      <div class="found" id="lbTot" style="margin-top:8px"></div>
+      <label>Giao hàng</label><select name="lbship">${Object.entries(SHIP).map(([k, v]) => `<option value="${k}" ${k === "khachgiu" ? "selected" : ""}>${v}</option>`).join("")}</select>
+      <label>Ghi chú</label><input name="lbnote" placeholder="Tùy chọn" autocomplete="off">
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">🛒 Tạo đơn bán</button></div>`;
+    const calc = () => { let t = 0; x.lines.forEach((l, i) => { const q = Math.max(1, Math.min(l.qty, parseInt(F.querySelector(`.lbq[data-i="${i}"]`).value) || 1)), pr = n0(F.querySelector(`.lbp[data-i="${i}"]`).value); F.querySelector(`.lbt[data-i="${i}"]`).textContent = pr ? "= " + money(pr * q) : ""; t += pr * q; });
+      $("#lbTot").innerHTML = `Tổng tiền đơn: <b>${money(t)}</b> – Kế toán ghi công nợ / thanh toán theo số này`; return t; };
+    F.querySelectorAll(".lbp").forEach(el => el.addEventListener("input", () => { el.value = el.value.trim() === "" ? "" : n0(el.value).toLocaleString("vi-VN"); calc(); }));
+    F.querySelectorAll(".lbq").forEach(el => el.addEventListener("input", calc)); calc();
+    actCtx = {run: async () => {
+      const lines = x.lines.map((l, i) => ({product: l.product, qty: Math.max(1, Math.min(l.qty, parseInt(F.querySelector(`.lbq[data-i="${i}"]`).value) || 1)), months: Number(F.querySelector(`.lbm[data-i="${i}"]`).value) || 0, price: n0(F.querySelector(`.lbp[data-i="${i}"]`).value), serials: l.serials || []}));
+      const miss = lines.find(l => !l.price); if (miss) { toast(`Điền đơn giá cho “${miss.product}”`); throw new Error("x"); }
+      const total = lines.reduce((a, l) => a + l.price * l.qty, 0), now = new Date().toISOString(), ship = F.lbship.value;
+      await loanRestock(x, now);   // hoàn tạm trừ → Kho xuất kho theo đơn sẽ trừ đúng 1 lần
+      const o = {id: uid(), code: oCode(), saleDate: iso(new Date()), createdAt: now, customer: x.who, phone: x.phone || "", address: "", lines, loanCode: x.code, loanTotal: total,
+        ship: {method: ship, carrier: ""}, note: `Khách mượn chuyển mua – phiếu ${x.code}. Tổng ${money(total)} (${lines.map(l => `${l.product} ${l.qty}×${money(l.price)}`).join("; ")})${F.lbnote.value.trim() ? " – " + F.lbnote.value.trim() : ""}`,
+        stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: `Khách mượn chuyển mua (phiếu ${x.code}) – ${orderSummary({lines})} – tổng ${money(total)}`}]};
+      await put("od", o);
+      await put("ex", Object.assign({}, x, {status: "ban", returnedAt: now, returnBy: actor(), orderCode: o.code, total}));
+      pushTo("wh", `🔔 Kho: đơn ${o.code} – ${o.customer} (khách mượn chuyển mua)`, orderSummary(o), o.id);
+      lastOrderId = o.id;
+    }, after: () => { toast("Đã tạo đơn bán – chuyển Kho xuất kho"); renderAll(); }};
+    open("actBg");
+  }
   async function loanReturn(id){
     const x = loans().find(y => y.id === id); if (!x || x.status !== "dang") return;
     if (!confirm(`${x.type === "khach" ? `Khách ${x.who} đã trả hàng mượn` : `Công ty đã trả hàng cho ${x.who}`}?\n${x.lines.map(l => `• ${l.product} × ${l.qty}`).join("\n")}${x.type === "khach" ? "\n\nKho sẽ tự cộng lại." : "\n\nKho sẽ tự trừ số hàng này."}`)) return;
     const now = new Date().toISOString();
-    if (x.type === "khach") {
-      const st = stock.filter(z => z.loanCode === x.code && z.status === "muon").map(z => { const c = Object.assign({}, z, {status: "in", loanReturnedAt: now}); delete c.loanCode; delete c.loanAt; delete c.customer; return c; });
-      if (st.length) await putMany("st", st);
-      const mv = x.lines.map(l => ({l, n: l.qty - (l.serials || []).length})).filter(y => y.n > 0).map(({l, n}) => ({id: "mv_" + uid(), product: l.product, qty: n, at: now, kind: "muon_tra", ref: x.code, note: `Khách trả hàng mượn: ${x.who}`, by: actor()}));
-      if (mv.length) await putMany("mv", mv);
-    } else {   // công ty trả hàng đã mượn: trừ kho
+    if (x.type === "khach") await loanRestock(x, now);
+    else {   // công ty trả hàng đã mượn: trừ kho
       const sold = stock.filter(z => z.borrowCode === x.code && z.status !== "in");
       if (sold.length && !confirm(`Seri ${sold.map(z => z.serial).join(", ")} đã xuất / cho mượn – không còn trong kho. Vẫn ghi đã trả?`)) return;
       const st = stock.filter(z => z.borrowCode === x.code && z.status === "in").map(z => Object.assign({}, z, {status: "tra_ncc", outAt: now, returnNote: `Trả hàng mượn cho ${x.who}`}));
@@ -3056,17 +3090,18 @@
       <div class="sub">${esc(x.code)}${x.phone ? " · 📞 " + esc(x.phone) : ""} · mượn ${fmt(x.date)}</div>
       <div style="font-size:14px;margin-top:4px">${x.lines.map(l => `• <b>${esc(l.product)}</b> × ${l.qty}${(l.serials || []).length ? ` <span class="sub">SN ${l.serials.map(esc).join(", ")}</span>` : ""}`).join("<br>")}</div>
       ${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
-      <span class="badge ${!open ? "b-ok" : d < 0 ? "b-bad" : d <= 1 ? "b-warn" : "b-info"}">${!open ? "Đã trả" : d < 0 ? `Quá hạn ${-d} ngày` : d === 0 ? "Hạn hôm nay" : `Còn ${d} ngày`}</span></div>
-      <div class="sub" style="margin-top:4px">${open ? `⏰ Hạn trả <b>${fmt(x.due)}</b>${x.type === "khach" ? " · đang tạm trừ kho" : " · đã cộng kho – trả thì tự trừ"}` : `✅ Đã trả ${fmtTime(x.returnedAt)}${x.returnBy ? " · " + esc(x.returnBy) : ""}`}</div>
-      ${open ? `<div class="cardbtns"><button type="button" class="btn okb" data-muret="${esc(x.id)}">✅ ${x.type === "khach" ? "Khách đã trả" : "Công ty đã trả"}</button></div>` : ""}</div>`; }
+      <span class="badge ${!open ? "b-ok" : d < 0 ? "b-bad" : d <= 1 ? "b-warn" : "b-info"}">${!open ? (x.status === "ban" ? "Đã mua" : "Đã trả") : d < 0 ? `Quá hạn ${-d} ngày` : d === 0 ? "Hạn hôm nay" : `Còn ${d} ngày`}</span></div>
+      <div class="sub" style="margin-top:4px">${open ? `⏰ Hạn trả <b>${fmt(x.due)}</b>${x.type === "khach" ? " · đang tạm trừ kho" : " · đã cộng kho – trả thì tự trừ"}` : x.status === "ban" ? `🛒 Khách mua luôn ${fmtTime(x.returnedAt)} → đơn <b>${esc(x.orderCode || "")}</b> · ${money(x.total || 0)}` : `✅ Đã trả ${fmtTime(x.returnedAt)}${x.returnBy ? " · " + esc(x.returnBy) : ""}`}</div>
+      ${open ? `<div class="cardbtns">${x.type === "khach" ? `<button type="button" class="btn pri" data-mubuy="${esc(x.id)}">🛒 Khách mua luôn</button>` : ""}<button type="button" class="btn okb" data-muret="${esc(x.id)}">✅ ${x.type === "khach" ? "Khách đã trả" : "Công ty đã trả"}</button></div>` : ""}</div>`; }
   function drawLoans(){
     if (!$("#muLines")) return; if (!$("#muLines").children.length) { muReset(); muSyncType(); }
     const L = loans(), op = L.filter(x => x.status === "dang").sort((a, b) => a.due.localeCompare(b.due)), late = op.filter(x => loanLeft(x) < 0).length;
     $("#muOpenCnt").textContent = op.length ? `(${op.length}${late ? ` · ⚠️ ${late} quá hạn` : ""})` : "";
     $("#muonCnt").textContent = late || ""; $("#muonCnt").classList.toggle("hide", !late);
     $("#muOpen").innerHTML = op.length ? op.map(loanCard).join("") : `<div class="empty">Không có hàng đang mượn.</div>`;
-    $("#muDone").innerHTML = L.filter(x => x.status === "tra").sort((a, b) => String(b.returnedAt).localeCompare(String(a.returnedAt))).slice(0, 20).map(loanCard).join("") || `<div class="empty">Chưa có.</div>`;
+    $("#muDone").innerHTML = L.filter(x => x.status === "tra" || x.status === "ban").sort((a, b) => String(b.returnedAt).localeCompare(String(a.returnedAt))).slice(0, 20).map(loanCard).join("") || `<div class="empty">Chưa có.</div>`;
     document.querySelectorAll("[data-muret]").forEach(b => b.onclick = () => loanReturn(b.dataset.muret));
+    document.querySelectorAll("[data-mubuy]").forEach(b => b.onclick = () => loanBuy(b.dataset.mubuy));
   }
   // nhắc mượn hàng: khách quá hạn (5 ngày) / công ty gần hạn – quá hạn; mỗi phiếu nhắc 1 lần mỗi ngày
   function loanReminder(){
@@ -4883,7 +4918,7 @@
     const req = !edit && hasPayReq(t) ? t.payReq : null, debt0 = Number(t.pay?.amount) || 0;
     // Giám đốc đã báo khách trả: điền sẵn – trả đủ = Đã thanh toán; trả một phần = Công nợ với số còn lại
     const p = req ? Object.assign({}, t.pay, preset === "cong_no" ? {amount: Math.max(0, debt0 - Number(req.amount)), note: `Khách trả ${money(req.amount)} ngày ${fmt(req.date)} (${req.method})${req.note ? " – " + req.note : ""}`}
-      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || {});
+      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || (t.loanTotal ? {amount: t.loanTotal, total: t.loanTotal, advance: 0} : {}));
     payStatus = preset || p.status || null;
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
