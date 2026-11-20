@@ -194,6 +194,7 @@
   #ccQuick{display:flex;align-items:center;justify-content:center;gap:10px}
   #ccQuick .ios-ic{width:30px;height:30px}
   @media (prefers-color-scheme: dark){ .dept{background:linear-gradient(180deg,#1f2937,#111827)} .dept.sel{background:linear-gradient(180deg,#1e3a8a,#111827)} }
+  .sgk{display:inline-block;font-size:11px;font-weight:700;color:var(--brand);background:rgba(29,78,216,.1);border-radius:6px;padding:1px 5px;margin-left:2px;white-space:nowrap}
   .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
   .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
   .chip.sel{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -2685,13 +2686,38 @@
   document.addEventListener("pointerdown", e => {
     document.querySelectorAll(".sugg:not(.hide)").forEach(sg => { if (!sg.parentElement.contains(e.target)) sg.classList.add("hide"); });
   }, true);
+  /* ---------- Tìm sản phẩm thông minh: ưu tiên Model → Thương hiệu → Tên sản phẩm ---------- */
+  const AUDIO_BRANDS = new Set("jbl bose sony yamaha denon marantz onkyo pioneer kenwood bmb paramax acnos arirang okara viki nas smartk vietk vietktv hanet kiwi alto behringer shure sennheiser audio-technica akg rode partyhouse domus boston klipsch polk sansui samsung lg tcl xiaomi apple anker soundmax microlab edifier dalton bfaudio cavs ef jarguar jamo mission tannoy wharfedale kef dynaudio focal rcf ev electro-voice dbx crown qsc mackie soundcraft yamaha peavey nexo martin db technics harman kardon infinity jbl. quanganh qa hosa ugreen orico baseus remax hoco aiwa philips panasonic sharp toshiba asanzo darling sumo karaoke".split(" "));
+  function pickScore(name, code, query){
+    const toks = norm(query).split(/[^a-z0-9]+/).filter(Boolean); if (!toks.length) return {sc: 0, kinds: []};
+    const nn = norm(name), words = nn.split(/[^a-z0-9]+/).filter(Boolean), comp = nn.replace(/[^a-z0-9]/g, ""), cw = norm(code || "").replace(/[^a-z0-9]/g, "");
+    const orig = String(name).split(/[^A-Za-z0-9]+/).filter(Boolean);
+    const brands = words.filter((w, i) => AUDIO_BRANDS.has(w) || (/^[A-Z]{2,}$/.test(orig[i] || "") && !/\d/.test(w)));
+    const models = [...words.filter(w => /\d/.test(w)), ...words.slice(0, -1).map((w, i) => !/\d/.test(w) && /^\d/.test(words[i + 1]) ? w + words[i + 1] : "").filter(Boolean), ...(cw ? [cw] : [])];
+    let sc = 0; const kinds = new Set();
+    for (const t of toks) {
+      const hasD = /\d/.test(t);
+      if (models.includes(t)) { sc += 100; kinds.add("model"); }
+      else if ((hasD || t.length >= 2) && models.some(m => m.startsWith(t)) || (hasD && models.some(m => m.includes(t)))) { sc += 70; kinds.add("model"); }
+      else if (brands.includes(t) || (t.length >= 2 && brands.some(b => b.startsWith(t)))) { sc += 40; kinds.add("brand"); }
+      else if (words.includes(t)) sc += 25;
+      else if (words.some(w => w.startsWith(t))) sc += 18;
+      else if (comp.includes(t)) { sc += hasD ? 50 : 6; if (hasD) kinds.add("model"); }
+      else return null;   // mọi chữ gõ đều phải khớp
+    }
+    if (nn.startsWith(norm(query).trim())) sc += 10;
+    return {sc, kinds: [...kinds]};
+  }
   function attachPicker(inp, sg, onPick, parts){
     const show = () => {
       const q = norm(inp.value), all = parts ? [...new Map([...productNames(), ...extNames()].map(n => [norm(n), n])).values()].sort((a,b) => a.localeCompare(b, "vi")) : productNames();
-      const list = (q ? all.filter(n => norm(n).includes(q)) : all).slice(0, 40);
+      const hits = q ? all.map(n => ({n, r: pickScore(n, findProduct(n)?.code, inp.value)})).filter(x => x.r)
+          .sort((a,b) => b.r.sc - a.r.sc || ((stockOf(b.n) || 0) > 0) - ((stockOf(a.n) || 0) > 0) || a.n.localeCompare(b.n, "vi")) : all.map(n => ({n, r: null}));
+      const kindOf = {}; hits.forEach(x => kindOf[x.n] = x.r ? x.r.kinds : []);
+      const list = hits.slice(0, 40).map(x => x.n);
       if (!list.length) { sg.classList.add("hide"); return; }
-      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${(q ? all.filter(n => norm(n).includes(q)) : all).length > list.length ? "+" : ""})</b>${list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
-        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${ex != null ? ' <span class="sub">🧩 LK ngoài</span>' : ""}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
+      sg.innerHTML = `<div class="sgh"><span>Tên sản phẩm <b style="color:var(--brand)">(${list.length}${hits.length > list.length ? "+" : ""})</b>${q ? " · Model → Hãng → Tên" : list.length > 5 ? " · vuốt ↕ xem thêm" : ""}</span><span>Tồn kho</span><span>Link</span></div>` + list.map(n => { const k0 = stockOf(n), ex = parts && k0 == null ? extOf(n) : null, k = k0 != null ? k0 : ex, u = linkOf(n);
+        return `<div class="sg" data-n="${esc(n)}"><span class="sgn">${esc(n)}${ex != null ? ' <span class="sub">🧩 LK ngoài</span>' : ""}${(kindOf[n] || []).includes("model") ? ' <span class="sgk">🔢 Model</span>' : ""}${(kindOf[n] || []).includes("brand") ? ' <span class="sgk">🏷️ Hãng</span>' : ""}</span><b style="color:${k == null ? "var(--muted)" : k > 0 ? "var(--ok)" : "var(--bad)"}">${k == null ? "—" : k}</b>${u ? `<span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}">📋</button></span>` : `<span class="sgl sub">—</span>`}</div>`; }).join("");
       sg.classList.remove("hide");
       sg.querySelectorAll(".sg").forEach(b => b.addEventListener("click", e => { if (e.target.closest("a,.cpy")) return; inp.value = b.dataset.n; sg.classList.add("hide"); onPick && onPick(); }));
       sg.querySelectorAll(".sgl a").forEach(a => a.addEventListener("click", e => { e.stopPropagation(); }));
@@ -3218,7 +3244,7 @@
       const upd = () => { st.name = inp.value.trim(); const co = st.m === "co", ex = st.name && exName(st.name), n = ex ? stockOf(ex) : null;
         el.querySelectorAll(".nccmode button").forEach(b => b.classList.toggle("on", b.dataset.m === st.m));
         q(".ncclbl").textContent = co ? "Chọn sản phẩm trong kho" : "Tên sản phẩm mới";
-        inp.placeholder = co ? "Bấm chọn sản phẩm trong kho" : "Gõ tên sản phẩm mới";
+        inp.placeholder = co ? "Gõ model, hãng hoặc tên SP" : "Gõ tên sản phẩm mới";
         q(".nccstk").innerHTML = !st.name ? "" : co ? (ex ? `<b style="color:var(--ok)">♻️ Hàng cũ · tồn ${n ?? 0} → ${(n ?? 0) + x0.qty}</b>` : `<b style="color:var(--bad)">Chưa có trong kho – chọn “Sản phẩm mới”</b>`)
           : (ex ? `<b style="color:var(--bad)">Đã có trong kho – chọn “Có sẵn trong kho”</b>` : `<b style="color:var(--info)">🆕 Tạo mới · tồn ${x0.qty}</b>`);
         q(".nccsnw").classList.toggle("hide", co);
@@ -4080,7 +4106,7 @@
       <button type="button" class="rm" title="Xóa">✕</button>
       <div class="full"><div class="seg nhseg" style="margin:0 28px 6px 0"><button type="button" data-m="co" class="on">📦 Có sẵn trong kho</button><button type="button" data-m="moi">🆕 Sản phẩm mới</button></div></div>
       <div class="full"><label style="margin-top:0;display:flex;justify-content:space-between;gap:8px"><span class="nhlbl">Chọn sản phẩm · Số lượng</span><span class="lstk nhstk"></span></label></div>
-      <div style="position:relative"><input class="nhn" placeholder="Bấm chọn sản phẩm trong kho" autocomplete="off"><div class="sugg hide"></div></div>
+      <div style="position:relative"><input class="nhn" placeholder="Gõ model, hãng hoặc tên SP" autocomplete="off"><div class="sugg hide"></div></div>
       <div><input class="nhq" type="number" min="1" inputmode="numeric" value="1"></div>
       <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
         <div class="sub nhsnhint"></div></div>
@@ -4169,7 +4195,7 @@
     el.querySelectorAll(".nhseg button").forEach(b => b.onclick = () => {
       el.dataset.m = b.dataset.m; el.querySelectorAll(".nhseg button").forEach(x => x.classList.toggle("on", x === b));
       const moi = b.dataset.m === "moi";
-      $e(".nhn").placeholder = moi ? "Gõ tên sản phẩm mới" : "Bấm chọn sản phẩm trong kho";
+      $e(".nhn").placeholder = moi ? "Gõ tên sản phẩm mới" : "Gõ model, hãng hoặc tên SP";
       $e(".nhlbl").textContent = moi ? "Tên sản phẩm mới · Số lượng" : "Chọn sản phẩm · Số lượng";
       $e(".nhph")._setMax(moi ? 2 : 3); upd(); });
     el.querySelectorAll(".nhsnopt button").forEach(b => b.onclick = () => { el._hasSn = b.dataset.s === "1"; el._snTouched = true; setSnBtns(); upd();
