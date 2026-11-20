@@ -3757,7 +3757,12 @@
       <div><input class="nhq" type="number" min="1" inputmode="numeric" value="1"></div>
       <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
         <div class="sub nhsnhint"></div></div>
-      <div class="full nhsnbox"><div class="nhsetw" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 4px"><span class="sub">Mỗi sản phẩm có</span><select class="nhsp" style="width:auto;padding:6px 8px">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">${n} số seri${n > 1 ? " (hàng bộ)" : ""}</option>`).join("")}</select></div><div class="sub nhsetinfo"></div><div class="nhsns"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn sm pri nhscan">📷 Quét seri bằng camera</button><button type="button" class="btn sm nhsnadd">+ Thêm dòng seri</button></div></div>
+      <div class="full nhsnbox"><div class="nhsetw" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 4px"><span class="sub">Mỗi sản phẩm có</span><select class="nhsp" style="width:auto;padding:6px 8px">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">${n} số seri${n > 1 ? " (hàng bộ)" : ""}</option>`).join("")}</select></div><div class="sub nhsetinfo"></div><div class="nhsns"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn sm pri nhscan">📷 Quét seri bằng camera</button><button type="button" class="btn sm nhsnadd">+ Thêm dòng seri</button><button type="button" class="btn sm nhseqbtn" style="border-color:var(--brand);color:var(--brand)">🔢 Dãy seri liên tiếp</button></div>
+        <div class="found nhseq hide" style="margin-top:8px"><b>🔢 Tạo dãy seri liên tiếp</b><div class="sub" style="margin:2px 0 6px">Quét / gõ <b>seri đầu tiên</b> (sai thì sửa), nhập <b>số lượng</b> → app tự nhảy số: 52527725, 52527726, 52527727…</div>
+          <label style="margin-top:0">Seri đầu tiên</label><div class="snrow"><input class="nhseq1" inputmode="numeric" placeholder="VD: 52527725" autocomplete="off"><button type="button" class="scanbtn nhseqscan">📷 Quét</button></div>
+          <label>Số lượng seri</label><input class="nhseqn" type="number" min="1" max="1000" inputmode="numeric" placeholder="VD: 100">
+          <div class="sub nhseqprev" style="margin-top:6px"></div>
+          <div class="btns"><button type="button" class="btn nhseqx">Đóng</button><button type="button" class="btn pri nhseqgo" disabled>➕ Thêm dãy seri</button></div></div></div>
       <div class="full nhcost"><details><summary style="cursor:pointer;font-weight:650;font-size:14px;padding:6px 0">💰 Giá vốn đợt nhập <span class="sub">(tùy chọn – tự chia giá 1 sản phẩm, có / không VAT)</span></summary>
         <div class="two"><div><label class="nhctl">Tổng tiền đợt nhập (đ) – đã gồm VAT</label><input class="nhct" inputmode="numeric" placeholder="VD: 102.400.000"></div>
           <div><label>Tính theo</label><select class="nhcm"><option value="total">Tổng tiền cả đợt</option><option value="unit">Giá 1 SP chưa VAT</option></select></div></div>
@@ -3784,6 +3789,22 @@
     });
     photoPicker($e(".nhph"), 3, imgs => { if (el._hasSn) readSn(imgs); });
     // quét camera: mỗi seri duyệt xong thêm 1 dòng, quét tiếp liên tục (số lượng tự đếm)
+    // 🔢 dãy seri liên tiếp: seri đầu + số lượng → tự nhảy số (giữ đủ số chữ số)
+    const seqList = () => { const a = $e(".nhseq1").value.trim().replace(/\s+/g, ""), n = Math.min(1000, parseInt($e(".nhseqn").value) || 0), m = a.match(/^(.*?)(\d+)$/);
+      if (!m || n < 1) return []; const w = m[2].length, start = BigInt(m[2]); return Array.from({length: n}, (_, i) => m[1] + (start + BigInt(i)).toString().padStart(w, "0")); };
+    const seqPrev = () => { const L = seqList(), have = new Set(sns().map(keySN)), dup = L.filter(x => have.has(keySN(x))), inSt = L.filter(x => findStock(x)?.status === "in"), bad = L.filter(x => !snOk(x));
+      $e(".nhseqprev").innerHTML = !L.length ? "" : `→ <b>${L.length}</b> seri: <b>${esc(L[0])}</b> … <b>${esc(L[L.length - 1])}</b>${(el._per || 1) > 1 ? ` = ${Math.floor(L.length / el._per)} bộ` : ""}`
+        + (dup.length ? `<div style="color:var(--warn)">⚠️ ${dup.length} seri đã có trong danh sách – sẽ bỏ qua</div>` : "") + (inSt.length ? `<div style="color:var(--bad)">⛔ ${inSt.length} seri đã có trong kho (VD ${esc(inSt[0])}) – sẽ bỏ qua</div>` : "") + (bad.length ? `<div style="color:var(--bad)">⚠️ ${bad.length} seri sai quy định (${SN_HINT}) – kiểm tra seri đầu</div>` : "");
+      const ok = L.filter(x => !have.has(keySN(x)) && findStock(x)?.status !== "in").length;
+      $e(".nhseqgo").disabled = !ok; $e(".nhseqgo").textContent = ok ? `➕ Thêm ${ok} seri` : "➕ Thêm dãy seri"; };
+    $e(".nhseqbtn").onclick = () => { $e(".nhseq").classList.toggle("hide"); if (!$e(".nhseq").classList.contains("hide")) { const last = sns().slice(-1)[0], m = last && last.match(/^(.*?)(\d+)$/);
+      if (m && !$e(".nhseq1").value) $e(".nhseq1").value = m[1] + (BigInt(m[2]) + 1n).toString().padStart(m[2].length, "0"); seqPrev(); setTimeout(() => $e(".nhseq1").focus(), 50); } };
+    $e(".nhseqx").onclick = () => $e(".nhseq").classList.add("hide");
+    [".nhseq1", ".nhseqn"].forEach(k => $e(k).addEventListener("input", seqPrev));
+    $e(".nhseqscan").onclick = () => openScanner(sn => { $e(".nhseq1").value = sn; seqPrev(); $e(".nhseqn").focus(); });
+    $e(".nhseqgo").onclick = () => { const have = new Set(sns().map(keySN)), L = seqList().filter(x => !have.has(keySN(x)) && findStock(x)?.status !== "in"); if (!L.length) { toast("Không có seri mới để thêm"); return; }
+      el.querySelectorAll(".nhsn").forEach(x => { if (!x.value.trim()) x.parentElement.remove(); }); L.forEach(x => addSn(x, true)); upd();
+      $e(".nhseq").classList.add("hide"); $e(".nhseq1").value = ""; $e(".nhseqn").value = ""; toast(`Đã thêm ${L.length} seri liên tiếp (${L[0]} … ${L[L.length - 1]})`); };
     $e(".nhscan").onclick = () => openScanner(sn => { const have = new Set(sns().map(keySN)); if (have.has(keySN(sn))) return false;
       el.querySelectorAll(".nhsn").forEach(x => { if (!x.value.trim()) x.parentElement.remove(); }); addSn(sn, true); upd(); return true; },
       {multi: true, has: v => sns().some(x => keySN(x) === keySN(v)) ? "Seri này đã quét trong đợt nhập này" : findStock(v)?.status === "in" ? `Seri này đã có trong kho (${findStock(v).product})` : false,
