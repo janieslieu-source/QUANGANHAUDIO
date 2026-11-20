@@ -286,7 +286,7 @@
   #pdfStage .sig{display:flex;justify-content:space-around;margin-top:40px;text-align:center}
   #pdfStage .sig div{width:30%} #pdfStage .sig i{display:block;color:#666;font-size:12px;margin-bottom:70px}
   .link{background:none;border:0;color:var(--brand);font-weight:600;font-size:13px;cursor:pointer;padding:4px}
-  @media (prefers-color-scheme: dark){.link{color:#5eead4}}
+  @media (prefers-color-scheme: dark){.link{color:#93c5fd}}
 </style>
 </head>
 <body>
@@ -511,8 +511,10 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho</button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho<span class="cnt hide" id="nccBtnCnt"></span></button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
+      <div class="panel hide" data-w="xuat" id="nccPanel"><h3>📥 Hàng NCC chờ nhập kho <span class="sub" id="nccCnt"></span></h3>
+        <div class="sub" style="margin:-4px 0 8px">Kế toán đã thanh toán / ghi nhận nhập hàng nhà cung cấp. Kiểm hàng rồi bấm <b>Duyệt nhập kho</b> – app tự cộng tồn kho.</div><div class="list" id="nccList"></div></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
         <input type="date" id="whDay" style="width:auto;padding:7px 9px;font-size:14px"></div>
@@ -3180,6 +3182,69 @@
       head: [{t: "Ngày đổi"}, {t: "Mã phiếu"}, {t: "Khách hàng"}, {t: "SĐT"}, {t: "Sản phẩm"}, {t: "Seri cũ (thu hồi)"}, {t: "Seri mới (giao khách)"}, {t: "Bảo hành đến"}, {t: "Cảnh báo seri"}, {t: "Giai đoạn"}],
       rows: L.map(t => [fmt(exDate(t)), t.code, t.customer, t.phone || "", t.exchange.newProduct || t.product, t.exchange.oldSerial, t.exchange.newSerial, fmt(t.exchange.until), t.snWarn?.length ? (t.snOk ? "Kho đã duyệt" : "Chờ Kho duyệt") : "", STAGES[t.stage]?.label || ""])}); };
 
+
+  /* ---------- HÀNG NCC CHỜ NHẬP KHO (Kế toán lưu “Nhập hàng NCC” -> Kho duyệt -> tự cộng tồn) ---------- */
+  const nccPending = () => expenses.filter(x => x.kind === "nhap" && x.whStatus === "cho").sort((a,b) => (a.at || "").localeCompare(b.at || ""));
+  const nccSel = {};   // lựa chọn đang chọn trên từng thẻ: {v: tên SP | "__new__" | "__other__", sn: bool}
+  function nccSuggest(name, max = 5){
+    const w = norm(name).split(/[^a-z0-9]+/).filter(x => x.length >= 2); if (!w.length) return [];
+    return productNames().map(p => { const n = norm(p), t = n.split(/[^a-z0-9]+/);
+        const hit = w.filter(x => t.includes(x) || (x.length >= 3 && n.includes(x))).length; return {p, sc: hit / w.length + (n.includes(norm(name)) ? 1 : 0)}; })
+      .filter(r => r.sc >= 0.34).sort((a,b) => b.sc - a.sc || a.p.localeCompare(b.p, "vi")).slice(0, max).map(r => r.p);
+  }
+  function drawNccIn(){
+    const L = nccPending(), box = $("#nccList"); if (!box) return;
+    $("#nccPanel").classList.toggle("hide", !L.length);
+    $("#nccCnt").textContent = L.length ? `(${L.length})` : "";
+    $("#nccBtnCnt").textContent = L.length || ""; $("#nccBtnCnt").classList.toggle("hide", !L.length);
+    box.innerHTML = L.map(x => {
+      const exact = productNames().find(p => norm(p) === norm(x.product)), sug = nccSuggest(x.product).filter(p => p !== exact);
+      const st = nccSel[x.id] || (nccSel[x.id] = {v: exact || sug[0] || "__new__", sn: false});
+      const tonTxt = p => { const n = stockOf(p); return n == null ? "chưa nhập lần nào" : `tồn ${n}`; };
+      const opts = [...(exact ? [exact] : []), ...sug].map(p => `<option value="${esc(p)}" ${st.v === p ? "selected" : ""}>♻️ ${esc(p)} (${tonTxt(p)})</option>`).join("")
+        + `<option value="__new__" ${st.v === "__new__" ? "selected" : ""}>🆕 Tạo sản phẩm mới</option><option value="__other__" ${st.v === "__other__" ? "selected" : ""}>🔎 Sản phẩm khác trong kho…</option>`;
+      const amt = exAmt(x), paid = Number(x.paid) || 0;
+      return `<div class="item" style="cursor:default" data-ncc="${esc(x.id)}">
+        <div class="row"><div><div class="pname">📦 ${esc(x.product)} × <b>${x.qty}</b></div>
+          <div class="sub">🏭 ${esc(x.supplier || "")} · ngày nhập ${fmt(x.date)} · ${money(amt)}${x.unit ? ` (${money(x.unit)}/SP)` : ""}</div>
+          <div class="sub">${paid >= amt ? "✅ Đã thanh toán đủ" : `💳 Đã trả ${money(paid)} – <b style="color:var(--bad)">còn nợ ${money(amt - paid)}</b>`} · KT: ${esc(x.by || "")}</div></div></div>
+        <div class="found" style="margin-top:8px;${exact ? "" : "background:var(--warnbg,#fff7ed);color:#9a3412"}">${exact ? `♻️ <b>HÀNG CŨ</b> – đã có trong kho: <b>${esc(exact)}</b> (${tonTxt(exact)}) → duyệt sẽ cộng thêm ${x.qty}`
+          : sug.length ? `🆕 <b>Chưa có tên này trong kho</b> – có ${sug.length} sản phẩm tên gần giống, chọn đúng sản phẩm bên dưới hoặc “Tạo sản phẩm mới”` : `🆕 <b>SẢN PHẨM MỚI</b> – chưa có trong kho, duyệt sẽ tạo sản phẩm mới`}</div>
+        <label>Nhập vào sản phẩm</label><select class="nccsel">${opts}</select>
+        <div class="nccother ${st.v === "__other__" ? "" : "hide"}"><input class="nccoth" list="prodList" autocomplete="off" placeholder="Gõ tên sản phẩm có trong kho"></div>
+        <div class="nccnew ${st.v === "__new__" ? "" : "hide"}"><label>Tên sản phẩm mới</label><input class="nccname" value="${esc(x.product)}">
+          <div class="seg nccsn" style="margin-top:6px"><button type="button" data-sn="0" class="${st.sn ? "" : "on"}">Không có seri</button><button type="button" data-sn="1" class="${st.sn ? "on" : ""}">Có seri (bảo hành)</button></div></div>
+        <div class="cardbtns"><button class="btn danger" data-nccno="${esc(x.id)}">✖ Không nhập</button><button class="btn okb" data-nccok="${esc(x.id)}">✅ Duyệt nhập kho</button></div></div>`; }).join("");
+    box.querySelectorAll("[data-ncc]").forEach(el => { const id = el.dataset.ncc, st = nccSel[id], q = c => el.querySelector(c);
+      q(".nccsel").onchange = () => { st.v = q(".nccsel").value; q(".nccnew").classList.toggle("hide", st.v !== "__new__"); q(".nccother").classList.toggle("hide", st.v !== "__other__"); if (st.v === "__other__") q(".nccoth").focus(); };
+      el.querySelectorAll(".nccsn button").forEach(b => b.onclick = () => { st.sn = b.dataset.sn === "1"; el.querySelectorAll(".nccsn button").forEach(y => y.classList.toggle("on", y === b)); });
+      q("[data-nccok]").onclick = async () => {
+        const x = expenses.find(e => e.id === id); if (!x || x.whStatus !== "cho") return;
+        let name = st.v, isNew = false;
+        if (st.v === "__new__") { name = q(".nccname").value.trim(); if (!name) { toast("Nhập tên sản phẩm mới"); q(".nccname").focus(); return; }
+          const ex = productNames().find(p => norm(p) === norm(name)); if (ex) name = ex; else isNew = true; }
+        else if (st.v === "__other__") { const v = q(".nccoth").value.trim(), ex = productNames().find(p => norm(p) === norm(v));
+          if (!ex) { toast(v ? `“${v}” không có trong kho – chọn trong danh sách gợi ý hoặc “Tạo sản phẩm mới”` : "Gõ / chọn sản phẩm trong kho"); q(".nccoth").focus(); return; } name = ex; }
+        const now = new Date().toISOString(), cost = costCalc("total", exAmt(x), x.qty, x.vatQty, x.vatRate), b = q("[data-nccok]"); b.disabled = true;
+        try {
+          if (isNew) { const used = new Set(products.map(p => p.id)); let pid = prId(name), k = 2; while (used.has(pid)) pid = prId(name) + "-" + (k++);
+            await put("pr", Object.assign({id: pid, name, months: 12, noSerial: !st.sn, createdAt: now, updatedAt: now}, cost ? {lastCost: Object.assign({at: now}, cost)} : {})); }
+          else if (findProduct(name) && cost) await put("pr", Object.assign({}, findProduct(name), {lastCost: Object.assign({at: now}, cost), updatedAt: now}));
+          const hasSn = isNew ? st.sn : !noSerial(name);
+          await put("mv", Object.assign({id: "mv_" + uid(), product: name, qty: x.qty, at: now, kind: "nhap", ref: `Nhập hàng NCC – ${x.supplier || ""}`, by: actor(), exId: x.id}, hasSn ? {snByPhoto: true} : {}, cost ? {cost} : {}));
+          await put("ex", Object.assign({}, x, {whStatus: "done", whAt: now, whBy: actor(), whProduct: name}));
+          delete nccSel[id];
+          toast(`Đã nhập kho ${x.qty} “${name}”${isNew ? " (sản phẩm mới)" : ""} – tồn kho đã cập nhật`);
+        } catch(e){ b.disabled = false; }
+      };
+      q("[data-nccno]").onclick = async () => {
+        const x = expenses.find(e => e.id === id); if (!x) return;
+        const why = prompt(`Không nhập kho ${x.qty} “${x.product}”?\nGhi lý do (VD: hàng lỗi trả NCC, đã nhập tay trước đó…):`); if (why == null) return;
+        if (!why.trim()) { toast("Cần ghi lý do"); return; }
+        try { await put("ex", Object.assign({}, x, {whStatus: "skip", whAt: new Date().toISOString(), whBy: actor(), whNote: why.trim()})); delete nccSel[id]; toast("Đã ghi nhận không nhập kho"); } catch(e){}
+      };
+    });
+  }
   /* ================= KHO ================= */
   let whDay = null;
   const dayOf = s => s ? iso(new Date(s)) : "";
@@ -3189,7 +3254,7 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt(); drawExchanges(); drawLoans(); if (whTab === "ls") drawLedger();
+    drawThao(); drawExt(); drawExchanges(); drawLoans(); drawNccIn(); if (whTab === "ls") drawLedger();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
@@ -4465,7 +4530,7 @@
           if (k === "nhap") { const qty = parseInt(v(".exqty")) || 0, c = costCalc("total", amount, qty, v(".exvq"), v(".exvr"));
             need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
             const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
-            Object.assign(rec, {supplier: v(".exsupn"), product: v(".expr"), qty, vatQty: c.vatQty, vatRate: c.vatRate, unit: c.unit, unitVat: c.unitVat, paid, debt: amount - paid, payMode: host._payMode}); }
+            Object.assign(rec, {supplier: v(".exsupn"), product: v(".expr"), qty, vatQty: c.vatQty, vatRate: c.vatRate, unit: c.unit, unitVat: c.unitVat, paid, debt: amount - paid, payMode: host._payMode, whStatus: "cho"}); }
           else if (k === "ship") { shipTarget = refOf(v(".exr")); need(shipTarget, "Chọn đơn cần trả ship (gõ đúng mã đơn)", ".exr");
             Object.assign(rec, {ref: shipTarget.code, customer: shipTarget.customer, saleDate: shipTarget.saleDate || (shipTarget.createdAt || "").slice(0, 10), payer: host._payer, charge: host._payer === "cty" && !!$h(".excharge")?.checked}); }
           else if (k === "dodung") { need(v(".exitem"), "Nhập tên đồ dùng", ".exitem"); const mach = $h(".exmach").checked, wm = mach ? Number(v(".exwm")) : 0;
@@ -4480,6 +4545,7 @@
           rec.photos = ph.length ? await savePhotos(ph, {product: "Chi phí", ref: exTitle(rec)}) : [];
           await put("ex", rec);
           let extra = "";
+          if (rec.kind === "nhap") { extra = " · đã chuyển Kho chờ nhập"; pushTo("wh", "📥 Hàng NCC chờ nhập kho", `${rec.qty} ${rec.product} – ${rec.supplier}`, rec.id); }
           if (rec.charge && shipTarget) extra = " · " + await chargeShip(shipTarget, amount);
           toast(`Đã lưu: ${exTitle(rec)} – ${money(amount)}${extra}`);
           buildFields(); $h(".exn").value = ""; $h(".exph")._clear();
@@ -4519,7 +4585,7 @@
     if (q) L = L.filter(x => norm([exTitle(x), exWho(x), x.ref, x.product, x.item, x.note, x.by, x.supplier, x.employee, x.customer, exCat(x), fmt(x.date), String(exAmt(x))].join(" ")).includes(q));
     const canDel = boss || role === "ac";
     $h(".exlist").innerHTML = L.length ? L.slice(0, 60).map(x => { const k = exKind(x), c = exCash(x);
-      const detail = k === "nhap" ? `${x.vatQty ? `${x.vatQty}/${x.qty} SP có VAT ${x.vatRate}% · ` : "Không VAT · "}${money(x.unit)}/SP${x.vatQty ? ` (có VAT ${money(x.unitVat)})` : ""}<br>Tổng ${money(exAmt(x))} · đã trả <b>${money(x.paid)}</b>${exAmt(x) - x.paid > 0 ? ` · <b style="color:var(--bad)">còn nợ ${money(exAmt(x) - x.paid)}</b>` : " · đã thanh toán đủ"}`
+      const detail = k === "nhap" ? `${x.vatQty ? `${x.vatQty}/${x.qty} SP có VAT ${x.vatRate}% · ` : "Không VAT · "}${money(x.unit)}/SP${x.vatQty ? ` (có VAT ${money(x.unitVat)})` : ""}<br>Tổng ${money(exAmt(x))} · đã trả <b>${money(x.paid)}</b>${exAmt(x) - x.paid > 0 ? ` · <b style="color:var(--bad)">còn nợ ${money(exAmt(x) - x.paid)}</b>` : " · đã thanh toán đủ"}${x.whStatus === "cho" ? `<br><b style="color:#b45309">📥 Đang chờ Kho duyệt nhập</b>` : x.whStatus === "done" ? `<br><b style="color:var(--ok)">✅ Kho đã nhập${x.whProduct && norm(x.whProduct) !== norm(x.product) ? ` vào “${esc(x.whProduct)}”` : ""}</b>` : x.whStatus === "skip" ? `<br><b style="color:var(--bad)">✖ Kho không nhập: ${esc(x.whNote || "")}</b>` : ""}`
         : k === "ship" ? `Ngày mua ${fmt(x.saleDate)}${x.charge ? " · <b style='color:var(--ok)'>tính lại khách (cộng công nợ)</b>" : ""}`
         : k === "dodung" ? `${x.machine ? (x.wMonths ? `🛡️ BH ${x.wMonths} tháng – đến ${fmt(x.wUntil)}` : "Máy móc · không bảo hành") : "Đồ dùng"}`
         : k === "luong" ? `Lương tháng ${x.month ? x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}` : k === "khac" ? esc(x.cat || "") : "";
