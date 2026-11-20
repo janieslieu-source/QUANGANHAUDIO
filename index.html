@@ -3317,11 +3317,38 @@
     $("#stockSum").textContent = stock.length || products.length ? `Tồn ${totalIn} · ${g.size} mặt hàng` : "";
     const more = rows.length - 100; rows = rows.slice(0, 100);
     $("#stockTable").innerHTML = rows.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Tồn</th><th>Đã xuất</th></tr>
-      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b></td><td>${r.out}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
+      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b></td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng tồn. Bấm “Nhập hàng từ file Excel” để tải danh sách lên."}</div>`;
-    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = () => showStockOf(tr.dataset.p));
+    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout]")) return; showStockOf(tr.dataset.p); });
+    $("#stockTable").querySelectorAll("[data-stout]").forEach(b => b.onclick = e => { e.stopPropagation(); showOutStats(b.dataset.stout); });
   }
   $("#stQ").addEventListener("input", drawStock);
+  // 📋 thống kê chi tiết hàng xuất của 1 sản phẩm: theo loại, theo tháng, từng lần xuất (ngày, SL, seri, đơn, khách)
+  function outEvents(name){ const k = norm(name), L = [];
+    moves.forEach(m => { if (m.kind === "seed" || m.ext || m.kind === "kiemke" || norm(m.product) !== k || !(Number(m.qty) < 0)) return; L.push({at: m.at, q: -Number(m.qty), kind: m.kind, ref: m.ref || "", sn: ""}); });
+    stock.forEach(x => { if (norm(x.product) !== k || x.status === "in" || !x.outAt) return; L.push({at: x.outAt, q: 1, kind: "xuat", ref: x.orderCode || "", sn: x.serial, cus: x.customer}); });
+    L.forEach(e => { const d = e.ref ? (orders.find(o => o.code === String(e.ref).split(" · ")[0]) || tickets.find(t => t.code === String(e.ref).split(" · ")[0])) : null; if (!e.cus) e.cus = d?.customer || ""; });
+    return L.sort((a, b) => String(b.at).localeCompare(String(a.at))); }
+  function showOutStats(name){
+    const L = outEvents(name), tot = L.reduce((a, e) => a + e.q, 0), byK = {}, byM = {}, byC = {};
+    L.forEach(e => { const kk = MV_KIND[e.kind] || e.kind || "Xuất"; byK[kk] = (byK[kk] || 0) + e.q; const m = String(e.at).slice(0, 7); byM[m] = (byM[m] || 0) + e.q; if (e.cus) byC[e.cus] = (byC[e.cus] || 0) + e.q; });
+    const tbl = (h, o, n) => `<table class="ptable" style="margin-top:6px"><tr><th style="text-align:left;width:auto">${h}</th><th style="width:70px">SL</th></tr>${Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n || 99).map(([k, v]) => `<tr><td>${esc(k)}</td><td><b>${v}</b></td></tr>`).join("")}</table>`;
+    $("#detail").innerHTML = `<div class="grab"></div><h2 style="margin:0 0 4px">📋 Thống kê xuất – ${esc(name)}</h2>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr);margin:8px 0"><div class="stat c-warn"><b>${tot}</b><span>Tổng đã xuất</span></div><div class="stat"><b>${L.length}</b><span>Lần xuất</span></div><div class="stat c-ok"><b>${stockOf(name) ?? 0}</b><span>Còn tồn</span></div></div>
+      ${L.length ? `<b style="font-size:14px">Theo loại xuất</b>${tbl("Loại", byK)}
+        <b style="font-size:14px;display:block;margin-top:10px">Theo tháng</b>${tbl("Tháng", Object.fromEntries(Object.entries(byM).map(([m, v]) => [m.slice(5) + "/" + m.slice(0, 4), v])))}
+        ${Object.keys(byC).length ? `<b style="font-size:14px;display:block;margin-top:10px">Khách lấy nhiều nhất</b>${tbl("Khách", byC, 10)}` : ""}
+        <b style="font-size:14px;display:block;margin-top:10px">Từng lần xuất (${L.length})</b>
+        <div class="list" style="margin-top:6px;max-height:340px;overflow:auto">${L.slice(0, 300).map(e => `<div class="item" style="cursor:default;padding:8px 10px"><div class="row"><div><b>${esc(MV_KIND[e.kind] || e.kind || "Xuất")}</b>${e.ref ? ` · <span class="link" data-odref="${esc(String(e.ref).split(" · ")[0])}" style="cursor:pointer">${esc(e.ref)}</span>` : ""}<div class="sub">${fmtTime(e.at)}${e.cus ? " · " + esc(e.cus) : ""}${e.sn ? " · SN " + esc(e.sn) : ""}</div></div><b style="color:var(--bad)">−${e.q}</b></div></div>`).join("")}</div>` : `<div class="empty">Chưa xuất lần nào.</div>`}
+      <div class="btns"><button type="button" class="btn" id="outXls">📊 Excel chi tiết xuất</button><button type="button" class="btn" data-close="detailBg">Đóng</button></div>`;
+    open("detailBg");
+    $("#detail").querySelectorAll("[data-odref]").forEach(a => a.onclick = () => { const c = a.dataset.odref, o = orders.find(x => x.code === c), t = tickets.find(x => x.code === c); if (o) showOrder(o.id); else if (t) showDetail(t.id); });
+    $("#outXls").onclick = async () => { try { await loadScript(XLSX_URL); const X = window.XLSX;
+      const ws = X.utils.aoa_to_sheet([[COMPANY], [`CHI TIẾT XUẤT – ${name}`], [`Tổng đã xuất ${tot} · ${L.length} lần · còn tồn ${stockOf(name) ?? 0}`], [], ["STT", "Ngày giờ", "Loại", "SL", "Seri", "Mã đơn / phiếu", "Khách"], ...L.map((e, i) => [i + 1, fmtTime(e.at), MV_KIND[e.kind] || e.kind || "", e.q, e.sn || "", e.ref || "", e.cus || ""]), [], ["", "", "TỔNG", tot]]);
+      ws["!cols"] = [{wch: 5}, {wch: 17}, {wch: 20}, {wch: 6}, {wch: 12}, {wch: 18}, {wch: 26}];
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Chi tiet xuat");
+      await saveBlob(`Xuat_${name.replace(/[^\p{L}\d]+/gu, "-")}.xlsx`, new Blob([X.write(wb, {bookType: "xlsx", type: "array"})], {type: XLSX_MIME}), "Đã lưu chi tiết xuất"); } catch(err){ toast("Không tạo được file Excel"); } };
+  }
   function showStockOf(name){
     const list = inStock(name), out = stock.filter(x => x.status !== "in" && norm(x.product) === norm(name)).sort((a,b) => (b.outAt||"").localeCompare(a.outAt||""));
     const n = stockOf(name), cur = linkOf(name);
