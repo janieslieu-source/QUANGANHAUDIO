@@ -4018,7 +4018,7 @@
      Loại chi: nhap (nhập hàng – trả 1 lần / trả một phần, còn nợ NCC), ship (trả ship cho đơn, tính lại khách -> công nợ),
      dodung (đồ dùng bộ phận, máy móc có bảo hành), luong (lương nhân viên), tranoncc (trả nợ nhà cung cấp), khac (chi khác)
      Chụp ảnh hay tự điền đều cộng dồn. "Tiền công ty đã chi" = tiền thật sự chi ra trong ngày chi. */
-  const EX_KINDS = {nhap: "📦 Nhập hàng", ship: "🚚 Ship hàng", dodung: "🧰 Đồ dùng bộ phận", luong: "👷 Lương nhân viên", tranoncc: "💳 Trả nợ NCC", khac: "📝 Chi khác"};
+  const EX_KINDS = {nhap: "📦 Nhập hàng NCC", ship: "🚚 Ship hàng", dodung: "🧰 Đồ dùng bộ phận", luong: "👷 Lương nhân viên", khac: "📝 Chi khác"};   // "Trả nợ NCC" nằm trong "Nhập hàng NCC"
   const EX_LABEL = {nhap: "Nhập hàng", ship: "Ship hàng", dodung: "Đồ dùng bộ phận", luong: "Lương nhân viên", tranoncc: "Trả nợ nhà cung cấp", khac: "Chi khác"};
   const EX_DEPTS = ["Kỹ thuật", "Kho", "Bán hàng", "Vận chuyển", "Kế toán", "Bảo hành", "Văn phòng / chung"];
   const EX_OTHER = ["Xăng xe", "Ăn uống / tiếp khách", "Văn phòng phẩm", "Điện nước / Internet", "Chành xe / Bưu điện", "Thuê mặt bằng", "Khác"];
@@ -4063,8 +4063,17 @@
       if (k === "nhap") { r.goods += exAmt(x); r.paid += Number(x.paid) || 0; r.debt += exAmt(x) - (Number(x.paid) || 0); }
       else { r.paid += exAmt(x); r.debt -= exAmt(x); }
       if ((x.date || "") > r.last) r.last = x.date || ""; });
-    return Object.values(m).sort((a,b) => b.debt - a.debt);
+    // nợ NCC phải trả trong SUP_DAYS ngày: tiền trả nợ trừ dần vào lô nhập cũ nhất → lô cũ nhất còn nợ = ngày bắt đầu tính hạn
+    Object.entries(m).forEach(([key, r]) => {
+      const lots = expenses.filter(x => exKind(x) === "nhap" && norm(x.supplier || "") === key).map(x => ({d: x.date || "", left: exAmt(x) - (Number(x.paid) || 0)})).filter(l => l.left > 0).sort((a, b) => a.d.localeCompare(b.d));
+      let pay = expenses.filter(x => exKind(x) === "tranoncc" && norm(x.supplier || "") === key).reduce((a, x) => a + exAmt(x), 0);
+      for (const l of lots) { const u = Math.min(pay, l.left); l.left -= u; pay -= u; }
+      const old = lots.find(l => l.left > 0.5);
+      r.since = old ? old.d : ""; r.age = old ? Math.floor((today() - new Date(old.d + "T00:00:00")) / 864e5) : 0; r.due = old ? iso(new Date(new Date(old.d + "T00:00:00").getTime() + SUP_DAYS * 864e5)) : "";
+      r.late = r.debt > 0.5 && !!old && r.age > SUP_DAYS; });
+    return Object.values(m).sort((a,b) => (b.late ? 1 : 0) - (a.late ? 1 : 0) || b.debt - a.debt);
   }
+  const SUP_DAYS = 5;   // nợ nhà cung cấp: trả trong 5 ngày, quá hạn thì cảnh báo
   const supDebtOf = name => supplierDebts().find(r => norm(r.name) === norm(name))?.debt || 0;
   // phí ship tính lại khách -> cộng vào công nợ của đơn / phiếu
   async function chargeShip(x, amount){
@@ -4109,7 +4118,7 @@
       const dateF = (lbl) => `<label>${lbl}</label><input class="exd" type="date" value="${iso(new Date())}">`;
       const buildFields = () => {
         const k = host._kind, F = $h(".exfields"); host._calc = null;
-        host.querySelectorAll(".exkind button").forEach(b => b.classList.toggle("on", b.dataset.k === k));
+        host.querySelectorAll(".exkind button").forEach(b => b.classList.toggle("on", b.dataset.k === k || (b.dataset.k === "nhap" && k === "tranoncc")));
         if (k === "nhap") F.innerHTML = `<div class="two"><div>${dateF("Ngày nhập *")}</div><div><label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="VD: NCC Hà Nội"></div></div>
           <div class="two"><div><label>Sản phẩm nhập *</label><input class="expr" list="prodList" autocomplete="off" placeholder="Tên sản phẩm"></div><div><label>Số lượng *</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
           <div class="two"><div><label>Số SP có VAT (0 = không VAT)</label><input class="exvq" type="number" min="0" inputmode="numeric" value="0"></div><div><label>Thuế VAT (%)</label><input class="exvr" type="number" min="0" step="0.5" value="8"></div></div>
@@ -4138,6 +4147,9 @@
         else F.innerHTML = `<label>Nội dung chi *</label><input class="exc" placeholder="VD: Đổ xăng xe giao hàng, tiếp khách…">
           <div class="two"><div><label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 200.000"></div><div>${dateF("Ngày chi")}</div></div>
           <label>Loại chi</label><select class="excat">${EX_OTHER.map(c => `<option>${c}</option>`).join("")}</select>${payerBtns()}`;
+        // Nhập hàng NCC: chọn "Nhập hàng mới" hoặc "Trả nợ NCC" ngay trong cùng mục
+        if (k === "nhap" || k === "tranoncc") { F.insertAdjacentHTML("afterbegin", `<div class="seg exsub" style="margin:8px 0 2px"><button type="button" data-sub="nhap" class="${k === "nhap" ? "on" : ""}">📦 Nhập hàng mới</button><button type="button" data-sub="tranoncc" class="${k === "tranoncc" ? "on" : ""}">💳 Trả nợ NCC</button></div>`);
+          F.querySelectorAll(".exsub button").forEach(b => b.onclick = () => { host._kind = b.dataset.sub; host._payer = "cty"; buildFields(); }); }
         host.querySelectorAll(".exfields .exa, .exfields .expaid").forEach(fmtMoneyInput);
         const syncP = () => { host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.classList.toggle("sel", o.dataset.p === host._payer));
           const cw = $h(".exchargew"); if (cw) { cw.style.display = host._payer === "cty" ? "flex" : "none"; if (host._payer !== "cty") $h(".excharge").checked = false; } };
@@ -4226,10 +4238,12 @@
       ${Object.keys(S.cat).length ? `<table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Công ty đã chi theo loại</th><th>Số khoản</th><th style="width:110px">Số tiền</th></tr>${Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : ""}`;
     const sup = supplierDebts().filter(r => Math.round(r.debt) !== 0);
     $h(".exsupbox").classList.toggle("hide", !sup.length);
-    $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b></td></tr>`).join("")}</table>` : "";
+    $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b>${r.debt > 0.5 && r.since ? (r.late ? `<div class="sub" style="color:var(--bad);font-weight:700">⏰ quá hạn ${r.age - SUP_DAYS} ngày</div>` : `<div class="sub">hạn trả ${fmt(r.due)}</div>`) : ""}</td></tr>`).join("")}</table>
+      ${sup.some(r => r.late) ? `<div class="reason" style="margin-top:6px;background:var(--badbg);color:var(--bad)">⏰ Có nợ nhà cung cấp quá ${SUP_DAYS} ngày – cần thanh toán (chọn “📦 Nhập hàng NCC” → “💳 Trả nợ NCC”).</div>` : ""}` : "";
     const q = norm($h(".exq").value);
-    let L = L0.slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
-    if (q) L = L.filter(x => norm([exTitle(x), exWho(x), x.ref, x.product, x.item, x.note, x.by, exCat(x)].join(" ")).includes(q));
+    // có gõ tìm → tìm trong MỌI thời gian (không chỉ ngày / tuần / tháng đang xem)
+    let L = (q ? exIn(new Date(0), new Date(8.64e15)) : L0).slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
+    if (q) L = L.filter(x => norm([exTitle(x), exWho(x), x.ref, x.product, x.item, x.note, x.by, x.supplier, x.employee, x.customer, exCat(x), fmt(x.date), String(exAmt(x))].join(" ")).includes(q));
     const canDel = boss || role === "ac";
     $h(".exlist").innerHTML = L.length ? L.slice(0, 60).map(x => { const k = exKind(x), c = exCash(x);
       const detail = k === "nhap" ? `${x.vatQty ? `${x.vatQty}/${x.qty} SP có VAT ${x.vatRate}% · ` : "Không VAT · "}${money(x.unit)}/SP${x.vatQty ? ` (có VAT ${money(x.unitVat)})` : ""}<br>Tổng ${money(exAmt(x))} · đã trả <b>${money(x.paid)}</b>${exAmt(x) - x.paid > 0 ? ` · <b style="color:var(--bad)">còn nợ ${money(exAmt(x) - x.paid)}</b>` : " · đã thanh toán đủ"}`
@@ -4240,7 +4254,7 @@
         <div class="sub">${fmt(x.date)}${x.by ? " · " + esc(x.by) : ""}</div><div class="sub">${detail}</div>${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
         <div style="text-align:right"><b style="color:${c ? "var(--bad)" : "var(--info)"}">${money(c || exAmt(x))}</b><div class="sub">${c ? (k === "nhap" && c < exAmt(x) ? "đã chi" : "công ty chi") : "khách trả"}</div></div></div>
         <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + exTitle(x))}${canDel ? `<button type="button" class="btn sm danger" data-exdel="${esc(x.id)}" style="margin-left:auto">🗑 Xóa</button>` : ""}</div></div>`; }).join("")
-      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có khoản chi trong kỳ."}</div>`;
+      : `<div class="empty">${q ? "Không tìm thấy (đã tìm trong mọi thời gian)." : "Chưa có khoản chi trong kỳ."}</div>`;
     host.querySelectorAll("[data-exdel]").forEach(b => b.onclick = async () => { const x = expenses.find(y => y.id === b.dataset.exdel); if (!x) return;
       if (!confirm(`Xóa khoản chi “${exTitle(x)}” – ${money(exAmt(x))}?${x.charge ? "\n(Phí ship đã cộng vào công nợ khách sẽ KHÔNG tự trừ lại – nhờ Kế toán sửa chi phí đơn đó)" : ""}`)) return;
       try { await delDoc("ex", x.id); toast("Đã xóa khoản chi"); } catch(e){} });
@@ -4583,6 +4597,7 @@
   const debtAge = x => { const s = debtStart(x); return s ? Math.floor((Date.now() - new Date(s)) / 86400000) : 0; };
   function debtReminder(){
     if (!(role === "ac" || boss) || $("#app").classList.contains("hide")) return;
+    supReminder();
     const due = [...tickets, ...orders].filter(x => x.stage === "cong_no" && debtAge(x) >= DEBT_DAYS);
     if (!due.length) return;
     let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_debt_rem") || "[]"); } catch(e){}
@@ -4591,6 +4606,14 @@
     try { localStorage.setItem("bh_debt_rem", JSON.stringify(seen.concat(fresh).slice(-500))); } catch(e){}
     const total = due.reduce((a,x) => a + (Number(x.pay?.amount) || 0), 0);
     bannerQ.push({id: "debt", title: `💰 Nhắc thu công nợ: ${due.length} đơn quá ${DEBT_DAYS} ngày`, text: `Tổng ${money(total)} – ${due.slice(0, 3).map(x => x.customer).join(", ")}${due.length > 3 ? "…" : ""}`, to: "ac"});
+    if (!bannerOn) nextBanner();
+  }
+  function supReminder(){
+    const late = supplierDebts().filter(r => r.late); if (!late.length) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_sup_rem") || "[]"); } catch(e){}
+    const day = iso(new Date()), keys = late.map(r => norm(r.name) + ":" + day), fresh = keys.filter(k => !seen.includes(k)); if (!fresh.length) return;
+    try { localStorage.setItem("bh_sup_rem", JSON.stringify(seen.concat(fresh).slice(-300))); } catch(e){}
+    bannerQ.push({id: "supdebt", title: `💳 Nợ nhà cung cấp quá ${SUP_DAYS} ngày: ${late.length} NCC`, text: `Tổng ${money(late.reduce((a, r) => a + r.debt, 0))} – ${late.slice(0, 3).map(r => `${r.name} (${money(r.debt)}, quá ${r.age - SUP_DAYS} ngày)`).join(", ")}${late.length > 3 ? "…" : ""}`, to: "ac"});
     if (!bannerOn) nextBanner();
   }
   let acGroup = "tk";
