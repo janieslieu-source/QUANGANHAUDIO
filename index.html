@@ -1331,6 +1331,7 @@
 
   /* ================= RENDER CHUNG ================= */
   function renderAll(){
+    dropIdx();
     if (bulk) return;
     updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
@@ -2891,7 +2892,7 @@
     document.querySelectorAll(".sugg:not(.hide)").forEach(sg => { if (!sg.parentElement.contains(e.target)) sg.classList.add("hide"); });
   }, true);
   /* ---------- Tìm sản phẩm thông minh: ưu tiên Model → Thương hiệu → Tên sản phẩm ---------- */
-  const AUDIO_BRANDS = new Set("jbl bose sony yamaha denon marantz onkyo pioneer kenwood bmb paramax acnos arirang okara viki nas smartk vietk vietktv hanet kiwi alto behringer shure sennheiser audio-technica akg rode partyhouse domus boston klipsch polk sansui samsung lg tcl xiaomi apple anker soundmax microlab edifier dalton bfaudio cavs ef jarguar jamo mission tannoy wharfedale kef dynaudio focal rcf ev electro-voice dbx crown qsc mackie soundcraft yamaha peavey nexo martin db technics harman kardon infinity jbl. quanganh qa hosa ugreen orico baseus remax hoco aiwa philips panasonic sharp toshiba asanzo darling sumo karaoke".split(" "));
+  const AUDIO_BRANDS = new Set("jbl bose sony yamaha denon marantz onkyo pioneer kenwood bmb paramax acnos arirang okara viki nas smartk vietk vietktv hanet kiwi alto behringer shure sennheiser audio-technica akg rode partyhouse domus boston klipsch polk sansui samsung lg tcl xiaomi apple anker soundmax microlab edifier dalton bfaudio cavs ef jarguar jamo mission tannoy wharfedale kef dynaudio focal rcf ev electro-voice dbx crown qsc mackie soundcraft yamaha peavey nexo martin db technics harman kardon infinity quanganh qa hosa ugreen orico baseus remax hoco aiwa philips panasonic sharp toshiba asanzo darling sumo".split(" "));
   function pickScore(name, code, query){
     const toks = norm(query).split(/[^a-z0-9]+/).filter(Boolean); if (!toks.length) return {sc: 0, kinds: []};
     const nn = norm(name), words = nn.split(/[^a-z0-9]+/).filter(Boolean), comp = nn.replace(/[^a-z0-9]/g, ""), cw = norm(code || "").replace(/[^a-z0-9]/g, "");
@@ -3843,7 +3844,18 @@
   const snPerOf = name => { const p = findProduct(name); if (p && Number(p.snPer) > 0) return Number(p.snPer);
     const m = String(name || "").match(/(?:^|[^\d])1\s*[-–]\s*([1-8])(?!\d)/); return m && /hdmi|không dây|khong day|wireless|bộ|bo /i.test(name) ? 1 + Number(m[1]) : 1; };
   const inStock = name => stock.filter(x => x.status === "in" && norm(x.product) === norm(name)).sort((a,b) => (a.importedAt||"").localeCompare(b.importedAt||"") || String(a.serial).localeCompare(String(b.serial)));
-  const findProduct = name => products.find(p => norm(p.name) === norm(name));
+  // bảng tra nhanh (lập lại mỗi khi dữ liệu đổi) – tránh dò cả kho cho từng sản phẩm khi gõ tìm
+  let _idx = null;
+  function dataIdx(){
+    if (_idx && _idx.st === stock && _idx.mv === moves && _idx.pr === products && _idx.n === stock.length + "/" + moves.length + "/" + products.length) return _idx;
+    const pr = new Map(), sk = new Map();
+    products.forEach(p => { const k = norm(p.name); if (!pr.has(k)) pr.set(k, p); });
+    stock.forEach(x => { const k = norm(x.product); sk.set(k, (sk.get(k) || 0) + (x.status === "in" ? 1 : 0)); });
+    moves.forEach(m => { if (m.ext) return; const k = norm(m.product); sk.set(k, (sk.get(k) || 0) + (Number(m.qty) || 0)); });
+    return (_idx = {st: stock, mv: moves, pr: products, n: stock.length + "/" + moves.length + "/" + products.length, prMap: pr, stMap: sk});
+  }
+  const dropIdx = () => { _idx = null; };
+  const findProduct = name => dataIdx().prMap.get(norm(name));
   // mặt hàng nhỏ được đánh dấu "không cần seri" (Kho bật trong thông tin sản phẩm)
   const noSerial = name => !!findProduct(name)?.noSerial;
   /* ---------- Gộp tên sản phẩm trùng ---------- */
@@ -3893,7 +3905,8 @@
   const linkA = (name, txt) => { const u = linkOf(name); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener" class="plink" onclick="event.stopPropagation()">${txt || "🔗"}</a>` : ""; };
   // tồn theo số lượng (hàng nhập không seri); null nếu chưa từng nhập theo số lượng
   // tổng tồn = seri còn trong kho + hàng theo số lượng; null nếu sản phẩm chưa từng nhập kho
-  const stockOf = name => { const a = stock.filter(x => norm(x.product) === norm(name)), b = qtyStock(name);
+  const stockOf = name => { const m = dataIdx().stMap, k = norm(name); return m.has(k) ? m.get(k) : null; };
+  const stockOfSlow = name => { const a = stock.filter(x => norm(x.product) === norm(name)), b = qtyStock(name);
     return a.length || b != null ? a.filter(x => x.status === "in").length + (b || 0) : null; };
   const qtyStock = name => { const L = moves.filter(m => !m.ext && norm(m.product) === norm(name)); return L.length ? L.reduce((a,m) => a + (Number(m.qty)||0), 0) : null; };
   /* ---------- DANH MỤC LINH KIỆN NGOÀI (riêng, không lẫn tồn kho chính) ---------- */
