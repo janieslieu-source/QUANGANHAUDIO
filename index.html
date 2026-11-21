@@ -1690,7 +1690,7 @@
       await put("reg", regRec); if (newRec) await put("reg", newRec);
       await put("tk", t); sendPush(t);
     } catch(err){ return; }
-    const label = isEx ? `🔄 Đổi mới → SN ${t.exchange.newSerial} – chờ Giám đốc duyệt → Vận chuyển` : issueLater ? "📞 Chưa rõ lỗi – chờ GĐ liên hệ khách" : stage === "cho_gd" ? "🛠️ Sửa chữa – chờ GĐ duyệt" : "🛡️ Bảo hành – chuyển Kho → Kỹ thuật";
+    const label = isEx ? `🔄 Đổi mới → SN ${t.exchange.newSerial} – chờ Giám đốc duyệt → Kho xuất → Vận chuyển` : issueLater ? "📞 Chưa rõ lỗi – chờ GĐ liên hệ khách" : stage === "cho_gd" ? "🛠️ Sửa chữa – chờ GĐ duyệt" : "🛡️ Bảo hành – chuyển Kho → Kỹ thuật";
     if (!recvBatch || norm(recvBatch.customer) !== norm(base.customer)) recvBatch = {customer: base.customer, items: []};
     recvBatch.items.push({product: t.product, serial: t.serial, text: label});
     if (more) {   // giữ tên khách & SĐT, xóa phần hàng để nhập hàng tiếp theo
@@ -1703,7 +1703,7 @@
     const many = recvBatch.items.length > 1; recvBatch = null;
     F.reset(); setTKind(""); F.exProduct.dataset.touched = ""; recvType = null; bhMode = "sua"; refreshRecv();
     if (many) { toast("Đã lưu đủ hàng của khách – các bộ phận đã được báo"); return; }
-    if (isEx) { toast("Đã gửi Giám đốc duyệt đổi hàng"); goTo("gd", `Hàng đổi chờ duyệt: ${t.product} – SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}. Giám đốc duyệt xong chuyển Vận chuyển.`); }
+    if (isEx) { toast("Đã gửi Giám đốc duyệt đổi hàng"); goTo("gd", `Hàng đổi chờ duyệt: ${t.product} – SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}. Giám đốc duyệt → Kho xuất → Vận chuyển.`); }
     else if (stage === "cho_gd") { toast("Đã gửi giám đốc duyệt"); goTo("gd", `Có hàng sửa chữa mới: ${t.product} (SN ${t.serial}) cần giám đốc duyệt.`); }
     else { toast("Đã chuyển Kho"); goTo("wh", `Hàng bảo hành mới: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`); }
   };
@@ -2144,7 +2144,7 @@
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
     $("#gdList").innerHTML = wait.length ? wait.map(t => tkCard(t, `<div class="cardbtns">
         <button class="btn danger" data-rej="${esc(t.id)}">✖ Không duyệt – Trả lại khách</button>
-        <button class="btn pri" data-ok="${esc(t.id)}">${t.issueLater ? "📞 Điền lỗi khách báo" : t.exPending ? "✓ Duyệt đổi – chuyển Vận chuyển" : "✓ Xác nhận sửa"}</button></div>`)).join("")
+        <button class="btn pri" data-ok="${esc(t.id)}">${t.issueLater ? "📞 Điền lỗi khách báo" : t.exPending ? "✓ Duyệt đổi – chuyển Kho xuất" : "✓ Xác nhận sửa"}</button></div>`)).join("")
       : `<div class="empty">Không có hàng chờ duyệt.</div>`;
     bindCards($("#gdList"));
     $("#gdList").querySelectorAll("[data-rej]").forEach(b => b.onclick = () => {
@@ -2155,20 +2155,18 @@
     });
     $("#gdList").querySelectorAll("[data-ok]").forEach(b => b.onclick = () => {
       const t = tickets.find(x => x.id === b.dataset.ok);
-      if (t.exPending) return openAct({title: "🔄 Duyệt đổi hàng cho khách", t, noteLabel: `Đổi SN ${t.exchange.oldSerial} → SN ${t.exchange.newSerial} (${t.exchange.newProduct}) · BH đến ${fmt(t.exchange.until)}. Ghi chú (tùy chọn)`, okText: "✓ Duyệt đổi – chuyển Vận chuyển", okCls: "okb",
+      if (t.exPending) return openAct({title: "🔄 Duyệt đổi hàng cho khách", t, noteLabel: `Đổi SN ${t.exchange.oldSerial} → SN ${t.exchange.newSerial} (${t.exchange.newProduct}) · BH đến ${fmt(t.exchange.until)}. Ghi chú cho Kho (tùy chọn)`, okText: "✓ Duyệt đổi – chuyển Kho xuất", okCls: "okb",
         run: async note => {
           const now = new Date().toISOString(), ex = t.exchange, sx = findStock(ex.newSerial);
           if (sx && sx.status !== "in") { toast(`Seri mới ${ex.newSerial} không còn trong kho – kiểm tra lại`); throw new Error("x"); }
-          if (sx) await put("st", Object.assign({}, sx, {status: "out", outAt: now, orderCode: t.code, customer: t.customer}));
-          else await put("mv", {id: "mv_" + uid(), product: ex.newProduct, qty: -1, at: now, kind: "doimoi", ref: t.code, note: `Đổi mới BH cho ${t.customer} – SN ${ex.newSerial}`});
           const oldR = findReg(ex.oldSerial), nr = findReg(ex.newSerial);
           if (oldR && !oldR.fromFile) await put("reg", Object.assign({}, oldR, {replacedBy: ex.newSerial, updatedAt: now}));
           await put("reg", Object.assign({}, nr && !nr.fromFile ? nr : {id: uid(), createdAt: now}, {customer: t.customer, phone: t.phone || "", product: ex.newProduct, serial: ex.newSerial, replacedFrom: ex.oldSerial, updatedAt: now},
             ex.mode === "new" ? {purchaseDate: iso(today()), months: ex.months} : {purchaseDate: t.purchaseDate || iso(today()), months: Number(t.months) || 12}));
-          await advance(t, "xong", `Giám đốc duyệt đổi: SN ${ex.oldSerial} → SN ${ex.newSerial}${note ? " – " + note : ""}`, {exPending: false, stockOut: true, exApproved: {at: now, by: actor()}});
-          toast("Đã duyệt đổi – trừ kho seri mới, chuyển Vận chuyển");
+          await advance(t, "cho_kho", `Giám đốc duyệt đổi: SN ${ex.oldSerial} → SN ${ex.newSerial} – chuyển Kho xuất máy mới${note ? " – " + note : ""}`, {exPending: false, stockOut: false, exApproved: {at: now, by: actor()}});
+          toast("Đã duyệt đổi – chuyển Kho xuất máy mới");
         },
-        after: () => goTo("vc", `Giám đốc đã duyệt đổi: ${t.product} (SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}). Vận chuyển nhập mật mã để gửi máy mới cho khách.`)});
+        after: () => goTo("wh", `Giám đốc đã duyệt đổi: ${t.product} (SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}). Kho nhập mật mã để xuất máy mới, rồi báo Vận chuyển.`)});
       if (t.issueLater) return openAct({title: "📞 Điền lỗi khách báo – xác nhận sửa", t, noteLabel: "Lỗi khách báo (sau khi liên hệ khách) * – nhiều lỗi cách nhau dấu phẩy", required: true, okText: "✓ Lưu lỗi & chuyển Kỹ thuật",
         run: async note => { await advance(t, "cho_kho", `GĐ liên hệ khách – lỗi khách báo: ${note}`, {issue: note, issueLater: false, issueBy: "Giám đốc", issueAt: new Date().toISOString()}); toast("Đã lưu lỗi – chuyển Kho nhận hàng → Kỹ thuật"); },
         after: () => goTo("wh", `Giám đốc đã điền lỗi: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`)});
@@ -3606,14 +3604,21 @@
     $("#whList").innerHTML = tk.map(t => tkCard(t, `<div class="sub" style="margin:6px 0">🧰 ${t.exchange ? `Đổi mới: nhận máy cũ SN ${esc(t.serial)}, giao máy mới ${esc(t.exchange.newProduct || t.product)} SN <b>${esc(t.exchange.newSerial)}</b>` : `${TYPE[t.type]}: nhận máy vào kho, chuẩn bị linh kiện rồi chuyển Kỹ thuật`}</div>
         ${t.snWarn?.length && !t.snOk ? `<div class="found" style="background:var(--badbg);color:var(--bad)">⚠️ <b>CẢNH BÁO SERI TRÙNG – cần Kho duyệt</b><br>${t.snWarn.map(w => "• " + esc(w)).join("<br>")}</div>
         <div class="cardbtns"><button class="btn danger" data-snno="${esc(t.id)}">✖ Không duyệt – trả lại khách</button><button class="btn okb" data-snok="${esc(t.id)}">✔ Đã kiểm tra – duyệt</button></div>`
-        : `${t.snWarn?.length ? `<div class="sub" style="color:var(--ok)">✔ Kho đã duyệt cảnh báo seri</div>` : ""}<div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`}`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
+        : `${t.snWarn?.length ? `<div class="sub" style="color:var(--ok)">✔ Kho đã duyệt cảnh báo seri</div>` : ""}<div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange && !t.stockOut ? "📦 Xuất máy mới – báo Vận chuyển" : t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`}`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
         <div class="cardbtns"><button class="btn pri" data-cxok="${esc(o.id)}">✔ Đồng ý – hàng đã về kho</button><button class="btn danger" data-cxno="${esc(o.id)}">✖ Không duyệt</button></div>`)).join("")
       + (wait.length ? wait.map(o => odCard(o, `<div class="cardbtns"><button class="btn pri" data-xk="${esc(o.id)}">📦 Xuất kho</button></div>`)).join("")
       : cx.length ? "" : `<div class="empty">Không có đơn chờ xuất.</div>`);
     bindCards($("#whList"));
     $("#whList").querySelectorAll("[data-khok]").forEach(b => b.onclick = async e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.khok); if (!t) return; b.disabled = true;
       try {
-        if (t.exchange || t.action) { await advance(t, "xong", t.exchange ? "Kho đã giao máy mới cho Vận chuyển" : "Kho đã bàn giao cho Vận chuyển"); toast("Đã chuyển Vận chuyển"); }
+        if (t.exchange && !t.stockOut) {   // phiếu đổi đã được Giám đốc duyệt: Kho xuất máy mới (trừ kho) rồi báo Vận chuyển
+          const now = new Date().toISOString(), ex = t.exchange, sx = findStock(ex.newSerial);
+          if (sx && sx.status !== "in") { toast(`Seri mới ${ex.newSerial} không còn trong kho – kiểm tra lại`); b.disabled = false; return; }
+          if (sx) await put("st", Object.assign({}, sx, {status: "out", outAt: now, orderCode: t.code, customer: t.customer}));
+          else await put("mv", {id: "mv_" + uid(), product: ex.newProduct, qty: -1, at: now, kind: "doimoi", ref: t.code, note: `Đổi mới BH cho ${t.customer} – SN ${ex.newSerial}`});
+          await advance(t, "xong", `Kho đã xuất máy mới SN ${ex.newSerial} – chuyển Vận chuyển`, {stockOut: true}); toast("Đã xuất kho máy mới – báo Vận chuyển");
+        }
+        else if (t.exchange || t.action) { await advance(t, "xong", t.exchange ? "Kho đã giao máy mới cho Vận chuyển" : "Kho đã bàn giao cho Vận chuyển"); toast("Đã chuyển Vận chuyển"); }
         else { await advance(t, "cho_kt", "Kho đã nhận hàng – chuyển Kỹ thuật"); toast("Đã chuyển Kỹ thuật"); }
       } catch(err){ b.disabled = false; } });
     $("#whList").querySelectorAll("[data-snok]").forEach(b => b.onclick = e => { e.stopPropagation(); const t = tickets.find(x => x.id === b.dataset.snok); if (!t) return;
