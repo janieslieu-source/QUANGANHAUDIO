@@ -1,0 +1,58 @@
+// App Android "Quang Anh MT": khung mở phần mềm bảo hành (bản web).
+// GitHub Actions (.github/workflows/android-apk.yml) tự đóng gói APK và đăng lên mục Releases.
+plugins {
+    id 'com.android.application' version '8.5.2'
+}
+
+def runNo = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+def ksFile = System.getenv('KEYSTORE_FILE')
+
+android {
+    namespace 'com.quanganhaudio.baohanh'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.quanganhaudio.baohanh'
+        minSdk 23
+        targetSdk 34
+        versionCode runNo
+        versionName "1.0.${runNo}"
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS') ?: 'quanganh'
+                keyPassword System.getenv('KEY_PASSWORD') ?: System.getenv('KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // có chìa khóa (GitHub Secrets) -> ký chính thức; chưa có -> ký tạm để vẫn cài thử được
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

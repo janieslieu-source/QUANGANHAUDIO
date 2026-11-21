@@ -1,0 +1,61 @@
+name: Đóng gói APK Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Chìa khóa ký app (GitHub Secrets)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SIGN_NOTE=✅ Ký chính thức – cài đè được lên bản trước." >> "$GITHUB_ENV"
+          else
+            echo "SIGN_NOTE=⚠️ Bản ký tạm (chưa có chìa khóa trong GitHub Secrets) – muốn cài bản mới phải gỡ bản cũ trước." >> "$GITHUB_ENV"
+          fi
+
+      - name: Đóng gói APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
+
+      - name: Đặt tên file
+        run: cp android/build/outputs/apk/release/*.apk QuangAnhMT.apk
+
+      - name: Đăng lên Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: App Quang Anh MT – bản 1.0.${{ github.run_number }}
+          make_latest: true
+          files: QuangAnhMT.apk
+          body: |
+            📱 App Quang Anh MT cho Android (Android 6 trở lên).
+            Tải file **QuangAnhMT.apk** bên dưới về điện thoại rồi bấm mở để cài (cho phép "Cài ứng dụng không rõ nguồn gốc" nếu máy hỏi).
+            ${{ env.SIGN_NOTE }}
