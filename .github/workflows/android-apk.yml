@@ -22,8 +22,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -47,6 +45,17 @@ jobs:
 
       - name: Đặt tên file
         run: cp android/build/outputs/apk/release/*.apk QuangAnhMT.apk
+
+      # Đặt file APK vào trang web (tai-app/) để tải bằng link ngắn của trang, không lộ link Releases
+      - name: Cập nhật file tải trên trang web
+        run: |
+          cp QuangAnhMT.apk tai-app/QuangAnhMT.apk
+          printf '{"version":"1.0.%s","date":"%s"}\n' "${{ github.run_number }}" "$(date +%d/%m/%Y)" > tai-app/version.json
+          git config user.name "apk-bot"
+          git config user.email "apk-bot@users.noreply.github.com"
+          git add tai-app/QuangAnhMT.apk tai-app/version.json
+          git commit -m "Cập nhật app Android bản 1.0.${{ github.run_number }}" || echo "không đổi"
+          git push
 
       - name: Đăng lên Releases
         uses: softprops/action-gh-release@v2
