@@ -1353,7 +1353,7 @@
       <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${ktCheckHtml(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
+      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
@@ -1678,28 +1678,19 @@
       t0.action = "doimoi";
       const newProduct = F.exProduct.value.trim() || base.product;
       t0.exchange = {oldSerial: base.serial, newSerial, newProduct, mode, months: mode === "new" ? months : null, until, at: new Date().toISOString()};
-      regRec.replacedBy = newSerial;
-      const now = new Date().toISOString(), nr = findReg(newSerial);
-      newRec = Object.assign({}, nr || {id: uid(), createdAt: now}, {customer: base.customer, phone: base.phone, product: t0.exchange.newProduct, serial: newSerial, replacedFrom: base.serial, updatedAt: now},
-        mode === "new" ? {purchaseDate: iso(today()), months} : {purchaseDate: pd, months: Number(mo)});
+      t0.exPending = true;   // hàng đổi: Giám đốc duyệt xong mới trừ kho, ghi sổ và chuyển Vận chuyển
     }
-    const stage = issueLater ? "cho_gd" : recvType === "bh" ? "cho_kho" : "cho_gd";   // bảo hành (sửa hoặc đổi mới) → Kho; sửa chữa → Giám đốc; chưa rõ lỗi → Giám đốc liên hệ khách
+    const stage = issueLater || isEx ? "cho_gd" : recvType === "bh" ? "cho_kho" : "cho_gd";   // hàng đổi → Giám đốc duyệt → Vận chuyển   // bảo hành (sửa hoặc đổi mới) → Kho; sửa chữa → Giám đốc; chưa rõ lỗi → Giám đốc liên hệ khách
     // cảnh báo seri trùng với lịch sử đổi hàng -> Kho phải duyệt
     const warn = [...exHitsFor(base.serial, base.customer), ...(t0.exchange ? exHits(t0.exchange.newSerial) : [])].map(hitText);
     if (warn.length) t0.snWarn = [...new Set(warn)];
-    const t = push(t0, stage, isEx ? `Đổi mới tại quầy: SN ${t0.exchange.oldSerial} → SN ${t0.exchange.newSerial}, bảo hành đến ${fmt(t0.exchange.until)}`
+    const t = push(t0, stage, isEx ? `Đổi mới: SN ${t0.exchange.oldSerial} → SN ${t0.exchange.newSerial}, bảo hành đến ${fmt(t0.exchange.until)} – chờ Giám đốc duyệt`
       : (recvType === "bh" ? `Còn bảo hành (${t0.warrantyText})` : "Khách yêu cầu sửa chữa") + (issueLater ? " · 📞 chưa rõ lỗi – Giám đốc liên hệ khách" : ""));
     try {
       await put("reg", regRec); if (newRec) await put("reg", newRec);
-      if (isEx) {   // trừ kho sản phẩm mới đổi cho khách
-        const now = new Date().toISOString(), sx = findStock(t.exchange.newSerial);
-        if (sx && sx.status === "in") await put("st", Object.assign({}, sx, {status: "out", outAt: now, orderCode: t.code, customer: base.customer}));
-        else if (!sx) await put("mv", {id: "mv_" + uid(), product: t.exchange.newProduct, qty: -1, at: now, kind: "doimoi", ref: t.code, note: `Đổi mới BH cho ${base.customer} – SN ${t.exchange.newSerial}`});
-        t.stockOut = true;
-      }
       await put("tk", t); sendPush(t);
     } catch(err){ return; }
-    const label = isEx ? `🔄 Đổi mới → SN ${t.exchange.newSerial} – chuyển Kho` : issueLater ? "📞 Chưa rõ lỗi – chờ GĐ liên hệ khách" : stage === "cho_gd" ? "🛠️ Sửa chữa – chờ GĐ duyệt" : "🛡️ Bảo hành – chuyển Kho → Kỹ thuật";
+    const label = isEx ? `🔄 Đổi mới → SN ${t.exchange.newSerial} – chờ Giám đốc duyệt → Vận chuyển` : issueLater ? "📞 Chưa rõ lỗi – chờ GĐ liên hệ khách" : stage === "cho_gd" ? "🛠️ Sửa chữa – chờ GĐ duyệt" : "🛡️ Bảo hành – chuyển Kho → Kỹ thuật";
     if (!recvBatch || norm(recvBatch.customer) !== norm(base.customer)) recvBatch = {customer: base.customer, items: []};
     recvBatch.items.push({product: t.product, serial: t.serial, text: label});
     if (more) {   // giữ tên khách & SĐT, xóa phần hàng để nhập hàng tiếp theo
@@ -1712,7 +1703,7 @@
     const many = recvBatch.items.length > 1; recvBatch = null;
     F.reset(); setTKind(""); F.exProduct.dataset.touched = ""; recvType = null; bhMode = "sua"; refreshRecv();
     if (many) { toast("Đã lưu đủ hàng của khách – các bộ phận đã được báo"); return; }
-    if (isEx) { toast("Đã đổi mới – chuyển Kho bàn giao máy mới"); goTo("wh", `Đổi mới bảo hành: ${t.product} – máy mới SN ${t.exchange.newSerial}. Kho nhập mật mã để bàn giao cho Vận chuyển.`); }
+    if (isEx) { toast("Đã gửi Giám đốc duyệt đổi hàng"); goTo("gd", `Hàng đổi chờ duyệt: ${t.product} – SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}. Giám đốc duyệt xong chuyển Vận chuyển.`); }
     else if (stage === "cho_gd") { toast("Đã gửi giám đốc duyệt"); goTo("gd", `Có hàng sửa chữa mới: ${t.product} (SN ${t.serial}) cần giám đốc duyệt.`); }
     else { toast("Đã chuyển Kho"); goTo("wh", `Hàng bảo hành mới: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`); }
   };
@@ -2153,7 +2144,7 @@
     $("#gdCnt").textContent = wait.length ? `(${wait.length})` : "";
     $("#gdList").innerHTML = wait.length ? wait.map(t => tkCard(t, `<div class="cardbtns">
         <button class="btn danger" data-rej="${esc(t.id)}">✖ Không duyệt – Trả lại khách</button>
-        <button class="btn pri" data-ok="${esc(t.id)}">${t.issueLater ? "📞 Điền lỗi khách báo" : "✓ Xác nhận sửa"}</button></div>`)).join("")
+        <button class="btn pri" data-ok="${esc(t.id)}">${t.issueLater ? "📞 Điền lỗi khách báo" : t.exPending ? "✓ Duyệt đổi – chuyển Vận chuyển" : "✓ Xác nhận sửa"}</button></div>`)).join("")
       : `<div class="empty">Không có hàng chờ duyệt.</div>`;
     bindCards($("#gdList"));
     $("#gdList").querySelectorAll("[data-rej]").forEach(b => b.onclick = () => {
@@ -2164,6 +2155,20 @@
     });
     $("#gdList").querySelectorAll("[data-ok]").forEach(b => b.onclick = () => {
       const t = tickets.find(x => x.id === b.dataset.ok);
+      if (t.exPending) return openAct({title: "🔄 Duyệt đổi hàng cho khách", t, noteLabel: `Đổi SN ${t.exchange.oldSerial} → SN ${t.exchange.newSerial} (${t.exchange.newProduct}) · BH đến ${fmt(t.exchange.until)}. Ghi chú (tùy chọn)`, okText: "✓ Duyệt đổi – chuyển Vận chuyển", okCls: "okb",
+        run: async note => {
+          const now = new Date().toISOString(), ex = t.exchange, sx = findStock(ex.newSerial);
+          if (sx && sx.status !== "in") { toast(`Seri mới ${ex.newSerial} không còn trong kho – kiểm tra lại`); throw new Error("x"); }
+          if (sx) await put("st", Object.assign({}, sx, {status: "out", outAt: now, orderCode: t.code, customer: t.customer}));
+          else await put("mv", {id: "mv_" + uid(), product: ex.newProduct, qty: -1, at: now, kind: "doimoi", ref: t.code, note: `Đổi mới BH cho ${t.customer} – SN ${ex.newSerial}`});
+          const oldR = findReg(ex.oldSerial), nr = findReg(ex.newSerial);
+          if (oldR && !oldR.fromFile) await put("reg", Object.assign({}, oldR, {replacedBy: ex.newSerial, updatedAt: now}));
+          await put("reg", Object.assign({}, nr && !nr.fromFile ? nr : {id: uid(), createdAt: now}, {customer: t.customer, phone: t.phone || "", product: ex.newProduct, serial: ex.newSerial, replacedFrom: ex.oldSerial, updatedAt: now},
+            ex.mode === "new" ? {purchaseDate: iso(today()), months: ex.months} : {purchaseDate: t.purchaseDate || iso(today()), months: Number(t.months) || 12}));
+          await advance(t, "xong", `Giám đốc duyệt đổi: SN ${ex.oldSerial} → SN ${ex.newSerial}${note ? " – " + note : ""}`, {exPending: false, stockOut: true, exApproved: {at: now, by: actor()}});
+          toast("Đã duyệt đổi – trừ kho seri mới, chuyển Vận chuyển");
+        },
+        after: () => goTo("vc", `Giám đốc đã duyệt đổi: ${t.product} (SN ${t.exchange.oldSerial} → ${t.exchange.newSerial}). Vận chuyển nhập mật mã để gửi máy mới cho khách.`)});
       if (t.issueLater) return openAct({title: "📞 Điền lỗi khách báo – xác nhận sửa", t, noteLabel: "Lỗi khách báo (sau khi liên hệ khách) * – nhiều lỗi cách nhau dấu phẩy", required: true, okText: "✓ Lưu lỗi & chuyển Kỹ thuật",
         run: async note => { await advance(t, "cho_kho", `GĐ liên hệ khách – lỗi khách báo: ${note}`, {issue: note, issueLater: false, issueBy: "Giám đốc", issueAt: new Date().toISOString()}); toast("Đã lưu lỗi – chuyển Kho nhận hàng → Kỹ thuật"); },
         after: () => goTo("wh", `Giám đốc đã điền lỗi: ${t.product} (SN ${t.serial}). Kho nhập mật mã để nhận hàng rồi chuyển Kỹ thuật.`)});
