@@ -309,6 +309,7 @@
       <button type="button" class="dept" data-role="vc"><span class="ic">🚚</span><b>Vận chuyển</b></button>
       <button type="button" class="dept" data-role="ac"><span class="ic">💰</span><b>Kế toán</b></button>
       <button type="button" class="dept" data-role="sa"><span class="ic">🛒</span><b>Bán hàng</b></button>
+      <button type="button" class="dept" data-role="pm"><span class="ic">💿</span><b>Phần mềm</b></button>
       <button type="button" class="dept" data-role="wh"><span class="ic">📦</span><b>Kho</b></button>
     </div>
     <button type="button" class="btn" id="ccQuick" style="width:100%;margin:0 0 10px">🕘 Chấm công (nhân viên – không cần mật mã)</button>
@@ -1014,6 +1015,12 @@
   });
   $("#loginForm").onsubmit = async e => {
     e.preventDefault();
+    if (loginRole === "pm") {   // mục Phần mềm (dịch vụ): dùng mật mã Bán hàng / Kỹ thuật / Giám đốc
+      const pw = $("#pw").value, r = (await checkPw("sa", pw)) ? "sa" : (await checkPw("kt", pw)) ? "kt" : (await checkPw("gd", pw)) ? "gd" : null;
+      if (r) { $("#pw").value = ""; setBoss(r === "gd"); enter(r); showPM(); }
+      else { $("#pwErr").textContent = "Sai mật mã. Mục Phần mềm dùng mật mã Bán hàng, Kỹ thuật hoặc Giám đốc."; $("#pw").select(); }
+      return;
+    }
     if (await checkPw(loginRole, $("#pw").value)) { $("#pw").value = ""; setBoss(loginRole === "gd"); enter(loginRole); }
     else { $("#pwErr").textContent = "Sai mật mã. Vui lòng thử lại."; $("#pw").select(); }
   };
