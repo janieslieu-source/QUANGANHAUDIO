@@ -1255,7 +1255,7 @@
     try { localStorage.setItem("bh_push", tok); localStorage.setItem("bh_push_os", pushPlatform); } catch(e){}
     registerDevice();
   };
-  window.__goTo = (r, id) => { if (ROLES[r] && !$("#app").classList.contains("hide")) { goTo(r); if (id && (r === role || boss)) focusItem(id); } };
+  window.__goTo = (r, id) => { if (ROLES[r] && !$("#app").classList.contains("hide")) { if (!id && r === "kt" && role === "kt" && tickets.some(t => t.stage === "cho_kt")) ktFilter = "cho"; goTo(r); if (id && (r === role || boss)) focusItem(id); } };
   let lastReg = "";
   async function registerDevice(){
     if (!pushToken || !colDev || mode !== "cloud") return;
