@@ -651,14 +651,7 @@
         <div class="chips" id="pmChips" style="margin-bottom:8px"></div>
         <input id="pmQ" type="search" placeholder="Tìm tên khách, SĐT, phần mềm, mã kích hoạt…" autocomplete="off">
         <div class="list" id="pmList" style="margin-top:8px"></div></div>
-      <div class="panel" id="fwBox"><h3>💾 Phần mềm khác <span class="sub" id="fwCnt"></span></h3>
-        <div id="fwForm" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <input id="fwModel" placeholder="Tên phần mềm (VD: VietKTV Online)" autocomplete="off" style="flex:1 1 150px;min-width:0">
-          <input id="fwGuide" placeholder="Link trang (https://…)" autocomplete="off" style="flex:2 1 200px;min-width:0">
-          <button type="button" class="btn pri" id="fwGo" style="flex:0 0 auto;width:auto;padding:10px 14px">➕ Thêm</button>
-        </div>
-        <input id="fwQ" type="search" placeholder="Tìm phần mềm…" autocomplete="off" style="margin-top:8px">
-        <div id="fwList" style="margin-top:6px"></div></div>
+      <div class="panel" id="fwBox" style="padding:12px 16px"><div id="fwList"></div></div>
     </section>
 
     <!-- ===== NGÀY CÔNG (Kế toán, Giám đốc) ===== -->
@@ -1470,7 +1463,7 @@
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "swsale"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -2627,45 +2620,16 @@
   }
 
 
-  /* ================= 💾 PHẦN MỀM KHÁC: tên ngắn gọn + nút nhỏ “Xem” mở trang ================= */
-  const fwList = () => expenses.filter(x => x.kind === "fw").sort((a,b) => (a.model || "").localeCompare(b.model || "", "vi") || verCmp(b.version || "", a.version || ""));
-  const fwSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
-  const verCmp = (a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: "base"});
-  const SBTN = 'style="padding:4px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap"';
+  /* ================= 💾 PHẦN MỀM KHÁC: 1 dòng + nút “🔗 Xem” mở trang (giống danh sách tìm sản phẩm) ================= */
+  const FW_URL = "https://quanganhaudio.com/huong-dan-tai-phan-mem-dau-karaoke-online-man-hinh-may-tinh-bang/";
+  const fwUrl = () => (expenses.find(x => x.id === "fw_cfg") || {}).url || FW_URL;
   function drawFw(){
-    const box = $("#fwList"); if (!box) return;
-    const q = norm($("#fwQ").value), all = fwList(), L = q ? all.filter(x => norm([x.model, x.version, x.note, x.guide, x.link].join(" ")).includes(q)) : all;
-    $("#fwCnt").textContent = all.length ? `(${all.length})` : "";
-    const canDel = boss || role === "kt";
-    box.innerHTML = L.length ? L.map(x => { const url = x.guide || x.link;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)">
-        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💿 <b>${esc(x.model)}</b>${x.version ? ` <span class="sub">${esc(x.version)}</span>` : ""}</div>
-        ${url ? `<a class="btn" ${SBTN} href="${esc(fixUrl(url))}" target="_blank" rel="noopener" title="${esc(url)}">🔗 Xem</a>` : ""}${x.file ? `<button type="button" class="btn okb" ${SBTN} data-fwdl="${esc(x.id)}" title="${esc(x.file.name)} (${fwSize(x.file.size)})">⬇️ Tải</button>` : ""}${canDel ? `<button type="button" class="btn danger" ${SBTN} data-fwdel="${esc(x.id)}" title="Xóa">🗑</button>` : ""}</div>`; }).join("")
-      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có phần mềm – gõ tên + link trang rồi bấm ➕ Thêm."}</div>`;
-  }
-  if ($("#fwGo")) {
-    $("#fwQ").addEventListener("input", drawFw);
-    const add = async () => {
-      const name = $("#fwModel").value.trim(), url = $("#fwGuide").value.trim();
-      if (!name) { toast("Nhập tên phần mềm"); $("#fwModel").focus(); return; }
-      if (!url) { toast("Dán link trang của phần mềm"); $("#fwGuide").focus(); return; }
-      if (fwList().some(x => norm(x.model) === norm(name) && !x.version)) { toast(`“${name}” đã có trong danh sách`); return; }
-      const btn = $("#fwGo"); btn.disabled = true;
-      try { await put("ex", {id: "fw_" + uid(), kind: "fw", model: name, version: "", guide: url, link: "", note: "", date: iso(new Date()), by: actor(), at: new Date().toISOString(), amount: 0});
-        $("#fwModel").value = ""; $("#fwGuide").value = ""; toast(`Đã thêm ${name}`); drawFw(); } catch(e){} finally { btn.disabled = false; }
-    };
-    $("#fwGo").onclick = add; $("#fwGuide").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
-    $("#fwList").addEventListener("click", async e => {
-      const d = e.target.closest("[data-fwdl]"), del = e.target.closest("[data-fwdel]");
-      if (d) { const x = fwList().find(y => y.id === d.dataset.fwdl); if (!x?.file) return; d.disabled = true;
-        try { const parts = [];
-          for (let i = 0; i < x.file.chunks.length; i++) { const c = await getPhoto(x.file.chunks[i]); if (!c?.data) throw new Error("miss");
-            const bin = atob(c.data), u = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); parts.push(u); }
-          await saveBlob(x.file.name, new Blob(parts, {type: x.file.type}), `Đã tải ${x.file.name}`);
-        } catch(err){ toast("Không tải được file – kiểm tra mạng rồi thử lại"); } finally { d.disabled = false; } }
-      if (del) { const x = fwList().find(y => y.id === del.dataset.fwdel); if (!x || !confirm(`Xóa “${x.model}${x.version ? " " + x.version : ""}”?`)) return;
-        try { for (const id of (x.file?.chunks || [])) await delDoc("ph", id).catch(() => {}); await delDoc("ex", x.id); toast("Đã xóa"); drawFw(); } catch(err){} }
-    });
+    const box = $("#fwList"); if (!box) return; const u = fwUrl();
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:16px">💾 Phần mềm khác</b>
+      <span class="sgl"><a href="${esc(u)}" target="_blank" rel="noopener" title="${esc(u)}">🔗 Xem</a> <button type="button" class="cpy" data-copy="${esc(u)}" title="Copy link">📋</button></span>
+      ${boss ? `<button type="button" class="cpy" id="fwEdit" title="Đổi link">✏️</button>` : ""}</div>`;
+    const ed = $("#fwEdit"); if (ed) ed.onclick = async () => { const v = prompt("Link trang “Phần mềm khác”:", fwUrl()); if (v === null) return;
+      try { await put("ex", {id: "fw_cfg", kind: "fw_cfg", url: v.trim() || FW_URL, by: actor(), at: new Date().toISOString(), amount: 0}); toast("Đã lưu link"); drawFw(); } catch(e){} };
   }
 
   /* ================= 💿 PHẦN MỀM: bán bản quyền, theo dõi hạn, gia hạn (tái gói) ================= */
@@ -2702,7 +2666,7 @@
         <div class="sub">Bán ngày ${fmt(x.start)}${x.price && !hidePrice() ? " · " + money(x.price) : ""}${x.renewals.length ? ` · đã gia hạn ${x.renewals.length} lần` : ""}${x.note ? " · " + esc(x.note) : ""}</div>
         <div style="margin-top:4px"><b style="color:${st.c}">${st.t}</b></div></div></div>
         ${x.term === "1y" && canEdit ? `<div class="cardbtns"><button type="button" class="btn ${st.k === "con" ? "" : "okb"}" data-pmrenew="${esc(x.src + ":" + x.id + ":" + x.idx)}">🔁 Gia hạn 1 năm (tái gói)</button></div>` : ""}</div>`; }).join("")
-      : `<div class="empty">${q || pmFilter !== "all" ? "Không tìm thấy." : "Chưa có phần mềm nào – nhập ở khung “Bán phần mềm cho khách” phía trên, hoặc thêm phần mềm trong đơn hàng."}</div>`;
+      : `<div class="empty">${q || pmFilter !== "all" ? "Không tìm thấy." : "Chưa có phần mềm nào – nhập ở khung “Bán phần mềm cho khách” phía trên."}</div>`;
     const fb = $("#fwBox"); if (fb && fb.parentNode.id !== "v-pm") $("#v-pm").appendChild(fb);
     $("#pmNames").innerHTML = [...new Set(all.map(x => x.name))].map(n => `<option value="${esc(n)}">`).join("");
     try { drawFw(); } catch(e){}
@@ -4758,7 +4722,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "swsale"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
