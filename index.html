@@ -651,18 +651,14 @@
         <div class="chips" id="pmChips" style="margin-bottom:8px"></div>
         <input id="pmQ" type="search" placeholder="Tìm tên khách, SĐT, phần mềm, mã kích hoạt…" autocomplete="off">
         <div class="list" id="pmList" style="margin-top:8px"></div></div>
-      <div class="panel" id="fwBox" ><h3>💾 Phần mềm vang số / đầu karaoke – các phiên bản <span class="sub" id="fwCnt"></span></h3>
-        <details id="fwForm"><summary style="cursor:pointer;font-weight:650;padding:6px 0;color:var(--brand)">⬆️ Upload phiên bản mới</summary>
-          <label>Model vang số / đầu karaoke *</label><input id="fwModel" list="prodList" placeholder="Gõ model, hãng hoặc tên SP">
-          <div class="two"><div><label>Phiên bản *</label><input id="fwVer" placeholder="VD: v2.1.5" autocomplete="off"></div><div><label>Ngày phát hành</label><input id="fwDate" type="date"></div></div>
-          <label>File phần mềm <span class="sub">(tối đa 20 MB)</span></label><input id="fwFile" type="file">
-          <label>Hoặc link tải <span class="sub">(Google Drive… – dùng cho file lớn hơn 20 MB)</span></label><input id="fwLink" placeholder="https://…" autocomplete="off">
-          <label>📖 Link bài hướng dẫn tải / cài đặt <span class="sub">(VD: bài hướng dẫn trên quanganhaudio.com)</span></label><input id="fwGuide" placeholder="https://quanganhaudio.com/huong-dan-…" autocomplete="off">
-          <label>Nội dung cập nhật / hướng dẫn nạp</label><textarea id="fwNote" placeholder="VD: Sửa lỗi hú micro, thêm chế độ Echo…"></textarea>
-          <div class="btns"><button type="button" class="btn pri" id="fwGo">⬆️ Upload phiên bản</button></div><div class="sub" id="fwProg"></div>
-        </details>
-        <input id="fwQ" type="search" placeholder="Tìm model / phiên bản…" autocomplete="off" style="margin-top:8px">
-        <div class="list" id="fwList" style="margin-top:8px"></div></div>
+      <div class="panel" id="fwBox"><h3>💾 Phần mềm khác <span class="sub" id="fwCnt"></span></h3>
+        <div id="fwForm" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input id="fwModel" placeholder="Tên phần mềm (VD: VietKTV Online)" autocomplete="off" style="flex:1 1 150px;min-width:0">
+          <input id="fwGuide" placeholder="Link trang (https://…)" autocomplete="off" style="flex:2 1 200px;min-width:0">
+          <button type="button" class="btn pri" id="fwGo" style="flex:0 0 auto;width:auto;padding:10px 14px">➕ Thêm</button>
+        </div>
+        <input id="fwQ" type="search" placeholder="Tìm phần mềm…" autocomplete="off" style="margin-top:8px">
+        <div id="fwList" style="margin-top:6px"></div></div>
     </section>
 
     <!-- ===== NGÀY CÔNG (Kế toán, Giám đốc) ===== -->
@@ -2631,60 +2627,44 @@
   }
 
 
-  /* ================= 💾 PHẦN MỀM VANG SỐ – PHIÊN BẢN (file chia nhỏ lưu kèm, hoặc link) ================= */
-  const FW_MAX = 20 * 1024 * 1024, FW_CHUNK = 600 * 1024;
-  const fwList = () => expenses.filter(x => x.kind === "fw").sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
+  /* ================= 💾 PHẦN MỀM KHÁC: tên ngắn gọn + nút nhỏ “Xem” mở trang ================= */
+  const fwList = () => expenses.filter(x => x.kind === "fw").sort((a,b) => (a.model || "").localeCompare(b.model || "", "vi") || verCmp(b.version || "", a.version || ""));
   const fwSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
   const verCmp = (a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: "base"});
+  const SBTN = 'style="padding:4px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap"';
   function drawFw(){
     const box = $("#fwList"); if (!box) return;
-    const q = norm($("#fwQ").value), all = fwList(), L = q ? all.filter(x => norm(x.model + " " + x.version + " " + (x.note || "")).includes(q)) : all;
+    const q = norm($("#fwQ").value), all = fwList(), L = q ? all.filter(x => norm([x.model, x.version, x.note, x.guide, x.link].join(" ")).includes(q)) : all;
     $("#fwCnt").textContent = all.length ? `(${all.length})` : "";
-    const latest = {}; all.forEach(x => { const k = norm(x.model); if (!latest[k] || verCmp(x.version, latest[k].version) > 0) latest[k] = x; });
-    const g = new Map(); L.forEach(x => { const k = norm(x.model); if (!g.has(k)) g.set(k, []); g.get(k).push(x); });
     const canDel = boss || role === "kt";
-    box.innerHTML = g.size ? [...g.values()].map(arr => { arr.sort((a,b) => verCmp(b.version, a.version));
-      return `<div class="item" style="cursor:default"><div class="pname">🎛️ ${esc(arr[0].model)} <span class="sub">· ${arr.length} phiên bản</span></div>` + arr.map(x => `
-        <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
-          <div><b style="font-size:16px">${esc(x.version)}</b> ${latest[norm(x.model)] === x ? `<span class="tag" style="background:#dcfce7;color:#15803d">⭐ Mới nhất</span>` : ""}
-            <span class="sub"> · 📅 ${fmt(x.date)}${x.file ? ` · 📎 ${esc(x.file.name)} (${fwSize(x.file.size)})` : ""}</span></div>
-          ${x.note ? `<div class="sub" style="margin-top:2px;white-space:pre-wrap;color:var(--ink)">${esc(x.note)}</div>` : ""}
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">${(x.guide || x.link) ? `<a class="btn" style="padding:5px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap" href="${esc(fixUrl(x.guide || x.link))}" target="_blank" rel="noopener">🔗 Xem</a><span class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55vw">${esc(String(x.guide || x.link).replace(/^https?:\/\//, ""))}</span>` : ""}${x.guide && x.link ? `<a class="btn" style="padding:5px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap" href="${esc(fixUrl(x.link))}" target="_blank" rel="noopener">⬇️ Link tải</a>` : ""}${x.file ? `<button type="button" class="btn okb" style="padding:5px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap" data-fwdl="${esc(x.id)}">⬇️ Tải file</button>` : ""}${canDel ? `<button type="button" class="btn danger" style="padding:5px 12px;font-size:13px;min-height:0;border-radius:9px;flex:0 0 auto;width:auto;white-space:nowrap" data-fwdel="${esc(x.id)}" title="Xóa">🗑</button>` : ""}</div></div>`).join("") + `</div>`; }).join("")
-      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có phiên bản nào – bấm “⬆️ Upload phiên bản mới”."}</div>`;
+    box.innerHTML = L.length ? L.map(x => { const url = x.guide || x.link;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)">
+        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💿 <b>${esc(x.model)}</b>${x.version ? ` <span class="sub">${esc(x.version)}</span>` : ""}</div>
+        ${url ? `<a class="btn" ${SBTN} href="${esc(fixUrl(url))}" target="_blank" rel="noopener" title="${esc(url)}">🔗 Xem</a>` : ""}${x.file ? `<button type="button" class="btn okb" ${SBTN} data-fwdl="${esc(x.id)}" title="${esc(x.file.name)} (${fwSize(x.file.size)})">⬇️ Tải</button>` : ""}${canDel ? `<button type="button" class="btn danger" ${SBTN} data-fwdel="${esc(x.id)}" title="Xóa">🗑</button>` : ""}</div>`; }).join("")
+      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có phần mềm – gõ tên + link trang rồi bấm ➕ Thêm."}</div>`;
   }
-  const b64 = buf => { let s = "", u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
   if ($("#fwGo")) {
-    $("#fwDate").value = iso(new Date());
     $("#fwQ").addEventListener("input", drawFw);
-    $("#fwGo").onclick = async () => {
-      const model = $("#fwModel").value.trim(), ver = $("#fwVer").value.trim(), f = $("#fwFile").files[0], link = $("#fwLink").value.trim();
-      if (!model) { toast("Nhập model vang số / đầu karaoke"); $("#fwModel").focus(); return; }
-      if (!ver) { toast("Nhập số phiên bản"); $("#fwVer").focus(); return; }
-      if (!f && !link && !$("#fwGuide").value.trim()) { toast("Chọn file phần mềm, dán link tải hoặc link hướng dẫn"); return; }
-      if (f && f.size > FW_MAX) { toast(`File ${fwSize(f.size)} – lớn hơn 20 MB, hãy dán link Google Drive`); return; }
-      if (fwList().some(x => norm(x.model) === norm(model) && norm(x.version) === norm(ver))) { toast(`${model} đã có phiên bản ${ver}`); return; }
+    const add = async () => {
+      const name = $("#fwModel").value.trim(), url = $("#fwGuide").value.trim();
+      if (!name) { toast("Nhập tên phần mềm"); $("#fwModel").focus(); return; }
+      if (!url) { toast("Dán link trang của phần mềm"); $("#fwGuide").focus(); return; }
+      if (fwList().some(x => norm(x.model) === norm(name) && !x.version)) { toast(`“${name}” đã có trong danh sách`); return; }
       const btn = $("#fwGo"); btn.disabled = true;
-      try {
-        const now = new Date().toISOString(), rec = {id: "fw_" + uid(), kind: "fw", model, version: ver, date: $("#fwDate").value || iso(new Date()), note: $("#fwNote").value.trim(), link, guide: $("#fwGuide").value.trim(), by: actor(), at: now, amount: 0};
-        if (f) { const buf = await f.arrayBuffer(), ids = [], n = Math.ceil(buf.byteLength / FW_CHUNK) || 1;
-          for (let i = 0; i < n; i++) { $("#fwProg").textContent = `Đang tải lên ${i + 1}/${n}…`; const id = "fwc_" + uid();
-            await put("ph", {id, fw: rec.id, part: i, data: b64(buf.slice(i * FW_CHUNK, (i + 1) * FW_CHUNK)), at: now}); ids.push(id); }
-          rec.file = {name: f.name, size: f.size, type: f.type || "application/octet-stream", chunks: ids}; }
-        await put("ex", rec);
-        ["#fwVer", "#fwLink", "#fwGuide", "#fwNote", "#fwFile"].forEach(s => $(s).value = ""); $("#fwProg").textContent = "";
-        toast(`Đã upload ${model} – ${ver}`); drawFw();
-      } catch(e){ $("#fwProg").textContent = "Upload lỗi – kiểm tra mạng rồi thử lại"; } finally { btn.disabled = false; }
+      try { await put("ex", {id: "fw_" + uid(), kind: "fw", model: name, version: "", guide: url, link: "", note: "", date: iso(new Date()), by: actor(), at: new Date().toISOString(), amount: 0});
+        $("#fwModel").value = ""; $("#fwGuide").value = ""; toast(`Đã thêm ${name}`); drawFw(); } catch(e){} finally { btn.disabled = false; }
     };
+    $("#fwGo").onclick = add; $("#fwGuide").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
     $("#fwList").addEventListener("click", async e => {
       const d = e.target.closest("[data-fwdl]"), del = e.target.closest("[data-fwdel]");
-      if (d) { const x = fwList().find(y => y.id === d.dataset.fwdl); if (!x?.file) return; d.disabled = true; const t0 = d.textContent;
+      if (d) { const x = fwList().find(y => y.id === d.dataset.fwdl); if (!x?.file) return; d.disabled = true;
         try { const parts = [];
-          for (let i = 0; i < x.file.chunks.length; i++) { d.textContent = `Đang tải ${i + 1}/${x.file.chunks.length}…`; const c = await getPhoto(x.file.chunks[i]); if (!c?.data) throw new Error("miss");
+          for (let i = 0; i < x.file.chunks.length; i++) { const c = await getPhoto(x.file.chunks[i]); if (!c?.data) throw new Error("miss");
             const bin = atob(c.data), u = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); parts.push(u); }
           await saveBlob(x.file.name, new Blob(parts, {type: x.file.type}), `Đã tải ${x.file.name}`);
-        } catch(err){ toast("Không tải được file – kiểm tra mạng rồi thử lại"); } finally { d.disabled = false; d.textContent = t0; } }
-      if (del) { const x = fwList().find(y => y.id === del.dataset.fwdel); if (!x || !confirm(`Xóa ${x.model} – ${x.version}?`)) return;
-        try { for (const id of (x.file?.chunks || [])) await delDoc("ph", id).catch(() => {}); await delDoc("ex", x.id); toast("Đã xóa phiên bản"); drawFw(); } catch(err){} }
+        } catch(err){ toast("Không tải được file – kiểm tra mạng rồi thử lại"); } finally { d.disabled = false; } }
+      if (del) { const x = fwList().find(y => y.id === del.dataset.fwdel); if (!x || !confirm(`Xóa “${x.model}${x.version ? " " + x.version : ""}”?`)) return;
+        try { for (const id of (x.file?.chunks || [])) await delDoc("ph", id).catch(() => {}); await delDoc("ex", x.id); toast("Đã xóa"); drawFw(); } catch(err){} }
     });
   }
 
