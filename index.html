@@ -421,7 +421,7 @@
       <div class="panel wlook" id="wlBh"></div>
       <div class="panel"><h3>⏳ Đang xử lý</h3><div class="list" id="trackList"></div></div>
       <div class="panel"><div class="row"><h3>✅ Đã trả khách</h3></div><div class="list" id="doneList"></div></div>
-      <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành từ file Excel</h3>
+      <div class="panel" id="riBox"><h3>📥 Nhập sổ bảo hành / lịch sử bảo hành từ file Excel</h3>
         <div class="sub" style="margin-bottom:8px">File thống kê seri bán hàng (cột NGÀY, TÊN KH, TÊN MẶT HÀNG, SERI, BẢO HÀNH…). Sau khi nhập, tab <b>Bảo hành sửa chữa</b> gõ seri là tự hiện sản phẩm, khách mua, ngày mua, còn bảo hành bao lâu; cột đổi hàng cũng được dùng để cảnh báo seri trùng.</div>
         <div class="btns" style="margin-top:0"><label class="btn pri" for="riFile" style="text-align:center">📥 Chọn file Excel để nhập</label></div>
         <input type="file" id="riFile" accept=".xlsx,.xls,.csv" style="display:none">
@@ -1586,6 +1586,9 @@
       $("#custHead").textContent = "② Thông tin khách hàng mới"; }
     $("#typeWrap").classList.toggle("hide", !sn);
     $("#snWarn").textContent = sn && !snOk(sn) ? `⚠️ Seri không đúng quy định (${SN_HINT}) – kiểm tra lại, hoặc bỏ qua nếu là hàng ngoài` : "";
+    if (hasSn && bhIdx.has(keySN(sn))) { $("#custKind").innerHTML += bhHistHtml(sn);
+      const last = bhIdx.get(keySN(sn))[0];   // seri chưa có trong sổ nhưng có lịch sử bảo hành: điền sẵn khách + sản phẩm lần gần nhất
+      if (!r && last) { if (!F.customer.value.trim() && last.c) { F.customer.value = last.c; F.customer.dataset.auto = "1"; } if (!F.product.value.trim() && last.p) { F.product.value = last.p; F.product.dataset.auto = "1"; } } }
     $("#foundBox").innerHTML = "";   // khách cũ / mới hiện ở #custKind
     $("#foundBox").innerHTML += dupBox(sn);
     const own = exHits(sn).filter(h => h.side === "new" && norm(h.customer) === norm(F.customer.value));
@@ -1731,11 +1734,15 @@
     return S.w.ok ? `<div class="sub" style="margin-top:4px;color:var(--ok)"><b>🛡️ Còn bảo hành${m >= 1200 ? " vĩnh viễn" : ` ${S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m < 1200 ? ` · hết hạn ${fmt(iso(S.exp))}` : ""}</div>`
       : `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⛔ ${m === 0 ? "Không có bảo hành" : `Hết bảo hành ${-S.days} ngày`}</b> · bán ${fmt(S.r.purchaseDate)}${m ? ` · BH ${m} tháng, hết hạn ${fmt(iso(S.exp))}` : ""}</div>`;
   }
+  function bhHistHtml(sn){
+    const L = bhIdx.get(keySN(sn)); if (!L || !L.length) return "";
+    return `<div class="found" style="margin-top:8px;text-align:left"><b>📜 Lịch sử bảo hành cũ – ${L.length} lần</b>${L.slice(0, 8).map(x => `<div style="margin-top:4px;font-size:13px">• <b>${x.d ? fmt(x.d) : "?"}</b>${x.t ? " " + esc(x.t) : ""} · ${esc(x.c || "—")} · ${esc(x.p || "")}${x.n ? ` · <i>${esc(x.n)}</i>` : ""}${x.cn ? ` · công nợ ${money(x.cn)}` : ""}</div>`).join("")}${L.length > 8 ? `<div class="sub">… và ${L.length - 8} lần khác</div>` : ""}</div>`;
+  }
   function wResultHtml(sn){
     sn = String(sn || "").trim(); if (!sn) return "";
     const S = wStatus(sn), hist = tickets.filter(t => keySN(t.serial) === keySN(sn) || keySN(t.exchange?.newSerial) === keySN(sn)).sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     let h = "";
-    if (!S.r) h = `<div class="wbox b-bad"><b>❓ KHÔNG TÌM THẤY</b>Seri ${esc(sn)} chưa có trong sổ bảo hành (app hoặc file thống kê).</div>`;
+    if (!S.r) h = bhIdx.has(keySN(sn)) ? "" : `<div class="wbox b-bad"><b>❓ KHÔNG TÌM THẤY</b>Seri ${esc(sn)} chưa có trong sổ bảo hành (app hoặc file thống kê).</div>`;
     else {
       const r = S.r, m = Number(r.months);
       h = S.noDate ? `<div class="wbox b-warn"><b>⚠️ CHƯA RÕ NGÀY BÁN</b>Sổ không ghi ngày bán – hỏi khách hóa đơn / ngày mua.</div>`
@@ -1749,7 +1756,7 @@
       if (r.replacedFrom) h += `<div class="found">🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}</div>`;
     }
     if (hist.length) h += `<h4 style="margin:10px 0 4px;font-size:14px">Các lần bảo hành / sửa chữa (${hist.length})</h4>` + hist.slice(0, 8).map(t => `<div class="sub">• ${fmt(t.createdAt)} · ${esc(TYPE[t.type])} · ${esc(t.issue || "")} · <b>${esc(STAGES[t.stage]?.label || "")}</b> · ${esc(t.code)}</div>`).join("");
-    return h;
+    return h + bhHistHtml(sn);
   }
   function drawWLookup(host){
     if (!host || host._built) return; host._built = true;
@@ -2013,14 +2020,70 @@
   }
   // chỉ mục tra cứu: seri -> bản ghi (dạng giống sổ bảo hành của app)
   let riIdx = new Map(), riEx = [];
+  let bhIdx = new Map();   // lịch sử bảo hành cũ (file danh sách hàng bảo hành): seri -> các lần
   function rebuildRi(){
-    riIdx = new Map(); riEx = [];
-    regImp.slice().sort((a,b) => (a.at || "").localeCompare(b.at || "")).forEach(doc => (doc.rows || []).forEach(x => {
+    riIdx = new Map(); riEx = []; bhIdx = new Map();
+    regImp.filter(d => d.type === "bhls").forEach(doc => (doc.rows || []).forEach(x => { const k = keySN(x.s); if (!k) return; if (!bhIdx.has(k)) bhIdx.set(k, []); bhIdx.get(k).push(x); }));
+    bhIdx.forEach(L => L.sort((a,b) => (b.d + (b.t || "")).localeCompare(a.d + (a.t || ""))));
+    regImp.filter(d => d.type !== "bhls").slice().sort((a,b) => (a.at || "").localeCompare(b.at || "")).forEach(doc => (doc.rows || []).forEach(x => {
       const r = {id: "ri_" + x.s, serial: x.s, product: x.p, customer: x.c, custCode: x.k, purchaseDate: x.d, months: x.d ? Number(x.m) || 0 : undefined, model: x.md, fileNote: x.n, fileHist: x.h, fromFile: doc.file, replacedBy: x.ns || undefined, replacedFrom: x.rf || undefined};
       riIdx.set(keySN(x.s), r);
       if (x.ns) riEx.push({id: "fx_" + x.s, code: "File " + (doc.file || ""), customer: x.c, phone: "", product: x.p, serial: x.s, stage: "da_tra", createdAt: x.nd || x.d, fromFile: true,
         exchange: {oldSerial: x.s, newSerial: x.ns, newProduct: x.p, until: x.d && x.m ? iso(addMonths(new Date(x.d + "T00:00:00"), Number(x.m))) : "", at: x.nd || x.d}});
     }));
+  }
+
+  /* ================= 📜 NHẬP LỊCH SỬ BẢO HÀNH CŨ (file danh sách hàng bảo hành: Ngày tạo, Khách hàng, Sản phẩm, Seri, Công nợ, Ghi chú) ================= */
+  function bhSns(cell){
+    const raw = String(cell ?? "").trim(); if (!raw) return [];
+    if (/^[\d\s,;\/\-–.]+$/.test(raw)) {   // "52527098-27099-27100", "52527098, 52527099"
+      const out = []; let base = "";
+      raw.split(/[\s,;\/\-–.]+/).filter(Boolean).forEach(t => { if (t.length >= 7) { out.push(t); base = t; } else if (t.length >= 4 && base) out.push(base.slice(0, base.length - t.length) + t); });
+      return [...new Set(out)];
+    }
+    const t = raw.replace(/\s+/g, "").toUpperCase(); return t.length >= 5 && /\d/.test(t) ? [t] : [];
+  }
+  function bhDate(v){
+    if (typeof v === "number" && v > 20000) { const d = new Date(Math.round((v - 25569) * 864e5)); return {d: iso(d), t: ""}; }
+    const m = String(v || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}:\d{2}))?/); if (!m) return {d: "", t: ""};
+    return {d: `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`, t: m[4] || ""};
+  }
+  function bhImport(rows, hi, f){
+    const H = rows[hi].map(c => norm(String(c)).trim()), col = n => H.findIndex(c => c === n);
+    const C = {d: col("ngay tao"), c: col("khach hang"), p: col("san pham"), s: col("seri"), cn: col("cong no"), n: col("ghi chu")};
+    const recs = [], st = {rows: 0, noSn: 0, multi: 0, minD: "", maxD: ""};
+    const have = new Set(); bhIdx.forEach(L => L.forEach(x => have.add(keySN(x.s) + "|" + x.d + "|" + (x.t || "") + "|" + norm(x.n || ""))));
+    let dup = 0;
+    rows.slice(hi + 1).forEach(r => {
+      const c = String(r[C.c] ?? "").trim(), p = String(r[C.p] ?? "").trim(), sns = bhSns(r[C.s]); if (!c && !p && !sns.length) return;
+      st.rows++; if (!sns.length) { st.noSn++; return; } if (sns.length > 1) st.multi++;
+      const {d, t} = bhDate(r[C.d]); if (d) { if (!st.minD || d < st.minD) st.minD = d; if (!st.maxD || d > st.maxD) st.maxD = d; }
+      const n = C.n >= 0 ? String(r[C.n] ?? "").trim() : "", cn = C.cn >= 0 ? Number(r[C.cn]) || 0 : 0;
+      sns.forEach(sn => { const k = keySN(sn) + "|" + d + "|" + t + "|" + norm(n); if (have.has(k)) { dup++; return; } have.add(k); recs.push(Object.assign({s: sn, c, p, d, t, n}, cn ? {cn} : {})); });
+    });
+    const nSn = new Set(recs.map(x => keySN(x.s))).size, F2 = $("#actForm");
+    F2.innerHTML = `<div class="grab"></div><h2>📜 Nhập lịch sử bảo hành cũ</h2><div class="sub">File: <b>${esc(f.name)}</b> – danh sách hàng bảo hành / sửa chữa của khách</div>
+      <table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Nội dung</th><th style="width:90px">Số lượng</th></tr>
+        <tr><td>Dòng dữ liệu</td><td>${st.rows.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>Dòng không có seri (bỏ qua)</td><td>${st.noSn.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>Ô ghi nhiều seri (VD 52527098-27099-27100) → tách từng seri</td><td>${st.multi}</td></tr>
+        ${dup ? `<tr><td>Dòng lặp lại / đã nhập trước đó (bỏ qua, không nhập 2 lần)</td><td>${dup.toLocaleString("vi-VN")}</td></tr>` : ""}
+        <tr><td><b>Lần bảo hành sẽ nhập</b></td><td><b>${recs.length.toLocaleString("vi-VN")}</b></td></tr>
+        <tr><td>· số seri khác nhau</td><td>${nSn.toLocaleString("vi-VN")}</td></tr>
+        <tr><td>Khoảng ngày</td><td style="white-space:nowrap">${st.minD ? fmt(st.minD) : "?"} – ${st.maxD ? fmt(st.maxD) : "?"}</td></tr></table>
+      <div class="sub" style="margin-top:6px">Ví dụ: ${recs.slice(0, 3).map(r => `SN ${esc(r.s)} · ${esc(r.c)} · ${esc(r.p)} · ${r.d ? fmt(r.d) : "?"}${r.n ? " · " + esc(r.n) : ""}`).join("<br>")}</div>
+      <div class="sub" style="margin-top:6px">Sau khi nhập: <b>Bảo hành sửa chữa</b> quét / gõ seri sẽ hiện các lần bảo hành cũ; seri chưa có trong sổ thì tự điền tên khách + sản phẩm lần gần nhất. <b>Không</b> thay đổi sổ bán hàng / hạn bảo hành.</div>
+      <div class="sub" id="riRun" style="margin-top:6px"></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">📥 Nhập lịch sử bảo hành</button></div>`;
+    actCtx = {run: async () => {
+      if (!recs.length) { toast("Không có dòng mới để nhập"); throw new Error("x"); }
+      const now = new Date().toISOString(), batch = "h" + Date.now().toString(36), docs = [];
+      for (let i = 0; i < recs.length; i += RI_CHUNK) docs.push({id: `${batch}_${String(i / RI_CHUNK).padStart(3, "0")}`, type: "bhls", batch, file: f.name, at: now, by: actor(), rows: recs.slice(i, i + RI_CHUNK)});
+      await putMany("ri", docs, n => { $("#riRun").textContent = `Đang lưu… ${Math.min(n * RI_CHUNK, recs.length).toLocaleString("vi-VN")}/${recs.length.toLocaleString("vi-VN")}`; });
+      if (mode !== "cloud") { rebuildRi(); renderAll(); }
+      toast(`Đã nhập ${recs.length.toLocaleString("vi-VN")} lần bảo hành cũ (${nSn.toLocaleString("vi-VN")} seri)`);
+    }};
+    open("actBg");
   }
   function drawRiBatches(){
     $("#riList").innerHTML = ""; $("#riList").classList.add("hide"); return;   // không hiển thị danh sách file đã nhập (theo yêu cầu)
@@ -2039,6 +2102,8 @@
     try { await loadScript(XLSX_URL); const wb = window.XLSX.read(await f.arrayBuffer(), {type: "array"}); rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true, defval: ""}); }
     catch(err){ $("#riProg").textContent = ""; toast("Không đọc được file Excel (cần mạng để tải bộ đọc)"); return; }
     $("#riProg").textContent = "";
+    { const hi = rows.slice(0, 10).findIndex(r => { const h = r.map(c => norm(String(c)).trim()); return h.includes("seri") && h.some(c => c === "khach hang") && h.some(c => c === "ngay tao") && !h.some(c => c.startsWith("bao hanh")); });
+      if (hi >= 0) return bhImport(rows, hi, f); }
     const F = $("#actForm");
     const draw = () => {
       const opt = {emptyMonths: F.em.value === "auto" ? "auto" : Number(F.em.value), vvMonths: Number(F.vv.value), skipShort: F.ss.checked, kara12: F.k12.checked};
