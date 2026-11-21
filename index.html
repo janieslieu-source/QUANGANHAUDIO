@@ -1310,7 +1310,7 @@
       <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
+      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}</div>` : ""}${ktCheckHtml(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
@@ -1339,7 +1339,7 @@
         <dt>Điện thoại</dt><dd>${esc(t.phone)||"—"}</dd>
         <dt>Số seri</dt><dd>${esc(t.serial)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
         ${t.type==="bh" && t.purchaseDate ? `<dt>Bảo hành</dt><dd>Mua ${fmt(t.purchaseDate)}, ${t.months} tháng – lúc nhận: ${esc(t.warrantyText)}</dd>` : ""}
-        <dt>Lỗi</dt><dd>${esc(t.issue)||"—"}</dd>
+        <dt>Lỗi</dt><dd>${esc(t.issue)||"—"}</dd>${t.ktCheck ? `<dt>KT kiểm tra</dt><dd>${t.ktCheck.confirmed.length ? "✔ Đúng lỗi: " + esc(t.ktCheck.confirmed.join(", ")) : "Lỗi khách báo không đúng"}${t.ktCheck.notConfirmed?.length ? "<br>✖ Không thấy: " + esc(t.ktCheck.notConfirmed.join(", ")) : ""}${t.ktCheck.added?.length ? "<br><b>➕ Lỗi thêm: " + esc(t.ktCheck.added.join(", ")) + "</b>" : ""}</dd>` : ""}
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
         ${t.exchange ? `<dt>Seri cũ</dt><dd>${esc(t.exchange.oldSerial)}</dd><dt>Seri mới đổi</dt><dd><b>${esc(t.exchange.newSerial)}</b>${t.exchange.newProduct && t.exchange.newProduct !== t.product ? ` – ${esc(t.exchange.newProduct)}` : ""}</dd><dt>BH tiếp đến</dt><dd><b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(BH mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}</dd>` : ""}
         ${t.partsUsed ? `<dt>Linh kiện thay</dt><dd>${t.partsUsed.map(u => `${esc(u.name)} × ${u.qty} – ${u.src === "thao" ? `🔩 tháo từ ${esc(u.donor)} (SN ${esc(u.donorSerial)})` : u.src === "ngoai" ? "🧩 linh kiện ngoài" : "📦 lấy từ kho"}`).join("<br>")}</dd>` : t.parts ? `<dt>Linh kiện thay</dt><dd>${esc(t.parts)}</dd>` : ""}
@@ -2392,6 +2392,11 @@
     return {kho, thao, ngoai};
   }
   const KTV_NAMES = ["Danh", "Khang", "Minh", "Thành"];   // kỹ thuật viên nhận sửa
+  /* ---------- Kỹ thuật kiểm tra lỗi: tick lỗi khách báo đúng + chọn thêm lỗi phát hiện ---------- */
+  const KT_FAULTS = ["Rè loa", "Mất tiếng", "Không lên nguồn", "Hú / rít", "Lỗi Bluetooth", "Lỗi micro", "Lỗi màn hình", "Chập chờn", "Lỗi sạc / pin", "Lỗi nút / núm", "Lỗi cổng kết nối", "Lỗi bo mạch", "Vỡ / móp vỏ", "Vào nước"];
+  const issueItems = t => { const a = String(t.issue || "").split(/[\n,;]+|\s\+\s/).map(x => x.trim()).filter(Boolean); return a.length ? a : []; };
+  const ktCheckHtml = t => { const k = t.ktCheck; if (!k) return "";
+    return `<div class="sub" style="margin-top:4px">🔍 KT kiểm tra: ${k.confirmed.length ? `<b style="color:var(--ok)">✔ đúng lỗi: ${esc(k.confirmed.join(", "))}</b>` : ""}${k.notConfirmed?.length ? ` · <span style="color:var(--bad)">✖ không thấy: ${esc(k.notConfirmed.join(", "))}</span>` : ""}${k.added?.length ? ` · <b style="color:#b45309">➕ lỗi thêm: ${esc(k.added.join(", "))}</b>` : ""}</div>`; };
   function openJob(id){
     const t = tickets.find(x => x.id === id); if (!t) return;
     const isBH = t.type === "bh";
@@ -2406,6 +2411,13 @@
         ${isBH ? `<dt>Bảo hành</dt><dd>${esc(t.warrantyText)}${oldExp ? ` (hết hạn ${oldExp})` : ""}</dd>` : ""}
         <dt>Tra cứu BH</dt><dd>${wBadge(t.serial).replace('margin-top:4px;', '')}</dd>
         ${(t.history||[]).filter(h => h.note && h.by === "Giám đốc").map(h => `<dt>GĐ ghi chú</dt><dd>${esc(h.note)}</dd>`).join("")}</dl>
+      <div class="ktiss">
+        <label>🔍 Kiểm tra lỗi khách báo * <span class="sub">(kiểm tra thấy đúng thì tick)</span></label>
+        ${issueItems(t).length ? issueItems(t).map((x, i) => `<label class="kirow" style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="kiok" data-i="${i}" style="width:22px;height:22px;margin:0" ${t.ktCheck ? (t.ktCheck.confirmed.includes(x) ? "checked" : "") : ""}> <span>${esc(x)}</span></label>`).join("") : `<div class="sub">Khách không ghi mô tả lỗi – chọn lỗi thực tế bên dưới.</div>`}
+        <label>➕ Lỗi phát hiện thêm <span class="sub">(bấm chọn, hoặc gõ lỗi khác)</span></label>
+        <div class="chips kichips" style="flex-wrap:wrap"></div>
+        <div style="display:flex;gap:6px;margin-top:6px"><input class="kiadd" placeholder="Gõ lỗi khác…" autocomplete="off"><button type="button" class="btn sm kiaddb" style="white-space:nowrap">+ Thêm</button></div>
+      </div>
       <label>Phương án xử lý *</label>
       <div class="choice">
         <button type="button" class="opt" data-a="sua"><span class="ic">🛠️</span>Sửa chữa</button>
@@ -2495,7 +2507,22 @@
     F2.querySelectorAll(".opt[data-a]").forEach(o => o.onclick = () => { jobAction = o.dataset.a; sync(); setTimeout(() => (jobAction === "doimoi" ? F2.newSerial : $("#prows .pn"))?.focus(), 50); });
     ["newSerial","exMode","exMonths"].forEach(n => { F2[n].addEventListener("input", sync); F2[n].addEventListener("change", sync); });
     sync();
+    // lỗi thêm: gợi ý = lỗi hay gặp + lỗi Kỹ thuật từng thêm; đã chọn thì tô màu
+    const kiAdded = (t.ktCheck?.added || []).slice();
+    const kiDraw = () => { const used = new Map(); tickets.forEach(x => (x.ktCheck?.added || []).forEach(a => { const k = norm(a), v = used.get(k) || [a, 0]; v[1]++; used.set(k, v); }));
+      const sug = [...new Map([...KT_FAULTS.map(a => [norm(a), a]), ...[...used.values()].sort((a,b) => b[1] - a[1]).slice(0, 8).map(([a]) => [norm(a), a]), ...kiAdded.map(a => [norm(a), a])]).values()]
+        .filter(a => !issueItems(t).some(x => norm(x) === norm(a)));
+      F2.querySelector(".kichips").innerHTML = sug.map(a => `<button type="button" class="chip ${kiAdded.some(x => norm(x) === norm(a)) ? "sel" : ""}" data-ki="${esc(a)}">${kiAdded.some(x => norm(x) === norm(a)) ? "✔ " : ""}${esc(a)}</button>`).join("");
+      F2.querySelectorAll(".kichips [data-ki]").forEach(b => b.onclick = () => { const a = b.dataset.ki, i = kiAdded.findIndex(x => norm(x) === norm(a)); if (i >= 0) kiAdded.splice(i, 1); else kiAdded.push(a); kiDraw(); }); };
+    const kiAdd = () => { const v = F2.querySelector(".kiadd").value.trim(); if (!v) return; if (!kiAdded.some(x => norm(x) === norm(v))) kiAdded.push(v); F2.querySelector(".kiadd").value = ""; kiDraw(); };
+    F2.querySelector(".kiaddb").onclick = kiAdd; F2.querySelector(".kiadd").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); kiAdd(); } });
+    kiDraw();
     actCtx = {run: async () => {
+      // kiểm tra lỗi: phải tick lỗi đúng hoặc chọn lỗi thực tế
+      const its = issueItems(t), ok = [...F2.querySelectorAll(".kiok")].filter(c => c.checked).map(c => its[+c.dataset.i]);
+      if (F2.querySelector(".kiadd").value.trim()) kiAdd();
+      if (!ok.length && !kiAdded.length) { toast("Kiểm tra lỗi: tick lỗi khách báo là đúng, hoặc chọn thêm lỗi thực tế"); F2.querySelector(".ktiss").scrollIntoView({block: "center"}); throw new Error("x"); }
+      const ktCheck = {confirmed: ok, notConfirmed: its.filter(x => !ok.includes(x)), added: kiAdded.slice(), at: new Date().toISOString()};
       // đọc & kiểm tra các dòng linh kiện
       const used = [...$("#prows").children].map(el => ({name: el.querySelector(".pn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".pq").value) || 1), src: el.dataset.src || "kho",
         donor: el.querySelector(".pdn").value.trim(), donorSerial: el.querySelector(".pds").value.trim()})).filter(x => x.name);
@@ -2514,7 +2541,7 @@
       }
       const parts = used.map(u => `${u.name} x${u.qty}`).join(", ");
       if (!F2.tech.value.trim()) { toast("Chọn kỹ thuật viên sửa máy này"); F2.querySelector(".ktvpick").scrollIntoView({block: "center"}); throw new Error("x"); }
-      const extra = {action: jobAction, parts, partsUsed: used, tech: F2.tech.value.trim(), techNote: F2.techNote.value.trim()};
+      const extra = {action: jobAction, parts, partsUsed: used, tech: F2.tech.value.trim(), techNote: F2.techNote.value.trim(), ktCheck: Object.assign(ktCheck, {by: F2.tech.value.trim()})};
       let note;
       if (jobAction === "doimoi") {
         const newSerial = F2.newSerial.value.trim();
@@ -2533,6 +2560,7 @@
       } else {
         extra.exchange = null;
         note = `${ACTION[jobAction]} – ${parts}`;
+        note += ` · KT kiểm tra: ${ktCheck.confirmed.length ? "đúng lỗi " + ktCheck.confirmed.join(", ") : "lỗi khách báo không đúng"}${ktCheck.added.length ? " · thêm lỗi: " + ktCheck.added.join(", ") : ""}`;
       }
       try { localStorage.setItem("bh_tech", extra.tech); } catch(e){}
       extra.stockApplied = await applyPartsStock(t, used);
