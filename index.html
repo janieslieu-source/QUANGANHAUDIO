@@ -195,6 +195,8 @@
   #ccQuick .ios-ic{width:30px;height:30px}
   @media (prefers-color-scheme: dark){ .dept{background:linear-gradient(180deg,#1f2937,#111827)} .dept.sel{background:linear-gradient(180deg,#1e3a8a,#111827)} }
   .sgk{display:inline-block;font-size:11px;font-weight:700;color:var(--brand);background:rgba(29,78,216,.1);border-radius:6px;padding:1px 5px;margin-left:2px;white-space:nowrap}
+  .flashitem{animation:flashit 1.1s ease-in-out 3;outline:3px solid #ef4444;outline-offset:2px}
+  @keyframes flashit{50%{background:#fee2e2}}
   .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
   .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
   .chip.sel{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -859,7 +861,7 @@
   }
 
   /* ================= THÔNG BÁO ================= */
-  let bannerQ = [], bannerOn = false, bannerTarget = null, bannerCur = null, reRing = null;
+  let bannerQ = [], bannerOn = false, bannerTarget = null, bannerCur = null, reRing = null; let bannerCur0 = null;
   const forMe = to => !!role && !$("#app").classList.contains("hide") && (to === role || boss);
   function notify(t){
     const st = STAGES[t.stage]; if (!st || !forMe(st.to)) return;
@@ -879,7 +881,7 @@
   }
   function nextBanner(){
     const b = bannerQ.shift(); if (!b){ bannerOn = false; bannerCur = null; return; }
-    bannerOn = true; bannerTarget = b.to; bannerCur = b.id;
+    bannerOn = true; bannerTarget = b.to; bannerCur = b.id; bannerCur0 = b.id;
     $("#bnTitle").textContent = b.title; $("#bnText").textContent = b.text;
     $("#banner").classList.add("show");
     const ringIt = b.id === "debt" || b.to === role || (boss && b.to === "gd") || (b.to === role);
@@ -897,8 +899,29 @@
   $("#banner").onclick = () => {
     clearInterval(reRing);
     $("#banner").classList.remove("show"); clearTimeout(nextBanner._t); setTimeout(nextBanner, 350);
-    if (bannerTarget && !$("#app").classList.contains("hide")) goTo(bannerTarget);
+    if (bannerTarget && !$("#app").classList.contains("hide")) { const id = bannerCur0; goTo(bannerTarget); if (id && (bannerTarget === role || boss)) focusItem(id); }
   };
+  // mở đúng phiếu / đơn được báo: chọn đúng mục lọc của bộ phận, cuộn tới và tô sáng thẻ
+  let focusWant = null;
+  function focusItem(id, tries = 0){
+    const t = tickets.find(x => x.id === id), o = !t && orders.find(x => x.id === id);
+    if (!t && !o) {   // dữ liệu chưa đồng bộ kịp về máy này -> chờ rồi thử lại (tối đa ~12 giây)
+      if (tries === 0) toast("Đang đồng bộ dữ liệu, chờ vài giây…");
+      if (tries < 24) { focusWant = id; setTimeout(() => focusWant === id && focusItem(id, tries + 1), 500); } else { focusWant = null; toast("Chưa thấy phiếu này – kiểm tra kết nối mạng rồi kéo xuống làm mới"); }
+      return;
+    }
+    focusWant = null;
+    if (t && role === "kt") { const f = {cho_kt: "cho", dang_sua: "dang", cho_lk: "lk"}[t.stage] || (["xong", "kt_tra"].includes(t.stage) || CLOSED.includes(t.stage) ? "xong" : null); if (f && f !== ktFilter) ktFilter = f; }
+    if (role === "wh" && typeof whTab !== "undefined" && whTab !== "xuat") whTab = "xuat";
+    renderAll();
+    setTimeout(() => {
+      const el = [...document.querySelectorAll(`#v-${role} .item[data-id="${CSS.escape(id)}"], #v-${role} [data-id="${CSS.escape(id)}"]`)].find(e => e.offsetParent);
+      const chip = document.querySelector("#ktChips .chip.sel"); if (chip && role === "kt") chip.parentNode.scrollLeft = Math.max(0, chip.offsetLeft - 16);
+      if (!el) return;
+      el.scrollIntoView({behavior: "smooth", block: "center"}); el.classList.add("flashitem"); setTimeout(() => el.classList.remove("flashitem"), 3500);
+    }, 60);
+  }
+  window.__openItem = id => { if (!$("#app").classList.contains("hide")) focusItem(id); };
   // Kỹ thuật (không phải Giám đốc): chỉ thấy thông báo liên quan Kỹ thuật – không thấy việc của Kế toán, Giám đốc, đơn bán
   const KT_STAGES = ["cho_kt", "dang_sua", "cho_lk", "xong", "kt_tra"];
   const ktOnly = () => role === "kt" && !boss;
@@ -928,7 +951,7 @@
       : `<div class="empty">Chưa có thông báo.</div>`) +
       `<div class="btns"><button class="btn pri" id="testBell">🔊 Thử chuông</button><button class="btn" data-close="notiBg">Đóng</button></div>
        <div class="sub" style="margin-top:10px">Nếu không nghe chuông: tăng âm lượng điện thoại, tắt chế độ im lặng (iPhone: gạt nút bên hông), và chạm vào màn hình app ít nhất 1 lần sau khi mở.</div>`;
-    $("#notiSheet").querySelectorAll(".noti").forEach(n => n.onclick = () => { close("notiBg"); n.dataset.od ? showOrder(n.dataset.id) : showDetail(n.dataset.id); });
+    $("#notiSheet").querySelectorAll(".noti").forEach(n => n.onclick = () => { close("notiBg"); focusItem(n.dataset.id); n.dataset.od ? showOrder(n.dataset.id) : showDetail(n.dataset.id); });
     $("#testBell").onclick = beep;
     try { localStorage.setItem("bh_seen", new Date().toISOString()); } catch(e){}
     updateBell(); open("notiBg");
@@ -997,6 +1020,10 @@
     try { expenses = JSON.parse(localStorage.getItem("baohanh_ex") || "[]"); } catch(e){ expenses = []; }
     try { regImp = JSON.parse(localStorage.getItem("baohanh_ri") || "[]"); } catch(e){ regImp = []; }
   }
+  window.addEventListener("storage", e => {
+    if (mode === "cloud" || !e.key || !e.key.startsWith("baohanh_")) return;
+    clearTimeout(window._lsT); window._lsT = setTimeout(() => { loadLocal(); rebuildRi(); onTickets(tickets.slice(), true); onOrders(orders.slice(), true); }, 120);
+  });
   function saveLocal(){
     try { localStorage.setItem("baohanh_v1", JSON.stringify(reg)); localStorage.setItem("baohanh_tk", JSON.stringify(tickets)); localStorage.setItem("baohanh_od", JSON.stringify(orders)); localStorage.setItem("baohanh_st", JSON.stringify(stock)); localStorage.setItem("baohanh_pr", JSON.stringify(products)); localStorage.setItem("baohanh_mv", JSON.stringify(moves)); } catch(e){}
     try { localStorage.setItem("baohanh_ph", JSON.stringify(photosLocal)); } catch(e){}
@@ -1049,20 +1076,24 @@
       if (kind === "tk") onTickets(tickets.slice()); else if (kind === "od") onOrders(orders.slice()); else renderAll();
     }
   }
-  function onTickets(list){
+  // dữ liệu từ máy chủ về dồn dập (nhiều bảng cùng lúc) -> gộp lại vẽ 1 lần, đỡ giật / chậm trên điện thoại
+  function renderSoon(){ clearTimeout(renderSoon._t); renderSoon._t = setTimeout(() => { renderAll(); if (focusWant && tickets.some(x => x.id === focusWant)) focusItem(focusWant, 99); }, 60); }
+  function onTickets(list, soon){
     const first = prevStage === null, map = new Map();
     list.forEach(t => {
       map.set(t.id, t.stage);
       if (!first && prevStage.get(t.id) !== t.stage) notify(t);
     });
     prevStage = map; tickets = list;
+    if (soon) { renderSoon(); return; }
     renderAll();
+    if (focusWant && tickets.some(x => x.id === focusWant)) focusItem(focusWant, 99);
   }
-  function onOrders(list){
+  function onOrders(list, soon){
     const first = prevOStage === null, map = new Map();
     list.forEach(o => { map.set(o.id, o.stage); if (!first && prevOStage.get(o.id) !== o.stage) notifyOrder(o); });
     prevOStage = map; orders = list;
-    renderAll();
+    soon ? renderSoon() : renderAll();
   }
   const setSync = (on, txt) => { $("#dot").classList.toggle("on", on); $("#syncTxt").textContent = txt; };
 
@@ -1077,23 +1108,23 @@
     const timer = setTimeout(() => setSync(false, "Chưa kết nối"), 10000);
     let gotTk = false, gotOd = false;
     const take = s => s.docs.map(d => Object.assign({id:d.id}, d.data()));
-    colSt.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.st = s; return; } stock = take(s); renderAll(); }, () => {});
-    colMv.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.mv = s; return; } moves = take(s); renderAll(); }, () => {});
-    colPr.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.pr = s; return; } products = take(s); renderAll(); }, () => {});
+    colSt.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.st = s; return; } stock = take(s); renderSoon(); }, () => {});
+    colMv.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.mv = s; return; } moves = take(s); renderSoon(); }, () => {});
+    colPr.onSnapshot(s => { mode = "cloud"; if (bulk) { pendingSnap.pr = s; return; } products = take(s); renderSoon(); }, () => {});
     colOd.onSnapshot(s => {
       if (!gotOd) { prevOStage = null; gotOd = true; }
-      mode = "cloud"; onOrders(s.docs.map(d => Object.assign({id:d.id}, d.data())));
+      mode = "cloud"; onOrders(s.docs.map(d => Object.assign({id:d.id}, d.data())), true);
     }, () => {});
-    colReg.onSnapshot(s => { mode = "cloud"; reg = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
-    colEx.onSnapshot(s => { mode = "cloud"; expenses = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderAll(); }, () => {});
+    colReg.onSnapshot(s => { mode = "cloud"; reg = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderSoon(); }, () => {});
+    colEx.onSnapshot(s => { mode = "cloud"; expenses = s.docs.map(d => Object.assign({id:d.id}, d.data())); renderSoon(); }, () => {});
     colRi = db.collection("regimport");
-    colRi.onSnapshot(s => { mode = "cloud"; regImp = s.docs.map(d => Object.assign({id:d.id}, d.data())); rebuildRi(); renderAll(); }, () => {});
+    colRi.onSnapshot(s => { mode = "cloud"; regImp = s.docs.map(d => Object.assign({id:d.id}, d.data())); rebuildRi(); renderSoon(); }, () => {});
     colTk.onSnapshot(s => {
       if (!s.metadata.fromCache) clearTimeout(timer);
       if (!gotTk) { prevStage = null; gotTk = true; }   // lần đầu: không bắn thông báo cũ
       mode = "cloud";
       setSync(true, s.metadata.fromCache ? "Đang đồng bộ" : "Đã đồng bộ");
-      onTickets(s.docs.map(d => Object.assign({id:d.id}, d.data())));
+      onTickets(s.docs.map(d => Object.assign({id:d.id}, d.data())), true);
     }, () => { clearTimeout(timer); setSync(false, "Mất kết nối"); });
   }
 
@@ -1224,7 +1255,7 @@
     try { localStorage.setItem("bh_push", tok); localStorage.setItem("bh_push_os", pushPlatform); } catch(e){}
     registerDevice();
   };
-  window.__goTo = r => { if (ROLES[r] && !$("#app").classList.contains("hide")) goTo(r); };
+  window.__goTo = (r, id) => { if (ROLES[r] && !$("#app").classList.contains("hide")) { goTo(r); if (id && (r === role || boss)) focusItem(id); } };
   let lastReg = "";
   async function registerDevice(){
     if (!pushToken || !colDev || mode !== "cloud") return;
