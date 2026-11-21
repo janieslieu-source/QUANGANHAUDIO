@@ -2987,9 +2987,10 @@
   function addSw(v = {}){
     $("#swLines").insertAdjacentHTML("beforeend", `<div class="oline swl" style="grid-template-columns:1fr 70px 34px;margin-top:6px">
       <input class="swn" placeholder="Tên phần mềm (VD: Phần mềm karaoke VietKTV)" autocomplete="off" value="${esc(v.name || "")}"><input class="swq" type="number" min="1" inputmode="numeric" value="${v.qty || 1}"><button type="button" class="rm" title="Xóa">✕</button>
-      <div class="seg swt full" style="grid-column:1/-1;margin:2px 0"><button type="button" data-t="1y" class="${v.term !== "vv" ? "on" : ""}">📅 Thời hạn 1 năm</button><button type="button" data-t="vv" class="${v.term === "vv" ? "on" : ""}">♾️ Vĩnh viễn</button></div>
-      <input class="swk full" style="grid-column:1/-1" placeholder="Mã kích hoạt / tài khoản (nếu có)" autocomplete="off" value="${esc(v.key || "")}"></div>`);
-    const el = $("#swLines").lastElementChild; el.dataset.t = v.term || "1y";
+      <div class="full" style="grid-column:1/-1;font-size:13px;color:var(--muted);margin-top:2px">Thời hạn * <span class="sub">(bắt buộc chọn)</span></div>
+      <div class="seg swt full" style="grid-column:1/-1;margin:2px 0"><button type="button" data-t="1y" class="${v.term === "1y" ? "on" : ""}">📅 Thời hạn 1 năm</button><button type="button" data-t="vv" class="${v.term === "vv" ? "on" : ""}">♾️ Vĩnh viễn</button></div>
+      <input class="swk full" style="grid-column:1/-1" placeholder="Mã kích hoạt * (bắt buộc – dùng để gia hạn / tái gói)" autocomplete="off" value="${esc(v.key || "")}"></div>`);
+    const el = $("#swLines").lastElementChild; el.dataset.t = v.term || "";
     el.querySelectorAll(".swt button").forEach(b => b.onclick = () => { el.dataset.t = b.dataset.t; el.querySelectorAll(".swt button").forEach(x => x.classList.toggle("on", x === b)); });
     el.querySelector(".rm").onclick = () => el.remove();
   }
@@ -3016,7 +3017,12 @@
       tradeIn = {newProduct: SF.tiNew.value, newQty: nq, newPrice: np, oldProduct: SF.tiOld.value.trim(), oldQty: oq, oldPrice: op, total: np * nq, oldValue: op * oq, diff: np * nq - op * oq,
         received: tiRecv, receivedAt: tiRecv ? new Date().toISOString() : "", due: tiRecv ? "" : iso(new Date(new Date(sd + "T00:00:00").getTime() + TI_DAYS * 864e5))};
     }
-    const software = [...$("#swLines").children].map(el => ({name: el.querySelector(".swn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".swq").value) || 1), term: el.dataset.t, key: el.querySelector(".swk").value.trim()})).filter(x => x.name);
+    const swEls = [...$("#swLines").children].filter(el => el.querySelector(".swn").value.trim() || el.querySelector(".swk").value.trim() || el.dataset.t);
+    for (const el of swEls) { const nm = el.querySelector(".swn").value.trim() || "Phần mềm";
+      if (!el.querySelector(".swn").value.trim()) { toast("Phần mềm: nhập tên phần mềm"); el.querySelector(".swn").focus(); return; }
+      if (!el.dataset.t) { toast(`${nm}: bắt buộc chọn thời hạn – 📅 1 năm hoặc ♾️ Vĩnh viễn`); el.querySelector(".swt").scrollIntoView({block: "center"}); return; }
+      if (!el.querySelector(".swk").value.trim()) { toast(`${nm}: bắt buộc nhập mã kích hoạt (để gia hạn / tái gói)`); el.querySelector(".swk").focus(); return; } }
+    const software = swEls.map(el => ({name: el.querySelector(".swn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".swq").value) || 1), term: el.dataset.t, key: el.querySelector(".swk").value.trim()}));
     { const sd = SF.saleDate.value || iso(new Date()); software.forEach(x => { x.start = sd; x.until = x.term === "vv" ? "" : iso(addMonths(new Date(sd + "T00:00:00"), 12)); }); }
     const now = new Date().toISOString();
     const o = {id: uid(), code: SF.ocode.value || oCode(), saleDate: SF.saleDate.value || iso(new Date()), createdAt: now,
@@ -5326,6 +5332,7 @@
       <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div>
       ${t.action ? `<div class="sub">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · " + esc(t.parts) : ""}</div>` : ""}
       ${t.ship ? `<div class="sub">🚚 ${shipText(t)} · ${isOd ? "gửi" : "trả"} ${fmt(t.ship.date)}</div>` : ""}
+      ${t.tradeIn ? `<div class="reason" style="margin-top:6px">♻️ <b>Thu cũ đổi mới:</b> ${t.tradeIn.newQty} × ${money(t.tradeIn.newPrice)} − thu cũ ${t.tradeIn.oldQty} ${esc(t.tradeIn.oldProduct)} × ${money(t.tradeIn.oldPrice)} = khách bù <b>${money(t.tradeIn.diff)}</b>${t.tradeIn.received ? " · ✅ đã nhận hàng cũ" : " · ⏳ chưa nhận hàng cũ"}</div>` : ""}
       <label>Tình trạng thanh toán *</label>
       <div class="choice">
         <button type="button" class="opt" data-ps="cong_no"><span class="ic">📒</span>Công nợ</button>
