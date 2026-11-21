@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2=".4" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset=".45" stop-color="#2563eb"/><stop offset="1" stop-color="#172554"/></linearGradient>
+  <radialGradient id="bgGlow" cx=".55" cy=".4" r=".6"><stop offset="0" stop-color="#93c5fd" stop-opacity=".5"/><stop offset="1" stop-color="#93c5fd" stop-opacity="0"/></radialGradient>
+  <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7aa2"/><stop offset=".35" stop-color="#ef3f6a"/><stop offset=".75" stop-color="#ef4444"/><stop offset="1" stop-color="#c81e3a"/></linearGradient>
+  <linearGradient id="redSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b3123a"/><stop offset="1" stop-color="#6e0a22"/></linearGradient>
+  <linearGradient id="pink" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#ef3f6a"/></linearGradient>
+  <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset=".5" stop-color="#0ea5e9"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+  <linearGradient id="ringSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e5a8a"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient>
+  <linearGradient id="aG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+  <radialGradient id="disk" cx=".42" cy=".35" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2e8f0"/></radialGradient>
+  <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="drop" x="-20%" y="-20%" width="140%" height="150%"><feGaussianBlur in="SourceAlpha" stdDeviation="14"/><feOffset dy="18"/><feComponentTransfer><feFuncA type="linear" slope=".35"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="dropS" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur in="SourceAlpha" stdDeviation="5"/><feOffset dy="7"/><feComponentTransfer><feFuncA type="linear" slope=".35"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="inset" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur in="SourceAlpha" stdDeviation="9"/><feOffset dy="9" result="o"/><feComposite in="o" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="sh"/><feFlood flood-color="#64748b" flood-opacity=".45"/><feComposite in2="sh" operator="in"/><feComposite in2="SourceGraphic" operator="over"/></filter>
+  <clipPath id="gapClip"><path d="M410 0 L1024 0 L1024 1024 L410 1024 Z M0 0 L1024 0 L1024 260 L0 260 Z M0 560 L1024 560 L1024 1024 L0 1024 Z" clip-rule="nonzero"/></clipPath>
+  <clipPath id="sq"><rect width="1024" height="1024" rx="0"/></clipPath>
+</defs>
+<g clip-path="url(#sq)">
+  <rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#bgGlow)"/>
+  <!-- bánh răng hồng-đỏ nổi khối, hở bên trái -->
+  <g filter="url(#drop)"><g clip-path="url(#gapClip)">
+    <path d="M491.4 198.9 L522.5 191.2 L525.6 144.2 L594.4 144.2 L597.5 191.2 L628.6 198.9 L628.6 198.9 L658.3 210.9 L688.4 174.7 L744.1 215.2 L718.9 255.0 L739.6 279.5 L739.6 279.5 L756.5 306.7 L802.1 295.1 L823.4 360.6 L779.7 378.0 L782.0 410.0 L782.0 410.0 L779.7 442.0 L823.4 459.4 L802.1 524.9 L756.5 513.3 L739.6 540.5 L739.6 540.5 L718.9 565.0 L744.1 604.8 L688.4 645.3 L658.3 609.1 L628.6 621.1 L628.6 621.1 L597.5 628.8 L594.4 675.8 L525.6 675.8 L522.5 628.8 L491.4 621.1 L491.4 621.1 L461.7 609.1 L431.6 645.3 L375.9 604.8 L401.1 565.0 L380.4 540.5 L380.4 540.5 L363.5 513.3 L317.9 524.9 L296.6 459.4 L340.3 442.0 L338.0 410.0 L338.0 410.0 L340.3 378.0 L296.6 360.6 L317.9 295.1 L363.5 306.7 L380.4 279.5 L380.4 279.5 L401.1 255.0 L375.9 215.2 L431.6 174.7 L461.7 210.9 L491.4 198.9 Z M738 410 A178 178 0 1 0 382 410 A178 178 0 1 0 738 410 Z" fill="url(#redSide)" fill-rule="evenodd" transform="translate(0 20)"/>
+    <path d="M491.4 198.9 L522.5 191.2 L525.6 144.2 L594.4 144.2 L597.5 191.2 L628.6 198.9 L628.6 198.9 L658.3 210.9 L688.4 174.7 L744.1 215.2 L718.9 255.0 L739.6 279.5 L739.6 279.5 L756.5 306.7 L802.1 295.1 L823.4 360.6 L779.7 378.0 L782.0 410.0 L782.0 410.0 L779.7 442.0 L823.4 459.4 L802.1 524.9 L756.5 513.3 L739.6 540.5 L739.6 540.5 L718.9 565.0 L744.1 604.8 L688.4 645.3 L658.3 609.1 L628.6 621.1 L628.6 621.1 L597.5 628.8 L594.4 675.8 L525.6 675.8 L522.5 628.8 L491.4 621.1 L491.4 621.1 L461.7 609.1 L431.6 645.3 L375.9 604.8 L401.1 565.0 L380.4 540.5 L380.4 540.5 L363.5 513.3 L317.9 524.9 L296.6 459.4 L340.3 442.0 L338.0 410.0 L338.0 410.0 L340.3 378.0 L296.6 360.6 L317.9 295.1 L363.5 306.7 L380.4 279.5 L380.4 279.5 L401.1 255.0 L375.9 215.2 L431.6 174.7 L461.7 210.9 L491.4 198.9 Z M738 410 A178 178 0 1 0 382 410 A178 178 0 1 0 738 410 Z" fill="url(#red)" fill-rule="evenodd" stroke="#ffd1dc" stroke-opacity=".6" stroke-width="4"/>
+  </g></g>
+  <!-- đường mạch điện -->
+  <g filter="url(#dropS)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M172 318 L300 318 L340 346 L420 346" stroke="#9d174d" stroke-width="20" transform="translate(0 5)"/><path d="M172 318 L300 318 L340 346 L420 346" stroke="url(#pink)" stroke-width="16"/><circle cx="150" cy="322" r="22" fill="none" stroke="#9d174d" stroke-width="12"/><circle cx="150" cy="318" r="22" fill="#fff" stroke="url(#pink)" stroke-width="11"/><path d="M130 380 L320 380 L360 380 L420 380" stroke="#9d174d" stroke-width="20" transform="translate(0 5)"/><path d="M130 380 L320 380 L360 380 L420 380" stroke="url(#pink)" stroke-width="16"/><circle cx="108" cy="384" r="22" fill="none" stroke="#9d174d" stroke-width="12"/><circle cx="108" cy="380" r="22" fill="#fff" stroke="url(#pink)" stroke-width="11"/><path d="M172 440 L300 440 L340 412 L420 412" stroke="#9d174d" stroke-width="20" transform="translate(0 5)"/><path d="M172 440 L300 440 L340 412 L420 412" stroke="url(#pink)" stroke-width="16"/><circle cx="150" cy="444" r="22" fill="none" stroke="#9d174d" stroke-width="12"/><circle cx="150" cy="440" r="22" fill="#fff" stroke="url(#pink)" stroke-width="11"/><path d="M212 502 L300 502 L340 502 L420 502" stroke="#9d174d" stroke-width="20" transform="translate(0 5)"/><path d="M212 502 L300 502 L340 502 L420 502" stroke="url(#pink)" stroke-width="16"/><circle cx="190" cy="506" r="22" fill="none" stroke="#9d174d" stroke-width="12"/><circle cx="190" cy="502" r="22" fill="#fff" stroke="url(#pink)" stroke-width="11"/>
+  </g>
+  <!-- đĩa trắng lõm + vòng xanh (chữ Q) -->
+  <circle cx="560" cy="410" r="172" fill="url(#disk)" filter="url(#inset)"/>
+  <g filter="url(#dropS)" fill="none" stroke-linecap="round">
+    <circle cx="560" cy="419" r="140" stroke="url(#ringSide)" stroke-width="30"/>
+    <path d="M652 522 L700 578" stroke="url(#ringSide)" stroke-width="30" transform="translate(0 9)"/>
+    <circle cx="560" cy="410" r="140" stroke="url(#ring)" stroke-width="30"/>
+    <path d="M652 522 L700 578" stroke="url(#ring)" stroke-width="30"/>
+    <path d="M450 340 A132 132 0 0 1 590 278" stroke="#fff" stroke-opacity=".7" stroke-width="8"/>
+  </g>
+  <!-- chữ A xanh nổi -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#dropS)">
+    <path d="M560 315 L626 492 M560 315 L494 492 M520 428 L600 428" stroke="#1e3a8a" stroke-width="30" transform="translate(3 8)"/>
+    <path d="M560 315 L626 492 M560 315 L494 492 M520 428 L600 428" stroke="url(#aG)" stroke-width="28"/>
+    <path d="M556 326 L520 430" stroke="#fff" stroke-opacity=".55" stroke-width="7"/>
+  </g>
+  <!-- chữ Quang Anh MT -->
+  <g font-family="'Arial Rounded MT Bold','Nunito','Segoe UI',Arial,sans-serif" font-weight="800" font-size="118" text-anchor="middle" filter="url(#dropS)">
+    <text x="512" y="868" fill="#9d174d" opacity=".55" dx="2" dy="6"><tspan>Quang Anh </tspan><tspan fill="#1e3a8a">MT</tspan></text>
+    <text x="512" y="868" stroke="#fff" stroke-width="5" paint-order="stroke"><tspan fill="url(#pink)">Quang Anh </tspan><tspan fill="#bae6fd">MT</tspan></text>
+  </g>
+  <!-- bóng sáng phía trên -->
+  <ellipse cx="512" cy="110" rx="520" ry="190" fill="url(#gloss)" opacity=".3"/>
+</g></svg>
