@@ -530,7 +530,7 @@
 
     <!-- ===== KHO ===== -->
     <section id="v-wh" class="hide">
-      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho<span class="cnt hide" id="nccBtnCnt"></span></button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
+      <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho<span class="cnt hide" id="nccBtnCnt"></span></button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="lkm">🧪 LK mượn<span class="cnt hide" id="lkmCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
       <div class="panel hide" data-w="xuat" id="nccPanel"><h3>📥 Hàng NCC chờ nhập kho <span class="sub" id="nccCnt"></span></h3>
         <div class="sub" style="margin:-4px 0 8px">Kế toán đã thanh toán / ghi nhận nhập hàng nhà cung cấp. Kiểm hàng rồi bấm <b>Duyệt nhập kho</b> – app tự cộng tồn kho.</div><div class="list" id="nccList"></div></div>
@@ -569,6 +569,9 @@
         <div class="two hide" id="rpTwo"><div><label style="margin-top:6px">Từ ngày</label><input type="date" id="rpFrom"></div><div><label style="margin-top:6px">Đến ngày</label><input type="date" id="rpTo"></div></div>
         <div id="rpBody" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
+      <div class="panel" data-w="lkm"><h3>🧪 Linh kiện Kỹ thuật mượn test <span class="sub" id="lkmSum"></span></h3>
+        <div class="sub" style="margin:-4px 0 8px">Kỹ thuật mượn linh kiện trong kho để thử máy (đã tạm trừ kho). Sửa xong Kỹ thuật trả lại → Kho bấm <b>Đã nhận đủ</b> mới chuyển Vận chuyển. Chưa trả đến cuối ngày: cảnh báo đỏ.</div>
+        <div class="list" id="lkmList"></div></div>
       <div class="panel" data-w="ls"><h3>📜 Lịch sử nhập – xuất kho</h3>
         <div class="sub" style="margin-bottom:8px">Mỗi lần nhập (lô) và xuất: thời gian, bán cho ai, đơn nào, seri, <b>xuất từ lô nhập ngày nào</b>. Hàng có seri: đúng lô của seri; hàng không seri: tính “nhập trước – xuất trước”. Chọn 1 sản phẩm để xem bảng các lô nhập và tồn sau mỗi lần.</div>
         <div class="two"><div><label style="margin-top:0">Sản phẩm</label><input id="lsP" list="prodList" placeholder="Tất cả sản phẩm" autocomplete="off"></div>
@@ -737,6 +740,7 @@
     tra_lai:  {label:"GĐ không duyệt – chờ vận chuyển trả",cls:"b-bad",  to:"vc"},
     kt_tra:   {label:"Kỹ thuật không sửa được – chờ vận chuyển trả", cls:"b-bad", to:"vc"},
     cho_lk:   {label:"Chờ linh kiện về",                   cls:"b-warn", to:null},
+    cho_lktra:{label:"Chờ Kho nhận lại linh kiện test",    cls:"b-warn", to:"wh"},
     kho_tra:  {label:"Kho không duyệt – chờ vận chuyển trả khách", cls:"b-bad", to:"vc"},
     huy:      {label:"Đã hủy phiếu",                       cls:"b-bad",  to:null},
     da_giao:  {label:"Đã gửi trả khách",                   cls:"b-ok",   to:null},
@@ -1192,7 +1196,7 @@
       case "kt": return tickets.filter(t => t.stage === "cho_kt" || (t.stage === "cho_lk" && lkDays(t) <= 0));
       case "vc": return [...orders.filter(o => o.stage === "cho_vc"), ...tickets.filter(t => WAIT_VC.includes(t.stage))];
       case "ac": return [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra" || hasPayReq(x));
-      case "wh": return [...orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy"), ...tickets.filter(t => t.stage === "cho_kho")];
+      case "wh": return [...orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy"), ...tickets.filter(t => t.stage === "cho_kho" || t.stage === "cho_lktra")];
       case "sa": return orders.filter(o => o.stage === "cho_xk");          // đơn đã xác nhận, chờ kho xuất
       case "bh": return tickets.filter(t => t.stage === "cho_gd");         // phiếu sửa chữa chờ GĐ duyệt
       default: return [];
@@ -1333,7 +1337,7 @@
   function renderAll(){
     dropIdx();
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); } catch(e){}
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
@@ -1341,7 +1345,7 @@
                vc: tickets.filter(t => WAIT_VC.includes(t.stage)).length + orders.filter(o => o.stage === "cho_vc").length,
                ac: [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra" || hasPayReq(x)).length,
                sa: 0, pm: (() => { try { return pmLicenses().filter(x => x.term === "1y" && pmDays(x.until) <= PM_WARN).length; } catch(e){ return 0; } })(),
-               wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho").length};
+               wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho" || t.stage === "cho_lktra").length};
     document.querySelectorAll(".tab").forEach(b => { const c = b.querySelector(".cnt"), v = n[b.dataset.tab]; c.textContent = v; c.classList.toggle("hide", !v); });
     if (!role) return;
     if (ccView === "nc") drawCC(); else if (ccView === "pm") drawPM(); else if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
@@ -1354,7 +1358,7 @@
       <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
+      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${tpLine(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
@@ -2369,7 +2373,7 @@
   }
 
   /* ================= KỸ THUẬT ================= */
-  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
+  const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || t.stage === "cho_lktra" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
     drawWLookup($("#wlKt")); { const fb = $("#fwBox"); if (fb && fb.parentNode.id !== "v-kt") $("#v-kt").appendChild(fb); } try { drawFw(); } catch(e){}
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
@@ -2377,8 +2381,8 @@
     const f = KTF.find(x => x[0] === ktFilter)[2];
     const rows = tickets.filter(f).sort((a,b) => ktFilter==="xong" ? (b.updatedAt||"").localeCompare(a.updatedAt||"") : (a.createdAt||"").localeCompare(b.createdAt||""));
     $("#ktList").innerHTML = rows.length ? rows.map(t => tkCard(t, wBadge(t.serial) +
-        (t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button></div>`
-      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
+        (t.stage==="cho_kt" ? `<div class="cardbtns"><button class="btn pri" data-job="${esc(t.id)}">🔧 Xử lý</button><button class="btn" data-lktest="${esc(t.id)}">🧪 Linh kiện test</button></div>`
+      : t.stage==="dang_sua" ? `<div class="cardbtns"><button class="btn" data-job="${esc(t.id)}">Cập nhật</button><button class="btn" data-lktest="${esc(t.id)}">🧪 Linh kiện test</button><button class="btn okb" data-fin="${esc(t.id)}">✓ Hoàn tất</button></div>`
       : t.stage==="cho_lk" ? `<div class="cardbtns"><button class="btn okb" data-lkok="${esc(t.id)}">✅ Linh kiện đã về – tiếp tục sửa</button></div>` : "")
       + (canWaitLk(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn" data-lkwait="${esc(t.id)}">⏳ Chờ linh kiện</button></div>` : "")
       + (canKtFail(t) ? `<div class="cardbtns" style="margin-top:6px"><button class="btn danger" data-ktfail="${esc(t.id)}">↩ Trả lại khách</button></div>` : ""))).join("")
@@ -2390,6 +2394,7 @@
     $("#ktList").querySelectorAll("[data-lkok]").forEach(b => b.onclick = () => openLkArrived(b.dataset.lkok));
     $("#ktList").querySelectorAll("[data-fin]").forEach(b => b.onclick = () => {
       const t = tickets.find(x => x.id === b.dataset.fin);
+      if (tpOpen(t).length) return openFinishWithTest(t);
       openAct({title:"Hoàn tất – chuyển Vận chuyển", t, noteLabel:"Kết quả xử lý (tùy chọn)", okText:"✓ Hoàn tất", okCls:"okb",
         run: async note => { await advance(t, "xong", note || `${ACTION[t.action]} xong`); toast("Đã chuyển Vận chuyển"); },
         after: () => goTo("vc", `Kỹ thuật đã xong: ${t.product} (SN ${t.serial}). Vận chuyển nhập mật mã để gửi trả khách.`)});
@@ -2718,6 +2723,104 @@
     bannerQ.push({id: "pmexp", title: `💿 ${due.length} phần mềm sắp / đã hết hạn – gọi khách gia hạn`, text: due.slice(0, 3).map(x => `${x.customer} – ${x.name} (${pmDays(x.until) < 0 ? "hết hạn " + fmt(x.until) : "còn " + pmDays(x.until) + " ngày"})`).join("; ") + (due.length > 3 ? "…" : ""), to: "sa"});
     if (!bannerOn) nextBanner();
   }
+
+  /* ================= 🧪 LINH KIỆN TEST: Kỹ thuật mượn kho để thử máy → trả lại → Kho xác nhận đủ → Vận chuyển ================= */
+  const tpOpen = t => (t?.testParts || []).filter(p => !p.returned && !p.used);
+  const tpDays = p => Math.floor((today() - new Date(iso(new Date(p.at)) + "T00:00:00")) / 864e5);
+  function tpLine(t){ const L = t.testParts || []; if (!L.length) return "";
+    return `<div class="sub" style="margin-top:4px">🧪 LK test: ${L.map(p => `${esc(p.name)} ×${p.qty}${p.src === "ngoai" ? " (ngoài kho)" : ""} – ${p.returned ? `<span style="color:var(--ok)">✔ đã trả kho</span>` : p.used ? "dùng cho máy" : p.returning ? `<b style="color:#b45309">chờ Kho nhận</b>` : `<b style="color:${tpDays(p) > 0 ? "var(--bad)" : "#b45309"}">đang mượn${tpDays(p) > 0 ? ` – QUÁ ${tpDays(p)} ngày` : ""}</b>`}`).join(" · ")}</div>`; }
+  function openTestParts(t){
+    const F2 = $("#actForm");
+    F2.innerHTML = `<div class="grab"></div><h2>🧪 Linh kiện test – mượn kho để thử máy</h2>
+      <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
+      ${(t.testParts || []).length ? `<div class="found" style="margin-bottom:8px">${(t.testParts || []).map(p => `• ${esc(p.name)} ×${p.qty} ${p.src === "kho" ? "(đã tạm trừ kho)" : "(ngoài kho)"} – ${p.returned ? "đã trả" : p.used ? "dùng cho máy" : "đang mượn"}`).join("<br>")}</div>` : ""}
+      <div class="sub">Tìm linh kiện trong kho: <b>có trong kho → tạm trừ kho</b>; không có thì tự gõ tên (chỉ ghi lại). Sửa xong nhớ trả lại kho khi bấm Hoàn tất.</div>
+      <div id="tpRows"></div>
+      <button type="button" class="btn sm" id="tpAdd" style="margin-top:8px">+ Thêm linh kiện</button>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu linh kiện test</button></div>`;
+    const addRow = () => { $("#tpRows").insertAdjacentHTML("beforeend", `<div class="tprow" style="margin-top:8px"><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="tpn" placeholder="Tìm linh kiện trong kho hoặc tự gõ" autocomplete="off"><div class="sugg hide"></div></div><input class="tpq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div><div class="sub tph" style="margin-top:2px"></div></div>`);
+      const el = $("#tpRows").lastElementChild, inp = el.querySelector(".tpn"), q = el.querySelector(".tpq");
+      const upd = () => { const n = inp.value.trim(), k = n ? stockOf(n) : null, need = parseInt(q.value) || 1;
+        el.querySelector(".tph").innerHTML = !n ? "" : k != null && k >= need ? `<b style="color:var(--ok)">📦 Có trong kho: tồn ${k} → tạm trừ ${need}</b>` : k != null ? `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>` : `<b style="color:#7c3aed">✍️ Ngoài kho – chỉ ghi lại</b>`; };
+      attachPicker(inp, el.querySelector(".sugg"), upd, true); q.addEventListener("input", upd); inp.focus(); };
+    $("#tpAdd").onclick = addRow; addRow();
+    actCtx = {run: async () => {
+      const rows = [...document.querySelectorAll("#tpRows .tprow")].map(el => ({name: el.querySelector(".tpn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".tpq").value) || 1)})).filter(r => r.name);
+      if (!rows.length) { toast("Tìm hoặc gõ tên linh kiện test"); throw new Error("x"); }
+      const now = new Date().toISOString(), add = [];
+      for (const r of rows) { const ex = productNames().find(p => norm(p) === norm(r.name)), k = ex ? stockOf(ex) : null;
+        if (k != null && k < r.qty) { toast(`${ex}: kho chỉ còn ${k}`); throw new Error("x"); }
+        const src = k != null ? "kho" : "ngoai", name = ex || r.name;
+        if (src === "kho") await put("mv", {id: "mv_" + uid(), product: name, qty: -r.qty, at: now, kind: "lk_test", ref: t.code, note: `Kỹ thuật mượn test – ${t.product} SN ${t.serial}`, by: actor()});
+        add.push({id: uid(), name, qty: r.qty, src, at: now, by: t.tech || actor()}); }
+      await advance(t, t.stage, `🧪 Mượn linh kiện test: ${add.map(p => `${p.name} ×${p.qty}${p.src === "kho" ? "" : " (ngoài kho)"}`).join(", ")}`, {testParts: (t.testParts || []).concat(add)});
+      toast(`Đã ghi ${add.length} linh kiện test${add.some(p => p.src === "kho") ? " – đã tạm trừ kho" : ""}`);
+    }};
+    open("actBg");
+  }
+  function openFinishWithTest(t){
+    const F2 = $("#actForm"), L = tpOpen(t);
+    F2.innerHTML = `<div class="grab"></div><h2>✓ Hoàn tất – trả linh kiện test lại kho</h2>
+      <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
+      <label>Linh kiện test – tick món <b>trả lại kho</b> <span class="sub">(bỏ tick nếu đã lắp luôn vào máy khách)</span></label>
+      ${L.map(p => `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="tpret" data-id="${esc(p.id)}" checked style="width:22px;height:22px;margin:0"> <span>${esc(p.name)} ×${p.qty} <span class="sub">${p.src === "kho" ? "(mượn kho)" : "(ngoài kho)"}</span></span></label>`).join("")}
+      <label>Kết quả xử lý (tùy chọn)</label><textarea name="note"></textarea>
+      <div class="sub" style="margin-top:6px">Có linh kiện trả lại → chuyển <b>Kho kiểm nhận đủ</b> rồi mới sang Vận chuyển.</div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn okb">✓ Hoàn tất</button></div>`;
+    actCtx = {run: async note => {
+      const ret = new Set([...document.querySelectorAll("#actForm .tpret")].filter(c => c.checked).map(c => c.dataset.id));
+      const parts = (t.testParts || []).map(p => p.returned || p.used ? p : ret.has(p.id) ? Object.assign({}, p, {returning: true}) : Object.assign({}, p, {used: true}));
+      const back = parts.filter(p => p.returning && !p.returned), used = L.filter(p => !ret.has(p.id));
+      const base = `${ACTION[t.action] || "Xử lý"} xong${note ? " – " + note : ""}`;
+      if (back.length) { await advance(t, "cho_lktra", `${base} · trả linh kiện test về kho: ${back.map(p => `${p.name} ×${p.qty}`).join(", ")}${used.length ? ` · dùng cho máy: ${used.map(p => p.name).join(", ")}` : ""}`, {testParts: parts}); toast("Đã hoàn tất – chờ Kho nhận lại linh kiện test"); }
+      else { await advance(t, "xong", `${base}${used.length ? ` · linh kiện test dùng cho máy: ${used.map(p => p.name).join(", ")}` : ""}`, {testParts: parts}); toast("Đã chuyển Vận chuyển"); }
+    }};
+    open("actBg");
+  }
+  function lkReturnCards(){
+    const L = tickets.filter(t => t.stage === "cho_lktra"); if (!L.length) return "";
+    return L.map(t => tkCard(t, `<div class="found" style="margin:6px 0">🧪 <b>Kỹ thuật trả linh kiện test – kiểm đủ rồi xác nhận:</b><br>${tpOpen(t).filter(p => p.returning).map(p => `• ${esc(p.name)} ×${p.qty} ${p.src === "kho" ? "(cộng lại kho)" : "(ngoài kho)"}`).join("<br>")}</div>
+      <div class="cardbtns"><button class="btn danger" data-lkno="${esc(t.id)}">⚠️ Thiếu – báo Kỹ thuật</button><button class="btn okb" data-lkok="${esc(t.id)}">✅ Đã nhận đủ – chuyển Vận chuyển</button></div>`)).join("");
+  }
+  function drawLkm(){
+    const box = $("#lkmList"); if (!box) return;
+    const L = tickets.filter(t => tpOpen(t).length).sort((a,b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
+    const n = L.reduce((a, t) => a + tpOpen(t).length, 0), late = L.filter(t => tpOpen(t).some(p => tpDays(p) > 0)).length;
+    $("#lkmCnt").textContent = n || ""; $("#lkmCnt").classList.toggle("hide", !n);
+    $("#lkmSum").innerHTML = n ? `(${n} món${late ? ` · <b style="color:var(--bad)">${late} phiếu quá ngày</b>` : ""})` : "";
+    box.innerHTML = L.length ? L.map(t => { const bad = tpOpen(t).some(p => tpDays(p) > 0);
+      return `<div class="item" style="cursor:default;${bad ? "border:2px solid var(--bad);background:var(--badbg)" : ""}"><div class="pname">${bad ? "⛔ " : ""}${esc(t.product)} <span class="sub">· ${esc(t.code)} · SN ${esc(t.serial)}</span></div>
+        <div class="sub">👤 ${esc(t.customer)}${t.tech ? ` · 👨‍🔧 KTV ${esc(t.tech)}` : ""} · ${esc(STAGES[t.stage]?.label || "")}</div>
+        <div style="margin-top:4px;font-size:14px">${tpOpen(t).map(p => `• <b>${esc(p.name)}</b> ×${p.qty} ${p.src === "kho" ? "" : '<span class="sub">(ngoài kho)</span>'} – mượn ${fmtTime(p.at)}${tpDays(p) > 0 ? ` <b style="color:var(--bad)">QUÁ ${tpDays(p)} ngày chưa trả</b>` : p.returning ? ` <b style="color:#b45309">chờ Kho nhận</b>` : ""}`).join("<br>")}</div></div>`; }).join("")
+      : `<div class="empty">Không có linh kiện nào đang mượn test.</div>`;
+  }
+  // cuối ngày (từ 17h) còn linh kiện test chưa trả → cảnh báo đỏ cho Kho / Kỹ thuật / Giám đốc
+  function lkTestReminder(){
+    if (!(boss || ["wh", "kt"].includes(role)) || $("#app").classList.contains("hide")) return;
+    const L = tickets.filter(t => tpOpen(t).length), late = L.filter(t => tpOpen(t).some(p => tpDays(p) > 0));
+    const eod = new Date().getHours() >= 17; if (!late.length && !(eod && L.length)) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_lk_rem") || "[]"); } catch(e){}
+    const key = iso(new Date()) + (eod ? ":eod" : ":am"); if (seen.includes(key)) return;
+    try { localStorage.setItem("bh_lk_rem", JSON.stringify(seen.concat([key]).slice(-60))); } catch(e){}
+    const n = L.reduce((a, t) => a + tpOpen(t).length, 0);
+    bannerQ.push({id: "lktest", title: `⛔ ${n} linh kiện test CHƯA TRẢ KHO${late.length ? ` (${late.length} phiếu quá ngày)` : ""}`, text: L.slice(0, 3).map(t => `${t.tech ? "KTV " + t.tech + ": " : ""}${tpOpen(t).map(p => p.name + " ×" + p.qty).join(", ")} (${t.code})`).join("; ") + (L.length > 3 ? "…" : "") + " – Kho kiểm tra, Kỹ thuật trả lại", to: "wh"});
+    if (!bannerOn) nextBanner();
+  }
+  document.addEventListener("click", async e => {
+    const tb = e.target.closest("[data-lktest]"), ok = e.target.closest("[data-lkok]"), no = e.target.closest("[data-lkno]");
+    if (!tb && !ok && !no) return; e.stopPropagation();
+    const t = tickets.find(x => x.id === (tb || ok || no).dataset[tb ? "lktest" : ok ? "lkok" : "lkno"]); if (!t) return;
+    if (tb) return openTestParts(t);
+    const now = new Date().toISOString(), back = tpOpen(t).filter(p => p.returning);
+    if (ok) { ok.disabled = true;
+      try { for (const p of back.filter(p => p.src === "kho")) await put("mv", {id: "mv_" + uid(), product: p.name, qty: p.qty, at: now, kind: "lk_test_tra", ref: t.code, note: `Kỹ thuật trả linh kiện test – ${t.product} SN ${t.serial}`, by: actor()});
+        const parts = (t.testParts || []).map(p => p.returning && !p.returned ? Object.assign({}, p, {returning: false, returned: true, returnedAt: now}) : p);
+        await advance(t, "xong", `Kho đã nhận đủ linh kiện test: ${back.map(p => `${p.name} ×${p.qty}`).join(", ")} – chuyển Vận chuyển`, {testParts: parts}); toast("Đã nhận đủ linh kiện – cộng lại kho, chuyển Vận chuyển");
+      } catch(err){ ok.disabled = false; } }
+    if (no) { const why = prompt("Thiếu linh kiện nào? (ghi rõ để Kỹ thuật trả bổ sung)"); if (why == null) return; if (!why.trim()) { toast("Ghi rõ linh kiện thiếu"); return; }
+      const parts = (t.testParts || []).map(p => p.returning && !p.returned ? Object.assign({}, p, {returning: false}) : p);
+      try { await advance(t, "dang_sua", `⚠️ Kho báo thiếu linh kiện test: ${why.trim()} – Kỹ thuật trả bổ sung rồi bấm Hoàn tất lại`, {testParts: parts}); toast("Đã báo Kỹ thuật"); } catch(err){} }
+  }, true);
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -3265,7 +3368,7 @@
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
-  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành",
+  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
     doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
   const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
   function buildLedgers(){
@@ -3595,14 +3698,15 @@
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
     document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
-    drawThao(); drawExt(); drawExchanges(); drawLoans(); drawNccIn(); if (whTab === "ls") drawLedger();
+    drawThao(); drawExt(); drawExchanges(); drawLoans(); drawNccIn(); drawLkm(); if (whTab === "ls") drawLedger();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
     const cx = orders.filter(o => o.stage === "cho_huy");
     const tk = tickets.filter(t => t.stage === "cho_kho").sort((a,b) => (a.updatedAt||"").localeCompare(b.updatedAt||""));
     const wait = orders.filter(o => o.stage === "cho_xk").sort((a,b) => (isUrgent(b) - isUrgent(a)) || (a.createdAt||"").localeCompare(b.createdAt||""));
-    $("#whCnt").textContent = wait.length + cx.length + tk.length ? `(${wait.length + cx.length + tk.length})` : "";
-    $("#whList").innerHTML = tk.map(t => tkCard(t, `<div class="sub" style="margin:6px 0">🧰 ${t.exchange ? `Đổi mới: nhận máy cũ SN ${esc(t.serial)}, giao máy mới ${esc(t.exchange.newProduct || t.product)} SN <b>${esc(t.exchange.newSerial)}</b>` : `${TYPE[t.type]}: nhận máy vào kho, chuẩn bị linh kiện rồi chuyển Kỹ thuật`}</div>
+    const nLkr = tickets.filter(t => t.stage === "cho_lktra").length;
+    $("#whCnt").textContent = wait.length + cx.length + tk.length + nLkr ? `(${wait.length + cx.length + tk.length + nLkr})` : "";
+    $("#whList").innerHTML = lkReturnCards() + tk.map(t => tkCard(t, `<div class="sub" style="margin:6px 0">🧰 ${t.exchange ? `Đổi mới: nhận máy cũ SN ${esc(t.serial)}, giao máy mới ${esc(t.exchange.newProduct || t.product)} SN <b>${esc(t.exchange.newSerial)}</b>` : `${TYPE[t.type]}: nhận máy vào kho, chuẩn bị linh kiện rồi chuyển Kỹ thuật`}</div>
         ${t.snWarn?.length && !t.snOk ? `<div class="found" style="background:var(--badbg);color:var(--bad)">⚠️ <b>CẢNH BÁO SERI TRÙNG – cần Kho duyệt</b><br>${t.snWarn.map(w => "• " + esc(w)).join("<br>")}</div>
         <div class="cardbtns"><button class="btn danger" data-snno="${esc(t.id)}">✖ Không duyệt – trả lại khách</button><button class="btn okb" data-snok="${esc(t.id)}">✔ Đã kiểm tra – duyệt</button></div>`
         : `${t.snWarn?.length ? `<div class="sub" style="color:var(--ok)">✔ Kho đã duyệt cảnh báo seri</div>` : ""}<div class="cardbtns"><button class="btn pri" data-khok="${esc(t.id)}">${t.exchange && !t.stockOut ? "📦 Xuất máy mới – báo Vận chuyển" : t.exchange ? "✔ Kho giao máy mới – chuyển Vận chuyển" : t.action ? "✔ Kho bàn giao – chuyển Vận chuyển" : "✔ Kho đã nhận hàng – chuyển Kỹ thuật"}</button></div>`}`)).join("") + cx.map(o => odCard(o, `<div class="sub" style="color:var(--bad);margin:6px 0">↩️ Hàng trả lại kho – ${esc(o.cancelReq?.by || "")} yêu cầu: ${esc(o.cancelReq?.reason || "")}</div>
