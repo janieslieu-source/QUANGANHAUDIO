@@ -197,6 +197,7 @@
   .sgk{display:inline-block;font-size:11px;font-weight:700;color:var(--brand);background:rgba(29,78,216,.1);border-radius:6px;padding:1px 5px;margin-left:2px;white-space:nowrap}
   .flashitem{animation:flashit 1.1s ease-in-out 3;outline:3px solid #ef4444;outline-offset:2px}
   @keyframes flashit{50%{background:#fee2e2}}
+  a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
   .chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
   .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:7px 12px;font-size:13px;cursor:pointer}
   .chip.sel{background:var(--brand);color:#fff;border-color:var(--brand)}
@@ -485,6 +486,19 @@
         <div class="chips" id="promoChips" style="flex-wrap:wrap;margin:6px 0 2px"></div>
         <div id="glines"></div>
         <button type="button" class="btn sm" id="addGift" style="margin-top:8px">+ Thêm hàng tặng khác</button>
+        <h4 class="sechd">♻️ Thu cũ đổi mới <span class="sub">(không bắt buộc)</span></h4>
+        <label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px dashed var(--line);border-radius:12px;margin-top:8px;cursor:pointer"><input type="checkbox" name="tiOn" style="width:22px;height:22px;margin:0"> <span><b>Áp dụng chương trình thu cũ đổi mới</b></span></label>
+        <div id="tiBox" class="hide">
+          <div class="two"><div><label>Sản phẩm mua mới *</label><select name="tiNew"></select></div><div><label>Số lượng *</label><input name="tiNewQ" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <div class="two"><div><label>Sản phẩm cũ đổi *</label><input name="tiOld" placeholder="VD: Loa kéo cũ BMB" autocomplete="off"></div><div><label>Số lượng *</label><input name="tiOldQ" type="number" min="1" inputmode="numeric" value="1"></div></div>
+          <div class="two"><div><label>Giá SP mới (đ/cái) *</label><input name="tiNewP" inputmode="numeric" placeholder="VD: 5.000.000"></div><div><label>Giá thu cũ (đ/cái) *</label><input name="tiOldP" inputmode="numeric" placeholder="VD: 1.000.000"></div></div>
+          <div class="found" id="tiSum" style="display:none;margin-top:8px"></div>
+          <label>Sản phẩm cũ của khách *</label>
+          <div class="choice"><button type="button" class="opt" data-tir="1"><span class="ic">📥</span>Đã nhận hàng cũ</button><button type="button" class="opt" data-tir="0"><span class="ic">⏳</span>Khách gửi sau<br><span class="sub">nhắc sau 5 ngày</span></button></div>
+        </div>
+        <h4 class="sechd">💿 Phần mềm <span class="sub">(không bắt buộc – không trừ kho)</span></h4>
+        <div id="swLines"></div>
+        <button type="button" class="btn sm" id="addSw" style="margin-top:8px">+ Thêm phần mềm</button>
         <h4 class="sechd">📝 Thông tin kèm theo</h4>
         <label style="margin-top:4px">Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label>Địa chỉ nhận hàng</label><input name="address">
@@ -506,6 +520,7 @@
 <input type="hidden" name="otest" value="">
         <div class="btns"><button type="submit" class="btn pri" id="saleOk">✅ Xác nhận đơn</button></div>
       </form>
+      <div class="panel hide" id="tiPanel"><h3>♻️ Thu cũ đổi mới – chờ khách gửi hàng cũ <span class="sub" id="tiCnt"></span></h3><div class="list" id="tiList"></div></div>
       <div class="panel"><h3>📋 Đơn hàng gần đây</h3>
         <div style="margin-bottom:6px"><input id="saQ" type="search" placeholder="Tìm theo tên khách, SĐT, mã đơn, sản phẩm…" autocomplete="off" list="saCusList"><datalist id="saCusList"></datalist></div>
         <div class="two" style="margin-bottom:6px"><div><label style="margin-top:0">Từ ngày bán</label><input id="saFrom" type="date"></div><div><label style="margin-top:0">Đến ngày</label><input id="saTo" type="date"></div></div>
@@ -633,6 +648,18 @@
       <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
+      <div class="panel" id="fwBox" style="margin-top:14px"><h3>💾 Phần mềm vang số / đầu karaoke – các phiên bản <span class="sub" id="fwCnt"></span></h3>
+        <details id="fwForm"><summary style="cursor:pointer;font-weight:650;padding:6px 0;color:var(--brand)">⬆️ Upload phiên bản mới</summary>
+          <label>Model vang số / đầu karaoke *</label><input id="fwModel" list="prodList" placeholder="Gõ model, hãng hoặc tên SP">
+          <div class="two"><div><label>Phiên bản *</label><input id="fwVer" placeholder="VD: v2.1.5" autocomplete="off"></div><div><label>Ngày phát hành</label><input id="fwDate" type="date"></div></div>
+          <label>File phần mềm <span class="sub">(tối đa 20 MB)</span></label><input id="fwFile" type="file">
+          <label>Hoặc link tải <span class="sub">(Google Drive… – dùng cho file lớn hơn 20 MB)</span></label><input id="fwLink" placeholder="https://…" autocomplete="off">
+          <label>📖 Link bài hướng dẫn tải / cài đặt <span class="sub">(VD: bài hướng dẫn trên quanganhaudio.com)</span></label><input id="fwGuide" placeholder="https://quanganhaudio.com/huong-dan-…" autocomplete="off">
+          <label>Nội dung cập nhật / hướng dẫn nạp</label><textarea id="fwNote" placeholder="VD: Sửa lỗi hú micro, thêm chế độ Echo…"></textarea>
+          <div class="btns"><button type="button" class="btn pri" id="fwGo">⬆️ Upload phiên bản</button></div><div class="sub" id="fwProg"></div>
+        </details>
+        <input id="fwQ" type="search" placeholder="Tìm model / phiên bản…" autocomplete="off" style="margin-top:8px">
+        <div class="list" id="fwList" style="margin-top:8px"></div></div>
     </section>
   </main>
 </div>
@@ -1290,7 +1317,7 @@
   /* ================= RENDER CHUNG ================= */
   function renderAll(){
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder();
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
@@ -1421,7 +1448,7 @@
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -2325,7 +2352,7 @@
   /* ================= KỸ THUẬT ================= */
   const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
-    drawWLookup($("#wlKt"));
+    drawWLookup($("#wlKt")); try { drawFw(); } catch(e){}
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
     const f = KTF.find(x => x[0] === ktFilter)[2];
@@ -2577,6 +2604,63 @@
     open("actBg");
   }
 
+
+  /* ================= 💾 PHẦN MỀM VANG SỐ – PHIÊN BẢN (file chia nhỏ lưu kèm, hoặc link) ================= */
+  const FW_MAX = 20 * 1024 * 1024, FW_CHUNK = 600 * 1024;
+  const fwList = () => expenses.filter(x => x.kind === "fw").sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
+  const fwSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+  const verCmp = (a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: "base"});
+  function drawFw(){
+    const box = $("#fwList"); if (!box) return;
+    const q = norm($("#fwQ").value), all = fwList(), L = q ? all.filter(x => norm(x.model + " " + x.version + " " + (x.note || "")).includes(q)) : all;
+    $("#fwCnt").textContent = all.length ? `(${all.length})` : "";
+    const latest = {}; all.forEach(x => { const k = norm(x.model); if (!latest[k] || verCmp(x.version, latest[k].version) > 0) latest[k] = x; });
+    const g = new Map(); L.forEach(x => { const k = norm(x.model); if (!g.has(k)) g.set(k, []); g.get(k).push(x); });
+    const canDel = boss || role === "kt";
+    box.innerHTML = g.size ? [...g.values()].map(arr => { arr.sort((a,b) => verCmp(b.version, a.version));
+      return `<div class="item" style="cursor:default"><div class="pname">🎛️ ${esc(arr[0].model)} <span class="sub">· ${arr.length} phiên bản</span></div>` + arr.map(x => `
+        <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">
+          <div class="row"><div><b style="font-size:16px">${esc(x.version)}</b> ${latest[norm(x.model)] === x ? `<span class="tag" style="background:#dcfce7;color:#15803d">⭐ Mới nhất</span>` : ""}
+            <div class="sub">📅 ${fmt(x.date)} · ${esc(x.by || "")}${x.file ? ` · 📎 ${esc(x.file.name)} (${fwSize(x.file.size)})` : ""}</div></div></div>
+          ${x.note ? `<div class="sub" style="margin-top:4px;white-space:pre-wrap;color:var(--ink)">${esc(x.note)}</div>` : ""}
+          <div class="cardbtns">${x.file ? `<button type="button" class="btn okb" data-fwdl="${esc(x.id)}">⬇️ Tải file</button>` : ""}${x.link ? `<a class="btn" href="${esc(fixUrl(x.link))}" target="_blank" rel="noopener">🔗 Mở link tải</a>` : ""}${x.guide ? `<a class="btn" href="${esc(fixUrl(x.guide))}" target="_blank" rel="noopener">📖 Hướng dẫn</a>` : ""}${canDel ? `<button type="button" class="btn danger" data-fwdel="${esc(x.id)}">🗑</button>` : ""}</div></div>`).join("") + `</div>`; }).join("")
+      : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có phiên bản nào – bấm “⬆️ Upload phiên bản mới”."}</div>`;
+  }
+  const b64 = buf => { let s = "", u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+  if ($("#fwGo")) {
+    $("#fwDate").value = iso(new Date());
+    $("#fwQ").addEventListener("input", drawFw);
+    $("#fwGo").onclick = async () => {
+      const model = $("#fwModel").value.trim(), ver = $("#fwVer").value.trim(), f = $("#fwFile").files[0], link = $("#fwLink").value.trim();
+      if (!model) { toast("Nhập model vang số / đầu karaoke"); $("#fwModel").focus(); return; }
+      if (!ver) { toast("Nhập số phiên bản"); $("#fwVer").focus(); return; }
+      if (!f && !link && !$("#fwGuide").value.trim()) { toast("Chọn file phần mềm, dán link tải hoặc link hướng dẫn"); return; }
+      if (f && f.size > FW_MAX) { toast(`File ${fwSize(f.size)} – lớn hơn 20 MB, hãy dán link Google Drive`); return; }
+      if (fwList().some(x => norm(x.model) === norm(model) && norm(x.version) === norm(ver))) { toast(`${model} đã có phiên bản ${ver}`); return; }
+      const btn = $("#fwGo"); btn.disabled = true;
+      try {
+        const now = new Date().toISOString(), rec = {id: "fw_" + uid(), kind: "fw", model, version: ver, date: $("#fwDate").value || iso(new Date()), note: $("#fwNote").value.trim(), link, guide: $("#fwGuide").value.trim(), by: actor(), at: now, amount: 0};
+        if (f) { const buf = await f.arrayBuffer(), ids = [], n = Math.ceil(buf.byteLength / FW_CHUNK) || 1;
+          for (let i = 0; i < n; i++) { $("#fwProg").textContent = `Đang tải lên ${i + 1}/${n}…`; const id = "fwc_" + uid();
+            await put("ph", {id, fw: rec.id, part: i, data: b64(buf.slice(i * FW_CHUNK, (i + 1) * FW_CHUNK)), at: now}); ids.push(id); }
+          rec.file = {name: f.name, size: f.size, type: f.type || "application/octet-stream", chunks: ids}; }
+        await put("ex", rec);
+        ["#fwVer", "#fwLink", "#fwGuide", "#fwNote", "#fwFile"].forEach(s => $(s).value = ""); $("#fwProg").textContent = "";
+        toast(`Đã upload ${model} – ${ver}`); drawFw();
+      } catch(e){ $("#fwProg").textContent = "Upload lỗi – kiểm tra mạng rồi thử lại"; } finally { btn.disabled = false; }
+    };
+    $("#fwList").addEventListener("click", async e => {
+      const d = e.target.closest("[data-fwdl]"), del = e.target.closest("[data-fwdel]");
+      if (d) { const x = fwList().find(y => y.id === d.dataset.fwdl); if (!x?.file) return; d.disabled = true; const t0 = d.textContent;
+        try { const parts = [];
+          for (let i = 0; i < x.file.chunks.length; i++) { d.textContent = `Đang tải ${i + 1}/${x.file.chunks.length}…`; const c = await getPhoto(x.file.chunks[i]); if (!c?.data) throw new Error("miss");
+            const bin = atob(c.data), u = new Uint8Array(bin.length); for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k); parts.push(u); }
+          await saveBlob(x.file.name, new Blob(parts, {type: x.file.type}), `Đã tải ${x.file.name}`);
+        } catch(err){ toast("Không tải được file – kiểm tra mạng rồi thử lại"); } finally { d.disabled = false; d.textContent = t0; } }
+      if (del) { const x = fwList().find(y => y.id === del.dataset.fwdel); if (!x || !confirm(`Xóa ${x.model} – ${x.version}?`)) return;
+        try { for (const id of (x.file?.chunks || [])) await delDoc("ph", id).catch(() => {}); await delDoc("ex", x.id); toast("Đã xóa phiên bản"); drawFw(); } catch(err){} }
+    });
+  }
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -2827,7 +2911,7 @@
   function setOKind(v){ SF.otest.value = v ? "1" : ""; document.querySelectorAll("#oKind button").forEach(b => b.classList.toggle("on", b.dataset.ok === (v ? "1" : ""))); $("#oKindHint").classList.toggle("hide", !v); }
   document.querySelectorAll("#oKind button").forEach(b => b.onclick = () => setOKind(b.dataset.ok));
   function resetSale(){
-    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; addLine(); saleShip = null; syncSale();
+    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; $("#swLines").innerHTML = ""; SF.tiNew.innerHTML = ""; delete SF.tiNewQ.dataset.touched; addLine(); saleShip = null; syncSale(); tiRecv = null; tiSync();
     SF.saleDate.value = iso(new Date()); SF.ocode.value = oCode();
   }
   function syncSale(){
@@ -2853,6 +2937,64 @@
     });
   }
   $("#addGift").onclick = () => { addLine({qty: GIFT_STEP}, true); $("#glines").lastElementChild.querySelector(".lp").focus(); };
+  /* ---------- ♻️ Thu cũ đổi mới ---------- */
+  const TI_DAYS = 5, mny = v => Number(String(v || "").replace(/[^\d]/g, "")) || 0;
+  let tiRecv = null;
+  const soldNames = () => [...$("#olines").children].map(el => ({p: el.querySelector(".lp").value.trim(), q: parseInt(el.querySelector(".lq").value) || 1})).filter(x => x.p);
+  function tiSync(){
+    const on = SF.tiOn.checked; $("#tiBox").classList.toggle("hide", !on); if (!on) return;
+    const cur = SF.tiNew.value, L = soldNames();
+    SF.tiNew.innerHTML = L.length ? L.map(x => `<option value="${esc(x.p)}" ${x.p === cur ? "selected" : ""}>${esc(x.p)}</option>`).join("") : `<option value="">– Nhập hàng bán ở trên trước –</option>`;
+    const pick = L.find(x => x.p === SF.tiNew.value); if (pick && !SF.tiNewQ.dataset.touched) SF.tiNewQ.value = pick.q;
+    const nq = Math.max(1, parseInt(SF.tiNewQ.value) || 1), oq = Math.max(1, parseInt(SF.tiOldQ.value) || 1), np = mny(SF.tiNewP.value), op = mny(SF.tiOldP.value), diff = np * nq - op * oq;
+    $("#tiSum").style.display = np || op ? "" : "none";
+    $("#tiSum").innerHTML = `Tiền SP mới: ${nq} × ${money(np)} = <b>${money(np * nq)}</b><br>Trừ thu cũ: ${oq} × ${money(op)} = <b>− ${money(op * oq)}</b><br>Khách bù thêm: <b style="font-size:17px;color:${diff >= 0 ? "var(--info)" : "var(--bad)"}">${money(diff)}</b>`;
+    SF.querySelectorAll(".opt[data-tir]").forEach(o => o.classList.toggle("sel", tiRecv !== null && o.dataset.tir === (tiRecv ? "1" : "0")));
+  }
+  SF.tiOn.addEventListener("change", tiSync); SF.tiNewQ.addEventListener("input", () => SF.tiNewQ.dataset.touched = "1");
+  ["tiNew", "tiNewQ", "tiOldQ", "tiNewP", "tiOldP"].forEach(n => SF[n].addEventListener("input", tiSync)); SF.tiNew.addEventListener("change", () => { const x = soldNames().find(y => y.p === SF.tiNew.value); if (x) SF.tiNewQ.value = x.q; tiSync(); });
+  ["tiNewP", "tiOldP"].forEach(n => SF[n].addEventListener("blur", () => { const v = mny(SF[n].value); SF[n].value = v ? v.toLocaleString("vi-VN") : ""; }));
+  SF.querySelectorAll(".opt[data-tir]").forEach(o => o.onclick = () => { tiRecv = o.dataset.tir === "1"; tiSync(); });
+  $("#olines").addEventListener("input", () => SF.tiOn.checked && tiSync()); $("#olines").addEventListener("change", () => SF.tiOn.checked && tiSync());
+  const tiLeft = o => o.tradeIn && !o.tradeIn.received ? Math.round((new Date(o.tradeIn.due + "T00:00:00") - today()) / 864e5) : null;
+  const tiLine = o => { const x = o.tradeIn; if (!x) return ""; const left = tiLeft(o);
+    return `<div class="sub" style="margin-top:4px;color:var(--ink)">♻️ <b>Thu cũ đổi mới:</b> thu ${x.oldQty} ${esc(x.oldProduct)}${hidePrice() ? "" : ` (${money(x.oldPrice)}/cái)`} → mua ${x.newQty} ${esc(x.newProduct)}${hidePrice() ? "" : ` (${money(x.newPrice)}/cái) · khách bù <b>${money(x.diff)}</b>`}<br>
+      ${x.received ? `<b style="color:var(--ok)">✅ Đã nhận hàng cũ${x.receivedAt ? " " + fmt(x.receivedAt) : ""}</b>` : `<b style="color:${left < 0 ? "var(--bad)" : "#b45309"}">⏳ Chờ khách gửi hàng cũ – hẹn ${fmt(x.due)} (${left < 0 ? `QUÁ ${-left} ngày` : left === 0 ? "hôm nay" : `còn ${left} ngày`})</b>
+      ${(boss || ["sa", "wh", "ac"].includes(role)) ? ` <button type="button" class="btn sm okb" data-tirecv="${esc(o.id)}" style="margin-top:4px">📥 Đã nhận hàng cũ</button>` : ""}`}</div>`; };
+  document.addEventListener("click", async e => { const b = e.target.closest("[data-tirecv]"); if (!b) return; e.stopPropagation();
+    const o = orders.find(x => x.id === b.dataset.tirecv); if (!o || !o.tradeIn || o.tradeIn.received) return;
+    if (!confirm(`Đã nhận ${o.tradeIn.oldQty} “${o.tradeIn.oldProduct}” của khách ${o.customer}?`)) return;
+    const now = new Date().toISOString(); b.disabled = true;
+    try { await put("od", Object.assign({}, o, {tradeIn: Object.assign({}, o.tradeIn, {received: true, receivedAt: now, receivedBy: actor()}), updatedAt: now,
+      history: (o.history || []).concat([{stage: o.stage, at: now, by: actor(), note: `♻️ Đã nhận hàng cũ thu đổi: ${o.tradeIn.oldQty} ${o.tradeIn.oldProduct}`}])})); toast("Đã ghi nhận nhận hàng cũ"); } catch(err){ b.disabled = false; } }, true);
+  function drawTradeIns(){
+    const box = $("#tiList"); if (!box) return;
+    const L = orders.filter(o => o.tradeIn && !o.tradeIn.received).sort((a,b) => (a.tradeIn.due || "").localeCompare(b.tradeIn.due || ""));
+    $("#tiPanel").classList.toggle("hide", !L.length); $("#tiCnt").textContent = L.length ? `(${L.length})` : "";
+    box.innerHTML = L.map(o => `<div class="item" style="cursor:default"><div class="pname">${esc(o.code)} · ${esc(o.customer)}${o.phone ? ` <span class="sub">📞 ${esc(o.phone)}</span>` : ""}</div>${tiLine(o)}</div>`).join("");
+  }
+  function tradeInReminder(){
+    if (!(boss || ["sa", "wh", "ac"].includes(role)) || $("#app").classList.contains("hide")) return;
+    const late = orders.filter(o => tiLeft(o) !== null && tiLeft(o) <= 0); if (!late.length) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_ti_rem") || "[]"); } catch(e){}
+    const day = iso(new Date()), fresh = late.map(o => o.id + ":" + day).filter(k => !seen.includes(k)); if (!fresh.length) return;
+    try { localStorage.setItem("bh_ti_rem", JSON.stringify(seen.concat(fresh).slice(-300))); } catch(e){}
+    bannerQ.push({id: "tradein", title: `♻️ ${late.length} khách chưa gửi hàng cũ (thu cũ đổi mới)`, text: late.slice(0, 3).map(o => `${o.customer} – ${o.tradeIn.oldQty} ${o.tradeIn.oldProduct} (${tiLeft(o) < 0 ? "quá " + -tiLeft(o) + " ngày" : "hạn hôm nay"})`).join("; ") + (late.length > 3 ? "…" : "") + " – gọi nhắc khách", to: "sa"});
+    if (!bannerOn) nextBanner();
+  }
+  /* ---------- 💿 Phần mềm (1 năm / vĩnh viễn) ---------- */
+  const SW_TERM = {"1y": "1 năm", "vv": "Vĩnh viễn"};
+  function addSw(v = {}){
+    $("#swLines").insertAdjacentHTML("beforeend", `<div class="oline swl" style="grid-template-columns:1fr 70px 34px;margin-top:6px">
+      <input class="swn" placeholder="Tên phần mềm (VD: Phần mềm karaoke VietKTV)" autocomplete="off" value="${esc(v.name || "")}"><input class="swq" type="number" min="1" inputmode="numeric" value="${v.qty || 1}"><button type="button" class="rm" title="Xóa">✕</button>
+      <div class="seg swt full" style="grid-column:1/-1;margin:2px 0"><button type="button" data-t="1y" class="${v.term !== "vv" ? "on" : ""}">📅 Thời hạn 1 năm</button><button type="button" data-t="vv" class="${v.term === "vv" ? "on" : ""}">♾️ Vĩnh viễn</button></div>
+      <input class="swk full" style="grid-column:1/-1" placeholder="Mã kích hoạt / tài khoản (nếu có)" autocomplete="off" value="${esc(v.key || "")}"></div>`);
+    const el = $("#swLines").lastElementChild; el.dataset.t = v.term || "1y";
+    el.querySelectorAll(".swt button").forEach(b => b.onclick = () => { el.dataset.t = b.dataset.t; el.querySelectorAll(".swt button").forEach(x => x.classList.toggle("on", x === b)); });
+    el.querySelector(".rm").onclick = () => el.remove();
+  }
+  $("#addSw").onclick = () => { addSw(); $("#swLines").lastElementChild.querySelector(".swn").focus(); };
+  const swLine = o => (o.software || []).length ? `<div class="sub" style="margin-top:4px;color:var(--ink)">${o.software.map(x => `💿 <b>${esc(x.name)}</b> × ${x.qty} · ${x.term === "vv" ? "♾️ Vĩnh viễn" : `📅 1 năm – hết hạn <b style="color:${x.until < iso(new Date()) ? "var(--bad)" : "inherit"}">${fmt(x.until)}</b>`}${x.key ? ` · mã ${esc(x.key)}` : ""}`).join("<br>")}</div>` : "";
   SF.onsubmit = async e => {
     e.preventDefault();
     const sold = [...$("#olines").children].map(el => ({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: Number(el.querySelector(".lm").value)})).filter(l => l.product);
@@ -2862,10 +3004,24 @@
     if (!sold.length) { toast("Hãy nhập ít nhất 1 hàng bán"); $("#olines .lp").focus(); return; }
     if (!saleShip) { toast("Hãy chọn phương thức gửi hàng"); return; }
     if (saleShip === "chanh" && !SF.carrier.value.trim()) { toast("Hãy nhập tên chành xe"); SF.carrier.focus(); return; }
+    let tradeIn = null;
+    if (SF.tiOn.checked) {
+      const nq = Math.max(1, parseInt(SF.tiNewQ.value) || 1), oq = Math.max(1, parseInt(SF.tiOldQ.value) || 1), np = mny(SF.tiNewP.value), op = mny(SF.tiOldP.value);
+      if (!SF.tiNew.value) { toast("Thu cũ đổi mới: chọn sản phẩm mua mới"); SF.tiNew.focus(); return; }
+      if (!SF.tiOld.value.trim()) { toast("Thu cũ đổi mới: nhập tên sản phẩm cũ đổi"); SF.tiOld.focus(); return; }
+      if (!np) { toast("Thu cũ đổi mới: nhập giá sản phẩm mới"); SF.tiNewP.focus(); return; }
+      if (!op) { toast("Thu cũ đổi mới: nhập giá thu cũ"); SF.tiOldP.focus(); return; }
+      if (tiRecv === null) { toast("Thu cũ đổi mới: chọn “Đã nhận hàng cũ” hoặc “Khách gửi sau”"); return; }
+      const sd = SF.saleDate.value || iso(new Date());
+      tradeIn = {newProduct: SF.tiNew.value, newQty: nq, newPrice: np, oldProduct: SF.tiOld.value.trim(), oldQty: oq, oldPrice: op, total: np * nq, oldValue: op * oq, diff: np * nq - op * oq,
+        received: tiRecv, receivedAt: tiRecv ? new Date().toISOString() : "", due: tiRecv ? "" : iso(new Date(new Date(sd + "T00:00:00").getTime() + TI_DAYS * 864e5))};
+    }
+    const software = [...$("#swLines").children].map(el => ({name: el.querySelector(".swn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".swq").value) || 1), term: el.dataset.t, key: el.querySelector(".swk").value.trim()})).filter(x => x.name);
+    { const sd = SF.saleDate.value || iso(new Date()); software.forEach(x => { x.start = sd; x.until = x.term === "vv" ? "" : iso(addMonths(new Date(sd + "T00:00:00"), 12)); }); }
     const now = new Date().toISOString();
     const o = {id: uid(), code: SF.ocode.value || oCode(), saleDate: SF.saleDate.value || iso(new Date()), createdAt: now,
       customer: SF.customer.value.trim(), phone: SF.phone.value.trim(), address: SF.address.value.trim(), lines,
-      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.value ? {test: true} : {}),
+      ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.value ? {test: true} : {}), ...(tradeIn ? {tradeIn} : {}), ...(software.length ? {software} : {}),
       stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: orderSummary({lines})}]};
     try { await put("od", o); } catch(err){ return; }
     lastOrderId = o.id;
@@ -2885,6 +3041,7 @@
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       <div style="margin-top:6px;font-size:14px">${(o.lines||[]).map((l,i) => `• ${l.gift ? '<span class="tag gift">🎁 Tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "hàng tặng" : l.months ? l.months + " tháng BH" : "không BH"})</span>${snOf(o,i).length || (l.photos || []).length ? `<div class="sub" style="margin-left:12px">${snOf(o,i).length ? "SN: " + snOf(o,i).map(esc).join(", ") : ""} ${photoBtn(l.photos, "Seri – " + l.product)}</div>` : ""}`).join("<br>")}</div>
       <div class="sub" style="margin-top:4px">🚚 ${OSHIP[o.ship?.method] || ""}${o.ship?.carrier ? " " + esc(o.ship.carrier) : ""}${o.ship?.tracking ? " · MVĐ " + esc(o.ship.tracking) : ""}${o.ship?.date ? " · <b>gửi " + fmt(o.ship.date) + "</b>" : ""}${o.exportedAt ? " · xuất kho " + fmtTime(o.exportedAt) : ""}</div>
+      ${tiLine(o)}${swLine(o)}
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
       ${o.pay && !hidePrice() ? `<div class="sub" style="margin-top:4px">💰 ${PAY[o.pay.status]}: <b style="color:${o.pay.status === "cong_no" ? "var(--bad)" : "var(--ok)"}">${money(o.pay.amount)}</b>${o.pay.status === "cong_no" && o.pay.total && o.pay.advance ? ` <span class="sub">(tổng ${money(o.pay.total)}${o.pay.advance ? ` – tạm ứng ${money(o.pay.advance)}` : ""})</span>` : ""}${o.pay.status === "da_tt" && o.pay.paidDate ? " · " + fmt(o.pay.paidDate) : ""}${o.stage === "cong_no" ? ` · nợ ${debtAge(o)} ngày${debtAge(o) >= DEBT_DAYS ? ' <b style="color:var(--bad)">⏰ cần thu</b>' : ""}` : ""}</div>` : ""}
       ${gdLine(o)}${exLine(o.code)}
@@ -4506,7 +4663,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -5155,7 +5312,7 @@
     const req = !edit && hasPayReq(t) ? t.payReq : null, debt0 = Number(t.pay?.amount) || 0;
     // Giám đốc đã báo khách trả: điền sẵn – trả đủ = Đã thanh toán; trả một phần = Công nợ với số còn lại
     const p = req ? Object.assign({}, t.pay, preset === "cong_no" ? {amount: Math.max(0, debt0 - Number(req.amount)), note: `Khách trả ${money(req.amount)} ngày ${fmt(req.date)} (${req.method})${req.note ? " – " + req.note : ""}`}
-      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || (t.loanTotal ? {amount: t.loanTotal, total: t.loanTotal, advance: 0} : {}));
+      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || (t.loanTotal ? {amount: t.loanTotal, total: t.loanTotal, advance: 0} : t.tradeIn?.diff > 0 ? {amount: t.tradeIn.diff, total: t.tradeIn.diff, advance: 0} : {}));
     payStatus = preset || p.status || null;
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
