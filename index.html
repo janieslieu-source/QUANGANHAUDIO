@@ -1015,10 +1015,9 @@
   });
   $("#loginForm").onsubmit = async e => {
     e.preventDefault();
-    if (loginRole === "pm") {   // mục Phần mềm (dịch vụ): dùng mật mã Bán hàng / Kỹ thuật / Giám đốc
-      const pw = $("#pw").value, r = (await checkPw("sa", pw)) ? "sa" : (await checkPw("kt", pw)) ? "kt" : (await checkPw("gd", pw)) ? "gd" : null;
-      if (r) { $("#pw").value = ""; setBoss(r === "gd"); enter(r); showPM(); }
-      else { $("#pwErr").textContent = "Sai mật mã. Mục Phần mềm dùng mật mã Bán hàng, Kỹ thuật hoặc Giám đốc."; $("#pw").select(); }
+    if (loginRole === "pm") {   // mục Phần mềm (dịch vụ): chỉ dùng mật mã Giám đốc
+      if (await checkPw("gd", $("#pw").value)) { $("#pw").value = ""; setBoss(true); enter("gd"); showPM(); }
+      else { $("#pwErr").textContent = "Sai mật mã. Mục Phần mềm dùng mật mã Giám đốc."; $("#pw").select(); }
       return;
     }
     if (await checkPw(loginRole, $("#pw").value)) { $("#pw").value = ""; setBoss(loginRole === "gd"); enter(loginRole); }
@@ -1054,7 +1053,7 @@
     role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
     registerDevice();
     $("#login").classList.add("hide"); $("#app").classList.remove("hide");
-    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt" && b.dataset.tab !== "pm"); });   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
+    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", (r === "kt" && !boss && b.dataset.tab !== "kt") || (b.dataset.tab === "pm" && !boss)); });   // mục Phần mềm: chỉ Giám đốc   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
     markActive();
     ["bh","gd","kt","vc","ac","sa","wh","cc","nc","pm"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
     $('.tab[data-tab="nc"]').classList.toggle("hide", !(boss || r === "ac"));   // tab Ngày công: chỉ Kế toán, Giám đốc
@@ -2379,7 +2378,7 @@
   /* ================= KỸ THUẬT ================= */
   const KTF = [["cho","Chờ xử lý", t => t.stage==="cho_kt"], ["dang","Đang sửa", t => t.stage==="dang_sua"], ["lk","⏳ Chờ LK", t => t.stage==="cho_lk"], ["xong","Đã xong", t => (t.stage === "xong" || CLOSED.includes(t.stage)) && t.action && t.action !== "doimoi" && t.stage !== "huy" && !t.ktFail]];
   function renderKT(){
-    drawWLookup($("#wlKt")); try { drawFw(); } catch(e){}
+    drawWLookup($("#wlKt")); { const fb = $("#fwBox"); if (fb && fb.parentNode.id !== "v-kt") $("#v-kt").appendChild(fb); } try { drawFw(); } catch(e){}
     $("#ktChips").innerHTML = KTF.map(([k,l,f]) => `<button class="chip ${ktFilter===k?"sel":""}" data-k="${k}">${l} (${tickets.filter(f).length})</button>`).join("");
     $("#ktChips").querySelectorAll(".chip").forEach(c => c.onclick = () => { ktFilter = c.dataset.k; renderKT(); });
     const f = KTF.find(x => x[0] === ktFilter)[2];
@@ -2724,6 +2723,7 @@
         <div style="margin-top:4px"><b style="color:${st.c}">${st.t}</b></div></div></div>
         ${x.term === "1y" && canEdit ? `<div class="cardbtns"><button type="button" class="btn ${st.k === "con" ? "" : "okb"}" data-pmrenew="${esc(x.src + ":" + x.id + ":" + x.idx)}">🔁 Gia hạn 1 năm (tái gói)</button></div>` : ""}</div>`; }).join("")
       : `<div class="empty">${q || pmFilter !== "all" ? "Không tìm thấy." : "Chưa có phần mềm nào – nhập ở khung “Bán phần mềm cho khách” phía trên, hoặc thêm phần mềm trong đơn hàng."}</div>`;
+    const fb = $("#fwBox"); if (fb && fb.parentNode.id !== "v-pm") $("#v-pm").appendChild(fb);
     $("#pmNames").innerHTML = [...new Set(all.map(x => x.name))].map(n => `<option value="${esc(n)}">`).join("");
     try { drawFw(); } catch(e){}
   }
@@ -5320,7 +5320,7 @@
     ["bh","gd","kt","vc","ac","sa","wh","cc","nc","pm"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== v));
     $("#appTitle").innerHTML = iosIcon(v) + `<span>${esc(title.replace(/^\S+\s/, ""))}</span>`; draw(); window.scrollTo(0, 0); }
   const showCC = () => showView("cc", "🕘 Chấm công", drawCCView);
-  const showPM = () => showView("pm", "💿 Phần mềm", drawPM);
+  const showPM = () => { if (!boss) { toast("Mục Phần mềm dùng mật mã Giám đốc"); return; } showView("pm", "💿 Phần mềm", drawPM); };
   const showNC = () => { if (!(boss || role === "ac")) { toast("Chỉ Kế toán / Giám đốc xem ngày công"); return; } showView("nc", "📅 Ngày công", drawCC); };
   $("#ccQuick").onclick = () => openCheckin();
 
