@@ -337,6 +337,7 @@
       <button class="tab" data-tab="ac"><span class="ti">💰</span>Kế toán<span class="cnt hide"></span></button>
       <button class="tab hide" data-tab="nc"><span class="ti">📅</span>Ngày công<span class="cnt hide"></span></button>
       <button class="tab" data-tab="sa"><span class="ti">🛒</span>Bán hàng<span class="cnt hide"></span></button>
+      <button class="tab" data-tab="pm"><span class="ti">💿</span>Phần mềm<span class="cnt hide"></span></button>
       <button class="tab" data-tab="wh"><span class="ti">📦</span>Kho<span class="cnt hide"></span></button>
       <button class="tab" data-tab="cc"><span class="ti">🕘</span>Chấm công<span class="cnt hide"></span></button>
     </nav>
@@ -496,9 +497,7 @@
           <label>Sản phẩm cũ của khách *</label>
           <div class="choice"><button type="button" class="opt" data-tir="1"><span class="ic">📥</span>Đã nhận hàng cũ</button><button type="button" class="opt" data-tir="0"><span class="ic">⏳</span>Khách gửi sau<br><span class="sub">nhắc sau 5 ngày</span></button></div>
         </div>
-        <h4 class="sechd">💿 Phần mềm <span class="sub">(không bắt buộc – không trừ kho)</span></h4>
-        <div id="swLines"></div>
-        <button type="button" class="btn sm" id="addSw" style="margin-top:8px">+ Thêm phần mềm</button>
+        <div class="sub" style="margin-top:10px">💿 Bán phần mềm (dịch vụ riêng): dùng mục <b>Phần mềm</b> trên thanh trên cùng. Đầu karaoke mới luôn có sẵn phần mềm kích hoạt vĩnh viễn – app tự ghi.</div>
         <h4 class="sechd">📝 Thông tin kèm theo</h4>
         <label style="margin-top:4px">Số điện thoại</label><input name="phone" type="tel" inputmode="tel">
         <label>Địa chỉ nhận hàng</label><input name="address">
@@ -633,6 +632,38 @@
       <div class="panel exbox" id="exAc"></div>
     </section>
 
+
+    <!-- ===== PHẦN MỀM (bản quyền phần mềm bán cho khách + phiên bản phần mềm vang số / đầu karaoke) ===== -->
+    <section id="v-pm" class="hide">
+      <form class="panel" id="pmForm" autocomplete="off"><h3>💿 Bán phần mềm cho khách</h3>
+        <div class="two"><div><label style="margin-top:0">Tên khách hàng *</label><input name="customer"></div><div><label style="margin-top:0">Số điện thoại</label><input name="phone" type="tel" inputmode="tel"></div></div>
+        <label>Tên phần mềm *</label><input name="name" list="pmNames" placeholder="VD: Phần mềm karaoke VietKTV Online"><datalist id="pmNames"></datalist>
+        <label>Thời hạn * <span class="sub">(bắt buộc chọn)</span></label>
+        <div class="seg" id="pmTerm"><button type="button" data-t="1y">📅 Thời hạn 1 năm</button><button type="button" data-t="vv">♾️ Vĩnh viễn</button></div>
+        <label>Mã kích hoạt * <span class="sub">(bắt buộc – dùng để gia hạn / tái gói)</span></label><input name="key" placeholder="VD: VKT-2026-0001">
+        <div class="two"><div><label>Số lượng</label><input name="qty" type="number" min="1" inputmode="numeric" value="1"></div><div><label>Giá bán (đ)</label><input name="price" inputmode="numeric" placeholder="VD: 1.500.000"></div></div>
+        <div class="two"><div><label>Ngày bán</label><input name="date" type="date"></div><div><label>Hết hạn</label><input name="until" readonly style="opacity:.75" placeholder="—"></div></div>
+        <label>Ghi chú</label><input name="note" placeholder="VD: cài trên đầu karaoke SN 525xxxxx">
+        <div class="btns"><button type="submit" class="btn pri">💾 Lưu phần mềm</button></div>
+      </form>
+      <div class="panel"><h3>🔑 Bản quyền phần mềm của khách <span class="sub" id="pmCnt"></span></h3>
+        <div class="chips" id="pmChips" style="margin-bottom:8px"></div>
+        <input id="pmQ" type="search" placeholder="Tìm tên khách, SĐT, phần mềm, mã kích hoạt…" autocomplete="off">
+        <div class="list" id="pmList" style="margin-top:8px"></div></div>
+      <div class="panel" id="fwBox" ><h3>💾 Phần mềm vang số / đầu karaoke – các phiên bản <span class="sub" id="fwCnt"></span></h3>
+        <details id="fwForm"><summary style="cursor:pointer;font-weight:650;padding:6px 0;color:var(--brand)">⬆️ Upload phiên bản mới</summary>
+          <label>Model vang số / đầu karaoke *</label><input id="fwModel" list="prodList" placeholder="Gõ model, hãng hoặc tên SP">
+          <div class="two"><div><label>Phiên bản *</label><input id="fwVer" placeholder="VD: v2.1.5" autocomplete="off"></div><div><label>Ngày phát hành</label><input id="fwDate" type="date"></div></div>
+          <label>File phần mềm <span class="sub">(tối đa 20 MB)</span></label><input id="fwFile" type="file">
+          <label>Hoặc link tải <span class="sub">(Google Drive… – dùng cho file lớn hơn 20 MB)</span></label><input id="fwLink" placeholder="https://…" autocomplete="off">
+          <label>📖 Link bài hướng dẫn tải / cài đặt <span class="sub">(VD: bài hướng dẫn trên quanganhaudio.com)</span></label><input id="fwGuide" placeholder="https://quanganhaudio.com/huong-dan-…" autocomplete="off">
+          <label>Nội dung cập nhật / hướng dẫn nạp</label><textarea id="fwNote" placeholder="VD: Sửa lỗi hú micro, thêm chế độ Echo…"></textarea>
+          <div class="btns"><button type="button" class="btn pri" id="fwGo">⬆️ Upload phiên bản</button></div><div class="sub" id="fwProg"></div>
+        </details>
+        <input id="fwQ" type="search" placeholder="Tìm model / phiên bản…" autocomplete="off" style="margin-top:8px">
+        <div class="list" id="fwList" style="margin-top:8px"></div></div>
+    </section>
+
     <!-- ===== NGÀY CÔNG (Kế toán, Giám đốc) ===== -->
     <section id="v-nc" class="hide">
       <div class="panel hide" id="ccBox"></div>
@@ -648,18 +679,6 @@
       <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
-      <div class="panel" id="fwBox" style="margin-top:14px"><h3>💾 Phần mềm vang số / đầu karaoke – các phiên bản <span class="sub" id="fwCnt"></span></h3>
-        <details id="fwForm"><summary style="cursor:pointer;font-weight:650;padding:6px 0;color:var(--brand)">⬆️ Upload phiên bản mới</summary>
-          <label>Model vang số / đầu karaoke *</label><input id="fwModel" list="prodList" placeholder="Gõ model, hãng hoặc tên SP">
-          <div class="two"><div><label>Phiên bản *</label><input id="fwVer" placeholder="VD: v2.1.5" autocomplete="off"></div><div><label>Ngày phát hành</label><input id="fwDate" type="date"></div></div>
-          <label>File phần mềm <span class="sub">(tối đa 20 MB)</span></label><input id="fwFile" type="file">
-          <label>Hoặc link tải <span class="sub">(Google Drive… – dùng cho file lớn hơn 20 MB)</span></label><input id="fwLink" placeholder="https://…" autocomplete="off">
-          <label>📖 Link bài hướng dẫn tải / cài đặt <span class="sub">(VD: bài hướng dẫn trên quanganhaudio.com)</span></label><input id="fwGuide" placeholder="https://quanganhaudio.com/huong-dan-…" autocomplete="off">
-          <label>Nội dung cập nhật / hướng dẫn nạp</label><textarea id="fwNote" placeholder="VD: Sửa lỗi hú micro, thêm chế độ Echo…"></textarea>
-          <div class="btns"><button type="button" class="btn pri" id="fwGo">⬆️ Upload phiên bản</button></div><div class="sub" id="fwProg"></div>
-        </details>
-        <input id="fwQ" type="search" placeholder="Tìm model / phiên bản…" autocomplete="off" style="margin-top:8px">
-        <div class="list" id="fwList" style="margin-top:8px"></div></div>
     </section>
   </main>
 </div>
@@ -799,6 +818,7 @@
     nc: ["#fb7185", "#be123c", '<rect x="3.2" y="5" width="17.6" height="16" rx="2.6"/><path d="M3.2 10h17.6M8 3v4M16 3v4"/><path d="M8.5 15l2 2 4-4"/>'],
     sa: ["#c084fc", "#7e22ce", '<circle cx="9.5" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/><path d="M2.5 3.5h2.8l2.5 11.3a2 2 0 0 0 2 1.6h7.1a2 2 0 0 0 1.9-1.5L20.6 8H6.3"/>'],
     wh: ["#fbbf24", "#ea580c", '<path d="M20.5 7.8L12 3 3.5 7.8v8.4L12 21l8.5-4.8z"/><path d="M3.5 7.8L12 12.6l8.5-4.8M12 12.6V21M7.8 5.4l8.5 4.8"/>'],
+    pm: ["#a78bfa", "#4338ca", '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><path d="M12 3a9 9 0 0 1 9 9"/>'],
     cc: ["#22d3ee", "#0e7490", '<circle cx="12" cy="12.5" r="8.5"/><path d="M12 8v4.8l3 1.8M9 2.5h6"/>'],
     logo: ["#3b82f6", "#1e3a8a", '<circle cx="12" cy="12" r="9.3" stroke="#f87171" stroke-width="2.6" stroke-dasharray="2.2 1.5"/><circle cx="12" cy="12" r="6.2"/><path d="M9.3 15.6L12 8.4l2.7 7.2M10.3 13.2h3.4"/>']
   };
@@ -997,7 +1017,7 @@
     if (await checkPw(loginRole, $("#pw").value)) { $("#pw").value = ""; setBoss(loginRole === "gd"); enter(loginRole); }
     else { $("#pwErr").textContent = "Sai mật mã. Vui lòng thử lại."; $("#pw").select(); }
   };
-  document.querySelectorAll(".tab").forEach(b => b.onclick = () => b.dataset.tab === "cc" ? showCC() : b.dataset.tab === "nc" ? showNC() : goTo(b.dataset.tab));
+  document.querySelectorAll(".tab").forEach(b => b.onclick = () => b.dataset.tab === "cc" ? showCC() : b.dataset.tab === "nc" ? showNC() : b.dataset.tab === "pm" ? showPM() : goTo(b.dataset.tab));
   const ktLocked = () => role === "kt" && !boss;
   function goTo(r, reason){
     if (r === role) { if (ccView) enter(r); else renderAll(); return; }
@@ -1027,9 +1047,9 @@
     role = r; ccView = false; try { sessionStorage.setItem("bh_role", r); } catch(e){}
     registerDevice();
     $("#login").classList.add("hide"); $("#app").classList.remove("hide");
-    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt"); });   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
+    document.querySelectorAll(".tab").forEach(b => { b.classList.toggle("on", b.dataset.tab === r); b.classList.toggle("hide", r === "kt" && !boss && b.dataset.tab !== "kt" && b.dataset.tab !== "pm"); });   // phiên Kỹ thuật chỉ thấy tab Kỹ thuật (chấm công ở màn hình đăng nhập)
     markActive();
-    ["bh","gd","kt","vc","ac","sa","wh","cc","nc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
+    ["bh","gd","kt","vc","ac","sa","wh","cc","nc","pm"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== r));
     $('.tab[data-tab="nc"]').classList.toggle("hide", !(boss || r === "ac"));   // tab Ngày công: chỉ Kế toán, Giám đốc
     const tb = document.querySelector(`.tab[data-tab="${r}"]`); if (tb && tb.scrollIntoView) tb.scrollIntoView({inline: "center", block: "nearest"});
     $("#appTitle").innerHTML = (boss && r !== "gd" ? `${iosIcon("gd")}<span>GĐ ›</span>` : "") + iosIcon(r) + `<span>${esc(ROLES[r].name)}</span>`;
@@ -1317,18 +1337,18 @@
   /* ================= RENDER CHUNG ================= */
   function renderAll(){
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); } catch(e){}
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
                kt: tickets.filter(t => t.stage==="cho_kt"||t.stage==="dang_sua").length,
                vc: tickets.filter(t => WAIT_VC.includes(t.stage)).length + orders.filter(o => o.stage === "cho_vc").length,
                ac: [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra" || hasPayReq(x)).length,
-               sa: 0,
+               sa: 0, pm: (() => { try { return pmLicenses().filter(x => x.term === "1y" && pmDays(x.until) <= PM_WARN).length; } catch(e){ return 0; } })(),
                wh: orders.filter(o => o.stage === "cho_xk" || o.stage === "cho_huy").length + tickets.filter(t => t.stage === "cho_kho").length};
     document.querySelectorAll(".tab").forEach(b => { const c = b.querySelector(".cnt"), v = n[b.dataset.tab]; c.textContent = v; c.classList.toggle("hide", !v); });
     if (!role) return;
-    if (ccView === "nc") drawCC(); else if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
+    if (ccView === "nc") drawCC(); else if (ccView === "pm") drawPM(); else if (ccView) drawCCView(); else if (role === "bh") renderBH(); else if (role === "gd") renderGD(); else if (role === "vc") renderVC(); else if (role === "ac") renderAC(); else if (role === "sa") renderSA(); else if (role === "wh") renderWH(); else renderKT();
     if (detailId && $("#detailBg").classList.contains("show")) showDetail(detailId);
   }
   const isLate = t => !CLOSED.includes(t.stage) && daysSince(t.createdAt) > LATE_DAYS;
@@ -1448,7 +1468,7 @@
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "swsale"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -2661,6 +2681,88 @@
         try { for (const id of (x.file?.chunks || [])) await delDoc("ph", id).catch(() => {}); await delDoc("ex", x.id); toast("Đã xóa phiên bản"); drawFw(); } catch(err){} }
     });
   }
+
+  /* ================= 💿 PHẦN MỀM: bán bản quyền, theo dõi hạn, gia hạn (tái gói) ================= */
+  const PM_WARN = 30;   // còn ≤ 30 ngày: báo sắp hết hạn
+  let pmTerm = "", pmFilter = "all";
+  const pmDays = until => until ? Math.round((new Date(until + "T00:00:00") - today()) / 864e5) : null;
+  const pmUntil = (start, term) => term === "1y" ? iso(addMonths(new Date((start || iso(new Date())) + "T00:00:00"), 12)) : "";
+  function pmLicenses(){
+    const L = expenses.filter(x => x.kind === "swsale").map(x => ({src: "sw", id: x.id, idx: -1, customer: x.customer, phone: x.phone || "", name: x.name, qty: x.qty || 1, term: x.term, key: x.key, start: x.start, until: x.until, price: x.price, renewals: x.renewals || [], note: x.note || "", ref: ""}));
+    // mua đầu karaoke mới: phần mềm kích hoạt vĩnh viễn sẵn – tự ghi theo từng seri đã xuất kho
+    orders.filter(o => o.stage !== "huy").forEach(o => (o.lines || []).forEach((l, i) => { if (l.gift || !isHead(l.product)) return;
+      const sns = snOf(o, i), base = {src: "head", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: `Phần mềm karaoke – ${l.product}`, term: "vv", start: o.saleDate || (o.createdAt || "").slice(0, 10), until: "", price: null, renewals: [], ref: o.code, auto: true};
+      if (sns.length) sns.forEach(sn => { const r = findReg(sn) || {}; L.push(Object.assign({}, base, {qty: 1, key: r.actCodeNew || r.actCode || r.codes || "", sn, note: `Kích hoạt sẵn khi mua đầu · SN ${sn}`})); });
+      else L.push(Object.assign({}, base, {qty: l.qty || 1, key: "", note: "Kích hoạt sẵn khi mua đầu · chờ Kho xuất (chưa có seri)"})); }));
+    orders.forEach(o => (o.software || []).forEach((w, i) => L.push({src: "od", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: w.name, qty: w.qty || 1, term: w.term, key: w.key, start: w.start, until: w.until, price: null, renewals: w.renewals || [], note: "", ref: o.code})));
+    return L.sort((a,b) => (a.term === "vv") - (b.term === "vv") || (a.until || "").localeCompare(b.until || "") || (b.start || "").localeCompare(a.start || ""));
+  }
+  const pmState = x => { if (x.term === "vv") return {k: "vv", t: "♾️ Vĩnh viễn", c: "var(--ok)"}; const d = pmDays(x.until);
+    return d < 0 ? {k: "het", t: `⛔ Hết hạn ${fmt(x.until)} (quá ${-d} ngày)`, c: "var(--bad)"} : d <= PM_WARN ? {k: "sap", t: `⏰ Sắp hết hạn ${fmt(x.until)} (còn ${d} ngày)`, c: "#b45309"} : {k: "con", t: `✅ Còn hạn đến ${fmt(x.until)}`, c: "var(--ok)"}; };
+  function drawPM(){
+    if (!$("#pmList")) return;
+    const all = pmLicenses(), q = norm($("#pmQ").value);
+    const cnt = {all: all.length, sap: all.filter(x => ["sap", "het"].includes(pmState(x).k)).length, vv: all.filter(x => x.term === "vv").length};
+    $("#pmChips").innerHTML = [["all", "Tất cả"], ["sap", "⏰ Sắp / đã hết hạn"], ["vv", "♾️ Vĩnh viễn"]].map(([k, l]) => `<button type="button" class="chip ${pmFilter === k ? "sel" : ""}" data-f="${k}">${l} (${cnt[k]})</button>`).join("");
+    $("#pmChips").querySelectorAll("[data-f]").forEach(b => b.onclick = () => { pmFilter = b.dataset.f; drawPM(); });
+    let L = all.filter(x => pmFilter === "all" || (pmFilter === "vv" ? x.term === "vv" : ["sap", "het"].includes(pmState(x).k)));
+    if (q) L = L.filter(x => norm([x.customer, x.phone, x.name, x.key, x.ref, x.note, x.sn].join(" ")).includes(q));
+    $("#pmCnt").textContent = all.length ? `(${all.length})` : "";
+    const canEdit = boss || ["sa", "ac", "kt"].includes(role);
+    $("#pmList").innerHTML = L.length ? L.slice(0, 150).map(x => { const st = pmState(x);
+      return `<div class="item" style="cursor:default"><div class="row"><div><div class="pname">💿 ${esc(x.name)}${x.qty > 1 ? ` × ${x.qty}` : ""}</div>
+        <div class="sub">👤 <b style="color:var(--ink)">${esc(x.customer)}</b>${x.phone ? " · 📞 " + esc(x.phone) : ""}${x.ref ? ` · đơn ${esc(x.ref)}` : ""}</div>
+        <div style="margin-top:4px;font-size:15px">🔑 Mã: <b>${esc(x.key || (x.auto ? (x.sn ? "SN " + x.sn : "—") : "—"))}</b> ${x.key ? copyBtn(x.key) : ""}${x.auto ? ` <span class="tag" style="background:#ede9fe;color:#6d28d9">🎤 Kèm đầu karaoke</span>` : ""}</div>
+        <div class="sub">Bán ngày ${fmt(x.start)}${x.price && !hidePrice() ? " · " + money(x.price) : ""}${x.renewals.length ? ` · đã gia hạn ${x.renewals.length} lần` : ""}${x.note ? " · " + esc(x.note) : ""}</div>
+        <div style="margin-top:4px"><b style="color:${st.c}">${st.t}</b></div></div></div>
+        ${x.term === "1y" && canEdit ? `<div class="cardbtns"><button type="button" class="btn ${st.k === "con" ? "" : "okb"}" data-pmrenew="${esc(x.src + ":" + x.id + ":" + x.idx)}">🔁 Gia hạn 1 năm (tái gói)</button></div>` : ""}</div>`; }).join("")
+      : `<div class="empty">${q || pmFilter !== "all" ? "Không tìm thấy." : "Chưa có phần mềm nào – nhập ở khung “Bán phần mềm cho khách” phía trên, hoặc thêm phần mềm trong đơn hàng."}</div>`;
+    $("#pmNames").innerHTML = [...new Set(all.map(x => x.name))].map(n => `<option value="${esc(n)}">`).join("");
+    try { drawFw(); } catch(e){}
+  }
+  if ($("#pmForm")) {
+    const PF = $("#pmForm"), mnyP = v => Number(String(v || "").replace(/[^\d]/g, "")) || 0;
+    PF.date.value = iso(new Date());
+    const syncU = () => { PF.until.value = pmTerm === "1y" ? fmt(pmUntil(PF.date.value, "1y")) : pmTerm === "vv" ? "♾️ Vĩnh viễn" : ""; $("#pmTerm").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.t === pmTerm)); };
+    $("#pmTerm").querySelectorAll("button").forEach(b => b.onclick = () => { pmTerm = b.dataset.t; syncU(); });
+    PF.date.addEventListener("change", syncU);
+    PF.price.addEventListener("blur", () => { const v = mnyP(PF.price.value); PF.price.value = v ? v.toLocaleString("vi-VN") : ""; });
+    $("#pmQ").addEventListener("input", drawPM);
+    PF.onsubmit = async e => { e.preventDefault();
+      const v = n => PF[n].value.trim();
+      if (!v("customer")) { toast("Nhập tên khách hàng"); PF.customer.focus(); return; }
+      if (!v("name")) { toast("Nhập tên phần mềm"); PF.name.focus(); return; }
+      if (!pmTerm) { toast("Bắt buộc chọn thời hạn – 📅 1 năm hoặc ♾️ Vĩnh viễn"); return; }
+      if (!v("key")) { toast("Bắt buộc nhập mã kích hoạt (để gia hạn / tái gói)"); PF.key.focus(); return; }
+      const start = v("date") || iso(new Date()), now = new Date().toISOString();
+      const rec = {id: "sw_" + uid(), kind: "swsale", customer: v("customer"), phone: v("phone"), name: v("name"), qty: Math.max(1, parseInt(v("qty")) || 1), term: pmTerm, key: v("key"), price: mnyP(v("price")),
+        start, until: pmUntil(start, pmTerm), note: v("note"), renewals: [], by: actor(), at: now, date: start, amount: 0};
+      try { await put("ex", rec); toast(`Đã lưu: ${rec.name} – ${rec.customer}${rec.until ? " · hết hạn " + fmt(rec.until) : " · vĩnh viễn"}`);
+        PF.reset(); PF.date.value = iso(new Date()); pmTerm = ""; syncU(); drawPM(); } catch(err){}
+    };
+    document.addEventListener("click", async e => { const b = e.target.closest("[data-pmrenew]"); if (!b) return;
+      const [src, id, idx] = b.dataset.pmrenew.split(":"), now = new Date().toISOString();
+      const x = pmLicenses().find(y => y.src === src && y.id === id && String(y.idx) === idx); if (!x) return;
+      const from = x.until, base = from && from > iso(new Date()) ? from : iso(new Date()), to = iso(addMonths(new Date(base + "T00:00:00"), 12));
+      const pr = prompt(`Gia hạn “${x.name}” cho ${x.customer}\nMã: ${x.key}\nHạn mới: ${fmt(to)}\n\nGiá gia hạn (đ) – để trống nếu chưa có:`, ""); if (pr === null) return;
+      const rn = {at: now, by: actor(), from: from || "", to, price: Number(String(pr).replace(/[^\d]/g, "")) || 0};
+      try {
+        if (src === "sw") { const r = expenses.find(y => y.id === id); await put("ex", Object.assign({}, r, {until: to, renewals: (r.renewals || []).concat([rn])})); }
+        else { const o = orders.find(y => y.id === id), sw = (o.software || []).map((w, i) => i === +idx ? Object.assign({}, w, {until: to, renewals: (w.renewals || []).concat([rn])}) : w);
+          await put("od", Object.assign({}, o, {software: sw, updatedAt: now, history: (o.history || []).concat([{stage: o.stage, at: now, by: actor(), note: `🔁 Gia hạn phần mềm ${x.name} đến ${fmt(to)}`}])})); }
+        toast(`Đã gia hạn ${x.name} đến ${fmt(to)}`); drawPM();
+      } catch(err){}
+    });
+  }
+  function pmReminder(){
+    if (!(boss || ["sa", "ac"].includes(role)) || $("#app").classList.contains("hide")) return;
+    const due = pmLicenses().filter(x => x.term === "1y" && pmDays(x.until) <= 15 && pmDays(x.until) >= -30); if (!due.length) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_pm_rem") || "[]"); } catch(e){}
+    const day = iso(new Date()), fresh = due.map(x => x.src + x.id + x.idx + ":" + day).filter(k => !seen.includes(k)); if (!fresh.length) return;
+    try { localStorage.setItem("bh_pm_rem", JSON.stringify(seen.concat(fresh).slice(-300))); } catch(e){}
+    bannerQ.push({id: "pmexp", title: `💿 ${due.length} phần mềm sắp / đã hết hạn – gọi khách gia hạn`, text: due.slice(0, 3).map(x => `${x.customer} – ${x.name} (${pmDays(x.until) < 0 ? "hết hạn " + fmt(x.until) : "còn " + pmDays(x.until) + " ngày"})`).join("; ") + (due.length > 3 ? "…" : ""), to: "sa"});
+    if (!bannerOn) nextBanner();
+  }
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -2911,7 +3013,7 @@
   function setOKind(v){ SF.otest.value = v ? "1" : ""; document.querySelectorAll("#oKind button").forEach(b => b.classList.toggle("on", b.dataset.ok === (v ? "1" : ""))); $("#oKindHint").classList.toggle("hide", !v); }
   document.querySelectorAll("#oKind button").forEach(b => b.onclick = () => setOKind(b.dataset.ok));
   function resetSale(){
-    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; $("#swLines").innerHTML = ""; SF.tiNew.innerHTML = ""; delete SF.tiNewQ.dataset.touched; addLine(); saleShip = null; syncSale(); tiRecv = null; tiSync();
+    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; if ($("#swLines")) $("#swLines").innerHTML = ""; SF.tiNew.innerHTML = ""; delete SF.tiNewQ.dataset.touched; addLine(); saleShip = null; syncSale(); tiRecv = null; tiSync();
     SF.saleDate.value = iso(new Date()); SF.ocode.value = oCode();
   }
   function syncSale(){
@@ -2994,7 +3096,7 @@
     el.querySelectorAll(".swt button").forEach(b => b.onclick = () => { el.dataset.t = b.dataset.t; el.querySelectorAll(".swt button").forEach(x => x.classList.toggle("on", x === b)); });
     el.querySelector(".rm").onclick = () => el.remove();
   }
-  $("#addSw").onclick = () => { addSw(); $("#swLines").lastElementChild.querySelector(".swn").focus(); };
+  if ($("#addSw")) $("#addSw").onclick = () => { addSw(); $("#swLines").lastElementChild.querySelector(".swn").focus(); };
   const swLine = o => (o.software || []).length ? `<div class="sub" style="margin-top:4px;color:var(--ink)">${o.software.map(x => `💿 <b>${esc(x.name)}</b> × ${x.qty} · ${x.term === "vv" ? "♾️ Vĩnh viễn" : `📅 1 năm – hết hạn <b style="color:${x.until < iso(new Date()) ? "var(--bad)" : "inherit"}">${fmt(x.until)}</b>`}${x.key ? ` · mã ${esc(x.key)}` : ""}`).join("<br>")}</div>` : "";
   SF.onsubmit = async e => {
     e.preventDefault();
@@ -3017,7 +3119,7 @@
       tradeIn = {newProduct: SF.tiNew.value, newQty: nq, newPrice: np, oldProduct: SF.tiOld.value.trim(), oldQty: oq, oldPrice: op, total: np * nq, oldValue: op * oq, diff: np * nq - op * oq,
         received: tiRecv, receivedAt: tiRecv ? new Date().toISOString() : "", due: tiRecv ? "" : iso(new Date(new Date(sd + "T00:00:00").getTime() + TI_DAYS * 864e5))};
     }
-    const swEls = [...$("#swLines").children].filter(el => el.querySelector(".swn").value.trim() || el.querySelector(".swk").value.trim() || el.dataset.t);
+    const swEls = [...($("#swLines")?.children || [])].filter(el => el.querySelector(".swn").value.trim() || el.querySelector(".swk").value.trim() || el.dataset.t);
     for (const el of swEls) { const nm = el.querySelector(".swn").value.trim() || "Phần mềm";
       if (!el.querySelector(".swn").value.trim()) { toast("Phần mềm: nhập tên phần mềm"); el.querySelector(".swn").focus(); return; }
       if (!el.dataset.t) { toast(`${nm}: bắt buộc chọn thời hạn – 📅 1 năm hoặc ♾️ Vĩnh viễn`); el.querySelector(".swt").scrollIntoView({block: "center"}); return; }
@@ -4669,7 +4771,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "swsale"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -5208,9 +5310,10 @@
   function drawCCView(){ const F = $("#ccSelf"); if (!F.contains(document.activeElement) && !F.querySelector(".ccok")) drawSelf(F, false); }
   function showView(v, title, draw){ ccView = v;
     document.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === v));
-    ["bh","gd","kt","vc","ac","sa","wh","cc","nc"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== v));
+    ["bh","gd","kt","vc","ac","sa","wh","cc","nc","pm"].forEach(k => $("#v-"+k).classList.toggle("hide", k !== v));
     $("#appTitle").innerHTML = iosIcon(v) + `<span>${esc(title.replace(/^\S+\s/, ""))}</span>`; draw(); window.scrollTo(0, 0); }
   const showCC = () => showView("cc", "🕘 Chấm công", drawCCView);
+  const showPM = () => showView("pm", "💿 Phần mềm", drawPM);
   const showNC = () => { if (!(boss || role === "ac")) { toast("Chỉ Kế toán / Giám đốc xem ngày công"); return; } showView("nc", "📅 Ngày công", drawCC); };
   $("#ccQuick").onclick = () => openCheckin();
 
