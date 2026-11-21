@@ -570,7 +570,7 @@
         <div id="rpBody" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
       <div class="panel" data-w="lkm"><h3>🧪 Linh kiện Kỹ thuật mượn test <span class="sub" id="lkmSum"></span></h3>
-        <div class="sub" style="margin:-4px 0 8px">Kỹ thuật mượn linh kiện trong kho để thử máy (đã tạm trừ kho). Sửa xong Kỹ thuật trả lại → Kho bấm <b>Đã nhận đủ</b> mới chuyển Vận chuyển. Chưa trả đến cuối ngày: cảnh báo đỏ.</div>
+        <div class="sub" style="margin:-4px 0 8px">Kỹ thuật mượn linh kiện trong kho để thử máy (đã tạm trừ kho). Kỹ thuật mang trả → Kho bấm <b>📥 Nhận lại</b> từng món (cộng lại kho). Cuối ngày chưa trả: <b style="color:var(--bad)">cảnh báo đỏ</b>; hôm sau Kỹ thuật mở app sẽ được nhắc.</div>
         <div class="list" id="lkmList"></div></div>
       <div class="panel" data-w="ls"><h3>📜 Lịch sử nhập – xuất kho</h3>
         <div class="sub" style="margin-bottom:8px">Mỗi lần nhập (lô) và xuất: thời gian, bán cho ai, đơn nào, seri, <b>xuất từ lô nhập ngày nào</b>. Hàng có seri: đúng lô của seri; hàng không seri: tính “nhập trước – xuất trước”. Chọn 1 sản phẩm để xem bảng các lô nhập và tồn sau mỗi lần.</div>
@@ -2760,20 +2760,19 @@
   }
   function openFinishWithTest(t){
     const F2 = $("#actForm"), L = tpOpen(t);
-    F2.innerHTML = `<div class="grab"></div><h2>✓ Hoàn tất – trả linh kiện test lại kho</h2>
+    F2.innerHTML = `<div class="grab"></div><h2>✓ Hoàn tất – chuyển Vận chuyển</h2>
       <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
-      <label>Linh kiện test – tick món <b>trả lại kho</b> <span class="sub">(bỏ tick nếu đã lắp luôn vào máy khách)</span></label>
+      <label>Linh kiện test đang mượn – tick món <b>sẽ trả lại kho</b> <span class="sub">(bỏ tick nếu đã lắp luôn vào máy khách)</span></label>
       ${L.map(p => `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="tpret" data-id="${esc(p.id)}" checked style="width:22px;height:22px;margin:0"> <span>${esc(p.name)} ×${p.qty} <span class="sub">${p.src === "kho" ? "(mượn kho)" : "(ngoài kho)"}</span></span></label>`).join("")}
       <label>Kết quả xử lý (tùy chọn)</label><textarea name="note"></textarea>
-      <div class="sub" style="margin-top:6px">Có linh kiện trả lại → chuyển <b>Kho kiểm nhận đủ</b> rồi mới sang Vận chuyển.</div>
+      <div class="sub" style="margin-top:6px">Phiếu chuyển <b>Vận chuyển</b> ngay. Linh kiện còn mượn: mang trả Kho trong ngày – Kho bấm nhận lại ở mục <b>🧪 LK mượn</b>; cuối ngày chưa trả sẽ <b style="color:var(--bad)">cảnh báo đỏ</b>.</div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn okb">✓ Hoàn tất</button></div>`;
     actCtx = {run: async note => {
       const ret = new Set([...document.querySelectorAll("#actForm .tpret")].filter(c => c.checked).map(c => c.dataset.id));
-      const parts = (t.testParts || []).map(p => p.returned || p.used ? p : ret.has(p.id) ? Object.assign({}, p, {returning: true}) : Object.assign({}, p, {used: true}));
-      const back = parts.filter(p => p.returning && !p.returned), used = L.filter(p => !ret.has(p.id));
-      const base = `${ACTION[t.action] || "Xử lý"} xong${note ? " – " + note : ""}`;
-      if (back.length) { await advance(t, "cho_lktra", `${base} · trả linh kiện test về kho: ${back.map(p => `${p.name} ×${p.qty}`).join(", ")}${used.length ? ` · dùng cho máy: ${used.map(p => p.name).join(", ")}` : ""}`, {testParts: parts}); toast("Đã hoàn tất – chờ Kho nhận lại linh kiện test"); }
-      else { await advance(t, "xong", `${base}${used.length ? ` · linh kiện test dùng cho máy: ${used.map(p => p.name).join(", ")}` : ""}`, {testParts: parts}); toast("Đã chuyển Vận chuyển"); }
+      const parts = (t.testParts || []).map(p => p.returned || p.used ? p : ret.has(p.id) ? p : Object.assign({}, p, {used: true}));
+      const owe = parts.filter(p => !p.returned && !p.used), used = L.filter(p => !ret.has(p.id));
+      await advance(t, "xong", `${ACTION[t.action] || "Xử lý"} xong${note ? " – " + note : ""}${used.length ? ` · linh kiện test lắp vào máy: ${used.map(p => p.name).join(", ")}` : ""}${owe.length ? ` · còn phải trả kho: ${owe.map(p => `${p.name} ×${p.qty}`).join(", ")}` : ""}`, {testParts: parts});
+      toast(owe.length ? `Đã chuyển Vận chuyển – nhớ trả ${owe.length} linh kiện test cho Kho trong ngày` : "Đã chuyển Vận chuyển");
     }};
     open("actBg");
   }
@@ -2791,7 +2790,7 @@
     box.innerHTML = L.length ? L.map(t => { const bad = tpOpen(t).some(p => tpDays(p) > 0);
       return `<div class="item" style="cursor:default;${bad ? "border:2px solid var(--bad);background:var(--badbg)" : ""}"><div class="pname">${bad ? "⛔ " : ""}${esc(t.product)} <span class="sub">· ${esc(t.code)} · SN ${esc(t.serial)}</span></div>
         <div class="sub">👤 ${esc(t.customer)}${t.tech ? ` · 👨‍🔧 KTV ${esc(t.tech)}` : ""} · ${esc(STAGES[t.stage]?.label || "")}</div>
-        <div style="margin-top:4px;font-size:14px">${tpOpen(t).map(p => `• <b>${esc(p.name)}</b> ×${p.qty} ${p.src === "kho" ? "" : '<span class="sub">(ngoài kho)</span>'} – mượn ${fmtTime(p.at)}${tpDays(p) > 0 ? ` <b style="color:var(--bad)">QUÁ ${tpDays(p)} ngày chưa trả</b>` : p.returning ? ` <b style="color:#b45309">chờ Kho nhận</b>` : ""}`).join("<br>")}</div></div>`; }).join("")
+        <div style="margin-top:4px;font-size:14px">${tpOpen(t).map(p => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed var(--line)"><div style="flex:1;min-width:0">• <b>${esc(p.name)}</b> ×${p.qty} ${p.src === "kho" ? "" : '<span class="sub">(ngoài kho)</span>'} – mượn ${fmtTime(p.at)}${tpDays(p) > 0 ? ` <b style="color:var(--bad)">QUÁ ${tpDays(p)} ngày chưa trả</b>` : ""}</div>${(boss || role === "wh") ? `<button type="button" class="btn okb" data-lkback="${esc(t.id + ":" + p.id)}" style="padding:5px 10px;font-size:13px;min-height:0;flex:0 0 auto;width:auto;white-space:nowrap">📥 Nhận lại</button>` : ""}</div>`).join("")}</div></div>`; }).join("")
       : `<div class="empty">Không có linh kiện nào đang mượn test.</div>`;
   }
   // cuối ngày (từ 17h) còn linh kiện test chưa trả → cảnh báo đỏ cho Kho / Kỹ thuật / Giám đốc
@@ -2803,10 +2802,17 @@
     const key = iso(new Date()) + (eod ? ":eod" : ":am"); if (seen.includes(key)) return;
     try { localStorage.setItem("bh_lk_rem", JSON.stringify(seen.concat([key]).slice(-60))); } catch(e){}
     const n = L.reduce((a, t) => a + tpOpen(t).length, 0);
-    bannerQ.push({id: "lktest", title: `⛔ ${n} linh kiện test CHƯA TRẢ KHO${late.length ? ` (${late.length} phiếu quá ngày)` : ""}`, text: L.slice(0, 3).map(t => `${t.tech ? "KTV " + t.tech + ": " : ""}${tpOpen(t).map(p => p.name + " ×" + p.qty).join(", ")} (${t.code})`).join("; ") + (L.length > 3 ? "…" : "") + " – Kho kiểm tra, Kỹ thuật trả lại", to: "wh"});
+    bannerQ.push({id: "lktest", title: `⛔ ${n} linh kiện test CHƯA TRẢ KHO${late.length ? ` (${late.length} phiếu từ hôm trước)` : ""}`, text: L.slice(0, 3).map(t => `${t.tech ? "KTV " + t.tech + ": " : ""}${tpOpen(t).map(p => p.name + " ×" + p.qty).join(", ")} (${t.code})`).join("; ") + (L.length > 3 ? "…" : "") + (role === "kt" ? " – mang trả Kho ngay" : " – Kho nhắc Kỹ thuật trả, bấm 📥 Nhận lại ở mục LK mượn"), to: role === "kt" ? "kt" : "wh"});
     if (!bannerOn) nextBanner();
   }
   document.addEventListener("click", async e => {
+    const bk = e.target.closest("[data-lkback]");
+    if (bk) { e.stopPropagation(); const [tid, pid] = bk.dataset.lkback.split(":"), t = tickets.find(x => x.id === tid), p = t && (t.testParts || []).find(x => x.id === pid); if (!p || p.returned) return;
+      if (!confirm(`Kho đã nhận lại ${p.name} ×${p.qty} từ Kỹ thuật?`)) return; const now = new Date().toISOString(); bk.disabled = true;
+      try { if (p.src === "kho") await put("mv", {id: "mv_" + uid(), product: p.name, qty: p.qty, at: now, kind: "lk_test_tra", ref: t.code, note: `Kỹ thuật trả linh kiện test – ${t.product} SN ${t.serial}`, by: actor()});
+        await advance(t, t.stage, `📥 Kho đã nhận lại linh kiện test: ${p.name} ×${p.qty}`, {testParts: t.testParts.map(x => x.id === pid ? Object.assign({}, x, {returned: true, returning: false, returnedAt: now}) : x)});
+        toast(`Đã nhận lại ${p.name}${p.src === "kho" ? " – cộng lại kho" : ""}`); } catch(err){ bk.disabled = false; }
+      return; }
     const tb = e.target.closest("[data-lktest]"), ok = e.target.closest("[data-lkok]"), no = e.target.closest("[data-lkno]");
     if (!tb && !ok && !no) return; e.stopPropagation();
     const t = tickets.find(x => x.id === (tb || ok || no).dataset[tb ? "lktest" : ok ? "lkok" : "lkno"]); if (!t) return;
