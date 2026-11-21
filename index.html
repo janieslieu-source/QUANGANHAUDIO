@@ -431,6 +431,7 @@
 
     <!-- ===== GIÁM ĐỐC ===== -->
     <section id="v-gd" class="hide">
+      <div class="panel hide" id="kkPanel"><h3>📦 Kho xin sửa số lượng tồn <span class="sub" id="kkCnt"></span></h3><div class="list" id="kkList"></div></div>
       <div class="panel"><h3>🛠️ Hàng sửa chữa chờ duyệt <span class="sub" id="gdCnt"></span></h3><div class="list" id="gdList"></div></div>
       <div class="panel" id="gdPayBox"><div class="row" style="align-items:center"><h3 style="margin:0">💰 Thanh toán / công nợ chờ Giám đốc duyệt <span class="sub" id="gdPayCnt"></span></h3><button class="btn sm pri hide" id="gdPayAll" type="button">✓ Duyệt tất cả</button></div>
         <div class="sub" style="margin:4px 0 8px">Kế toán ghi nhận xong → Giám đốc kiểm tra lại số tiền. Sai thì bấm “Yêu cầu xem lại” để Kế toán sửa.</div>
@@ -1340,7 +1341,7 @@
     updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
-               gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length,
+               gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length + expenses.filter(x => x.kind === "kkreq" && x.status === "cho").length,
                kt: tickets.filter(t => t.stage==="cho_kt"||t.stage==="dang_sua").length,
                vc: tickets.filter(t => WAIT_VC.includes(t.stage)).length + orders.filter(o => o.stage === "cho_vc").length,
                ac: [...tickets, ...orders].filter(x => x.stage === "cho_tt" || x.pay?.gd === "tra" || hasPayReq(x)).length,
@@ -1468,7 +1469,7 @@
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -2143,6 +2144,7 @@
   });
 
   function renderGD(){
+    drawKkReq();
     drawGdLk(); drawGdWeek(); drawBackup(); drawRiBatches(); drawTestBox();
     drawGdPay(); drawGdDebt(); if (!$("#gdWkDate").value) $("#gdWkDate").value = iso(new Date());
     const wait = tickets.filter(t => t.stage === "cho_gd").sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
@@ -2826,6 +2828,45 @@
     if (no) { const why = prompt("Thiếu linh kiện nào? (ghi rõ để Kỹ thuật trả bổ sung)"); if (why == null) return; if (!why.trim()) { toast("Ghi rõ linh kiện thiếu"); return; }
       const parts = (t.testParts || []).map(p => p.returning && !p.returned ? Object.assign({}, p, {returning: false}) : p);
       try { await advance(t, "dang_sua", `⚠️ Kho báo thiếu linh kiện test: ${why.trim()} – Kỹ thuật trả bổ sung rồi bấm Hoàn tất lại`, {testParts: parts}); toast("Đã báo Kỹ thuật"); } catch(err){} }
+  }, true);
+
+  /* ================= ✏️ SỬA SỐ LƯỢNG TỒN KHO: Kho đề nghị → Giám đốc duyệt → áp dụng (ghi kiểm kê) ================= */
+  const kkPending = name => expenses.find(x => x.kind === "kkreq" && x.status === "cho" && norm(x.product) === norm(name));
+  function drawKkReq(){
+    const L = expenses.filter(x => x.kind === "kkreq" && x.status === "cho").sort((a,b) => (a.at || "").localeCompare(b.at || ""));
+    $("#kkPanel").classList.toggle("hide", !L.length); $("#kkCnt").textContent = L.length ? `(${L.length})` : "";
+    $("#kkList").innerHTML = L.map(x => { const cur = stockOf(x.product) || 0;
+      return `<div class="item" style="cursor:default"><div class="pname">${esc(x.product)}</div>
+        <div style="margin-top:4px;font-size:15px">Tồn lúc đề nghị <b>${x.from}</b> → sửa thành <b style="color:var(--brand)">${x.to}</b> <span class="sub">(${x.to - x.from > 0 ? "+" : ""}${x.to - x.from})</span>${cur !== x.from ? ` <span class="sub" style="color:#b45309">· tồn hiện tại ${cur}</span>` : ""}</div>
+        <div class="sub">📝 ${esc(x.reason)} · ${esc(x.by || "")} · ${fmtTime(x.at)}</div>
+        <div class="cardbtns"><button class="btn danger" data-kkno="${esc(x.id)}">✖ Không duyệt</button><button class="btn okb" data-kkok="${esc(x.id)}">✓ Duyệt sửa</button></div></div>`; }).join("");
+  }
+  document.addEventListener("click", async e => {
+    const ed = e.target.closest("[data-kkedit]"), ok = e.target.closest("[data-kkok]"), no = e.target.closest("[data-kkno]");
+    if (!ed && !ok && !no) return; e.stopPropagation(); e.preventDefault();
+    if (ed) { const name = ed.dataset.kkedit, cur = stockOf(name) || 0;
+      if (kkPending(name)) { toast("Mặt hàng này đang chờ Giám đốc duyệt sửa"); return; }
+      const v = prompt(`Sửa số lượng tồn: ${name}\nTồn hiện tại: ${cur}\n\nNhập số lượng ĐÚNG đang có trong kho:`, String(cur)); if (v === null) return;
+      const to = parseInt(String(v).replace(/[^\d-]/g, ""), 10); if (isNaN(to) || to < 0) { toast("Số lượng không hợp lệ"); return; }
+      if (to === cur) { toast("Số lượng không đổi"); return; }
+      const reason = prompt(`Lý do sửa ${cur} → ${to}? (VD: đếm lại thực tế, nhập sai, hàng hỏng…)`, "Kiểm đếm lại thực tế"); if (reason === null) return;
+      if (!reason.trim()) { toast("Cần ghi lý do"); return; }
+      const now = new Date().toISOString(), rec = {id: "kk_" + uid(), kind: "kkreq", product: name, from: cur, to, reason: reason.trim(), status: "cho", by: actor(), at: now, date: iso(new Date()), amount: 0};
+      try {
+        if (boss) { await put("mv", {id: "mv_" + uid(), product: name, qty: to - cur, at: now, kind: "kiemke", ref: `Giám đốc sửa tồn: ${reason.trim()}`, by: actor()});
+          await put("ex", Object.assign(rec, {status: "duyet", doneAt: now, doneBy: actor()})); toast(`Đã sửa tồn ${name}: ${cur} → ${to}`); }
+        else { await put("ex", rec); pushTo("gd", "📦 Kho xin sửa số lượng tồn", `${name}: ${cur} → ${to} (${reason.trim()})`, rec.id); toast("Đã gửi Giám đốc duyệt sửa số lượng"); }
+        if ($("#detail") && $("#detailBg")?.classList.contains("show")) showStockOf(name);
+      } catch(err){}
+      return; }
+    const x = expenses.find(y => y.id === (ok || no).dataset[ok ? "kkok" : "kkno"]); if (!x || x.status !== "cho") return;
+    const now = new Date().toISOString();
+    if (ok) { const cur = stockOf(x.product) || 0, d = x.to - cur; (ok).disabled = true;
+      try { if (d) await put("mv", {id: "mv_" + uid(), product: x.product, qty: d, at: now, kind: "kiemke", ref: `Duyệt sửa tồn: ${x.reason} (Kho đề nghị ${x.from} → ${x.to})`, by: actor()});
+        await put("ex", Object.assign({}, x, {status: "duyet", doneAt: now, doneBy: actor()})); pushTo("wh", "✅ Giám đốc đã duyệt sửa tồn", `${x.product}: → ${x.to}`, x.id);
+        toast(`Đã duyệt: ${x.product} tồn = ${x.to}`); } catch(err){ ok.disabled = false; } }
+    if (no) { const why = prompt("Lý do không duyệt?", ""); if (why === null) return;
+      try { await put("ex", Object.assign({}, x, {status: "tuchoi", doneAt: now, doneBy: actor(), rejectNote: why.trim()})); pushTo("wh", "✖ Giám đốc không duyệt sửa tồn", `${x.product}: ${why.trim()}`, x.id); toast("Đã không duyệt"); } catch(err){} }
   }, true);
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
@@ -4060,7 +4101,7 @@
     $("#stockSum").textContent = stock.length || products.length ? `Tồn ${totalIn} · ${g.size} mặt hàng` : "";
     const more = rows.length - 100; rows = rows.slice(0, 100);
     $("#stockTable").innerHTML = rows.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Tồn</th><th>Đã xuất</th></tr>
-      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b></td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
+      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td style="white-space:nowrap"><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b>${(boss || role === "wh") ? ` <button type="button" class="cpy" data-kkedit="${esc(r.name)}" title="Sửa số lượng tồn (Giám đốc duyệt)" style="padding:2px 6px">✏️</button>` : ""}${kkPending(r.name) ? ` <span title="Đang chờ Giám đốc duyệt sửa số lượng">⏳</span>` : ""}</td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng tồn. Bấm “Nhập hàng từ file Excel” để tải danh sách lên."}</div>`;
     $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout]")) return; showStockOf(tr.dataset.p); });
     $("#stockTable").querySelectorAll("[data-stout]").forEach(b => b.onclick = e => { e.stopPropagation(); showOutStats(b.dataset.stout); });
@@ -4096,7 +4137,8 @@
     const list = inStock(name), out = stock.filter(x => x.status !== "in" && norm(x.product) === norm(name)).sort((a,b) => (b.outAt||"").localeCompare(a.outAt||""));
     const n = stockOf(name), cur = linkOf(name);
     $("#detail").innerHTML = `<div class="grab"></div><h2>🏷️ ${esc(name)}</h2>
-      <div class="sub">Tồn kho: <b>${n ?? 0}</b>${list.length ? ` (trong đó ${list.length} có seri)` : ""} · đã xuất ${out.length} seri</div>
+      <div class="sub">Tồn kho: <b>${n ?? 0}</b>${list.length ? ` (trong đó ${list.length} có seri)` : ""} · đã xuất ${out.length} seri${(boss || role === "wh") ? ` <button type="button" class="btn sm" data-kkedit="${esc(name)}" style="margin-left:6px">✏️ Sửa số lượng</button>` : ""}</div>
+      ${kkPending(name) ? `<div class="reason" style="margin-top:6px">⏳ Đang chờ Giám đốc duyệt sửa: ${kkPending(name).from} → <b>${kkPending(name).to}</b> (${esc(kkPending(name).reason)})</div>` : ""}
       ${findProduct(name)?.lastCost && !hidePrice() ? `<div class="found" style="margin-top:8px">💰 Giá vốn lần nhập gần nhất (${fmt(findProduct(name).lastCost.at)}): <b>${money(findProduct(name).lastCost.unit)}</b>/SP chưa VAT${findProduct(name).lastCost.vatQty ? ` · <b>${money(findProduct(name).lastCost.unitVat)}</b>/SP có VAT ${findProduct(name).lastCost.vatRate}%` : ""}</div>` : ""}
       <label>🔗 Link tham khảo (trang sản phẩm, thông số, hướng dẫn…)</label>
       <div style="display:flex;gap:8px"><input id="pLink" type="url" inputmode="url" value="${esc(cur)}" placeholder="https://…" style="flex:1"><button class="btn sm pri" id="pLinkSave" type="button">Lưu</button></div>
@@ -4871,7 +4913,7 @@
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
