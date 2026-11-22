@@ -542,7 +542,9 @@
           <button type="button" class="opt" data-os="grab"><span class="ic">🛵</span>Grab thường</button>
           <button type="button" class="opt optgap" data-os="grabgap"><span class="ic">🚨</span>Grab gấp</button>
         </div>
-        <div id="oChanh" class="hide"><label>Tên chành xe *</label><input name="carrier" list="carrierList" placeholder="VD: Chành xe Phương Trang"></div>
+        <div id="oChanh" class="hide"><label>Tên chành xe *</label><input name="carrier" list="carrierList" placeholder="VD: Chành xe Phương Trang">
+          <div class="two"><div><label>Phí ship</label><input name="feeShip" inputmode="numeric" placeholder="VD: 30.000" autocomplete="off"></div><div><label>Phí gửi hàng <span class="sub">(không bắt buộc)</span></label><input name="feeSend" inputmode="numeric" placeholder="VD: 50.000" autocomplete="off"></div></div>
+          <div class="sub" id="feeSum" style="margin-top:6px"></div></div>
         <div id="oPost" class="hide"><label>Bưu cục / đơn vị</label><input name="post" placeholder="VD: Bưu điện VN, Viettel Post…"></div>
         <div id="oGap" class="hide reason" style="background:var(--badbg);color:var(--bad);margin-top:10px">🚨 Đơn GẤP: Kho và Vận chuyển sẽ bị báo động đỏ liên tục cho đến khi đơn được gửi đi.</div>
         <label>Ghi chú</label><textarea name="onote"></textarea>
@@ -745,7 +747,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.7";
+window.APP_BUILD = "2026-11-22.8";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3443,7 +3445,7 @@ window.APP_BUILD = "2026-11-22.7";
   function setOKind(v){ SF.otest.value = v ? "1" : ""; document.querySelectorAll("#oKind button").forEach(b => b.classList.toggle("on", b.dataset.ok === (v ? "1" : ""))); $("#oKindHint").classList.toggle("hide", !v); }
   document.querySelectorAll("#oKind button").forEach(b => b.onclick = () => setOKind(b.dataset.ok));
   function resetSale(){
-    SF.reset(); setOKind(""); $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; if ($("#swLines")) $("#swLines").innerHTML = ""; SF.tiNew.innerHTML = ""; delete SF.tiNewQ.dataset.touched; addLine(); saleShip = null; syncSale(); tiRecv = null; tiSync();
+    SF.reset(); setOKind(""); if ($("#feeSum")) $("#feeSum").innerHTML = ""; $("#olines").innerHTML = ""; $("#glines").innerHTML = ""; if ($("#swLines")) $("#swLines").innerHTML = ""; SF.tiNew.innerHTML = ""; delete SF.tiNewQ.dataset.touched; addLine(); saleShip = null; syncSale(); tiRecv = null; tiSync();
     SF.saleDate.value = iso(new Date()); SF.ocode.value = oCode();
   }
   function syncSale(){
@@ -3453,6 +3455,12 @@ window.APP_BUILD = "2026-11-22.7";
     $("#oGap").classList.toggle("hide", saleShip !== "grabgap");
   }
   SF.querySelectorAll(".opt[data-os]").forEach(o => o.onclick = () => { saleShip = o.dataset.os; syncSale(); });
+  // phí ship + phí gửi hàng (chành xe): tự cộng, ghi vào Chi phí – Ship hàng
+  const feeNum = el => Number(String(el?.value || "").replace(/[^\d]/g, "")) || 0;
+  const feeSync = () => { const a = feeNum(SF.feeShip), b = feeNum(SF.feeSend);
+    [SF.feeShip, SF.feeSend].forEach(el => { const n = feeNum(el); if (n && el.value !== n.toLocaleString("vi-VN")) el.value = n.toLocaleString("vi-VN"); });
+    $("#feeSum").innerHTML = a || b ? `🧮 Tổng phí: <b style="color:var(--ink)">${money(a + b)}</b>${a && b ? ` <span class="sub">(ship ${money(a)} + gửi hàng ${money(b)})</span>` : ""} → ghi vào <b>Chi phí – Ship hàng</b>` : ""; };
+  SF.feeShip.addEventListener("input", feeSync); SF.feeSend.addEventListener("input", feeSync);
   $("#addLine").onclick = () => { addLine(); $("#olines").lastElementChild.querySelector(".lp").focus(); };
   // Sản phẩm hay dùng làm quà tặng chương trình (sửa danh sách tại đây)
   const PROMO_GIFTS = ["Đầu 1U Pro SmartK", "Loa mini SmartK", "Pin Super Pen 3900mmA (Vỉ 4 viên)"];
@@ -3565,8 +3573,11 @@ window.APP_BUILD = "2026-11-22.7";
       stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: orderSummary({lines})}]};
     const allDirect = lines.every(l => l.direct);   // cả đơn giao thẳng từ NCC → không qua Kho / Vận chuyển, chuyển Kế toán
     if (allDirect) { o.stage = "cho_tt"; o.directAt = now; o.history = [{stage: "cho_tt", at: now, by: actor(), note: `${orderSummary({lines})} · 🚚 Giao thẳng từ NCC ${[...new Set(lines.map(l => l.direct.ncc))].join(", ")} – không qua kho`}]; }
+    if (saleShip === "chanh") { const fs = feeNum(SF.feeShip), fg = feeNum(SF.feeSend); if (fs || fg) o.shipFee = {ship: fs, send: fg, total: fs + fg}; }
     try { await put("od", o); } catch(err){ return; }
     for (const l of lines.filter(l => l.direct?.cost)) await dirPayable(o, l);
+    if (o.shipFee) try { await put("ex", {id: "ex_" + uid(), kind: "ship", date: o.saleDate, amount: o.shipFee.total, ref: o.code, customer: o.customer, saleDate: o.saleDate, payer: "cty", charge: false,
+      note: `🚚 ${o.ship.carrier}: ${[o.shipFee.ship ? "phí ship " + money(o.shipFee.ship) : "", o.shipFee.send ? "phí gửi hàng " + money(o.shipFee.send) : ""].filter(Boolean).join(" + ")}`, by: actor(), at: now}); } catch(e){}
     if (allDirect) { lastOrderId = o.id; pushTo("ac", `🔔 Kế toán: đơn ${o.code} – ${o.customer} (giao thẳng từ NCC)`, orderSummary(o), o.id); resetSale(); toast("Đã lưu đơn giao thẳng từ NCC – chuyển Kế toán"); return; }
     lastOrderId = o.id;
     pushTo("wh", `${o.ship.method === "grabgap" ? "🚨 GẤP – GRAB GẤP! " : "🔔 "}Kho: đơn ${o.code} – ${o.customer}`, orderSummary(o), o.id);
