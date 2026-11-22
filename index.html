@@ -145,7 +145,16 @@
   #urgentBar.calm{background:#b45309;animation:calmpulse 1.6s ease-in-out infinite;box-shadow:0 -6px 20px rgba(180,83,9,.4)}
   @keyframes calmpulse{50%{background:#d97706}}
   .sheet-bg.show ~ #urgentBar{display:none}
-  body.hasgap main{padding-bottom:120px}
+  body.hasgap main{padding-bottom:90px}
+  /* gọn: nút tròn đỏ nhỏ ở góc dưới phải, bấm vào mới hiện thông báo; ẩn khi đang gõ */
+  #urgentBar:not(.open){left:auto;right:14px;bottom:calc(env(safe-area-inset-bottom) + 14px);width:58px;height:58px;padding:0;border-radius:50%;font-size:0;color:transparent;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.35);border:3px solid #fff}
+  #urgentBar:not(.open)::before{content:"🔔";font-size:24px;color:#fff}
+  #urgentBar:not(.open)::after{content:attr(data-n);position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#fff;color:#b91c1c;font-size:13px;font-weight:900;line-height:22px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  #urgentBar:not(.open).calm{background:#dc2626;animation:barblink 1.4s steps(2) infinite}
+  #urgentBar.open{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);border-radius:14px;padding:14px 40px 14px 14px}
+  #urgentBar.open::after{content:"✕";position:absolute;top:8px;right:12px;font-size:18px}
+  body.typing #urgentBar{display:none}
   .tab.gaptab{animation:flagblink .6s steps(2) infinite;color:#fff}
   .newitem{border:2px solid var(--brand)!important;box-shadow:0 0 0 4px rgba(29,78,216,.18);animation:pulse 1.6s ease 0s 3}
   .whoff{display:none!important}
@@ -1283,8 +1292,16 @@
     bar.classList.remove("hide");
     return total;
   }
-  $("#urgentBar").onclick = () => {
-    const bar = $("#urgentBar"), sc = bar.dataset.scroll; bar.dataset.scroll = "";
+  { const bar = $("#urgentBar");
+    new MutationObserver(() => { const m = bar.textContent.match(/\d+/); const n = m ? m[0] : "!"; if (bar.dataset.n !== n) bar.dataset.n = n; }).observe(bar, {childList: true, characterData: true, subtree: true});
+    document.addEventListener("focusin", e => { if (e.target.matches("input,textarea,select")) document.body.classList.add("typing"); });
+    document.addEventListener("focusout", () => setTimeout(() => { if (!document.activeElement?.matches?.("input,textarea,select")) document.body.classList.remove("typing"); }, 100)); }
+  $("#urgentBar").onclick = e => {
+    const bar = $("#urgentBar");
+    if (!bar.classList.contains("open")) { bar.classList.add("open"); clearTimeout(bar._t); bar._t = setTimeout(() => bar.classList.remove("open"), 8000); return; }   // lần 1: mở thông báo
+    const r = bar.getBoundingClientRect(); bar.classList.remove("open"); clearTimeout(bar._t);
+    if (e.clientX > r.right - 44 && e.clientY < r.top + 40) return;                                                         // bấm ✕: thu gọn
+    const sc = bar.dataset.scroll; bar.dataset.scroll = "";
     goTo(bar.dataset.to);
     const el = sc && $("#" + sc);
     if (el && !el.closest(".hide")) setTimeout(() => el.scrollIntoView({behavior: "smooth", block: "start"}), 150); else window.scrollTo({top: 0, behavior: "smooth"});
