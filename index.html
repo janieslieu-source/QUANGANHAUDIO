@@ -745,7 +745,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.11";
+window.APP_BUILD = "2026-11-22.12";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -5962,6 +5962,8 @@ window.APP_BUILD = "2026-11-22.11";
         <button type="button" class="opt" data-ps="da_tt"><span class="ic">✅</span>Đã thanh toán</button>
       </div>
       <div id="payWrap" class="hide">
+        <label>Tiền hàng (đ)</label><input name="pgoods" inputmode="numeric" value="${p.goods ? Number(p.goods).toLocaleString("vi-VN") : !t.pay && p.amount ? Number(p.amount).toLocaleString("vi-VN") : ""}" placeholder="Tiền hàng chưa gồm phí ship">
+        <div class="sub" id="goodsInfo" style="margin-top:4px"></div>
         <div id="debtCalc" class="hide"><div class="two">
           <div><label>Tổng công nợ (đ)</label><input name="ptotal" inputmode="numeric" value="${p.total != null ? Number(p.total).toLocaleString("vi-VN") : p.amount != null && p.status === "cong_no" ? Number(p.amount).toLocaleString("vi-VN") : ""}" placeholder="Tổng tiền đơn"></div>
           <div><label>Khách tạm ứng (đ)</label><input name="padv" inputmode="numeric" value="${p.advance ? Number(p.advance).toLocaleString("vi-VN") : ""}" placeholder="0 (không gõ = 0)"></div></div>
@@ -6004,15 +6006,20 @@ window.APP_BUILD = "2026-11-22.11";
       if (payStatus === "cong_no") { F4.ptotal.value = F4.amount.value.trim() === "" ? "" : (n + numOf(F4.padv)).toLocaleString("vi-VN"); calcDebt(); }
       sync();
     });
-    F4.querySelectorAll(".opt").forEach(o => o.onclick = () => { payStatus = o.dataset.ps; calcDebt(); sync(); setTimeout(() => (payStatus === "cong_no" && !F4.ptotal.value ? F4.ptotal : F4.amount).focus(), 50); });
+    F4.querySelectorAll(".opt").forEach(o => o.onclick = () => { payStatus = o.dataset.ps; if (numOf(F4.pgoods) || feeSum()) recalc(); calcDebt(); sync(); setTimeout(() => (!F4.pgoods.value ? F4.pgoods : payStatus === "cong_no" ? F4.padv : F4.amount).focus(), 50); });
     // phí chành xe khách trả: tick → cộng / bỏ tick → trừ khỏi số tiền (tách riêng phí ship, phí gửi hàng)
     const feeAdded = {}; (t.pay?.shipFees ? Object.keys(t.pay.shipFees) : []).forEach(k => { feeAdded[k] = true; const c = F4.querySelector(`.feeAdd[data-k="${k}"]`); if (c) c.checked = true; });
     const feeAddSum = () => { const L = [...F4.querySelectorAll(".feeAdd:checked")]; if ($("#feeAddSum")) $("#feeAddSum").innerHTML = L.length ? `Đã cộng vào tiền khách: ${L.map(c => `${c.dataset.k === "ship" ? "phí ship" : "phí gửi hàng"} ${money(+c.dataset.v)}`).join(" + ")} = <b>${money(L.reduce((a, c) => a + +c.dataset.v, 0))}</b>` : ""; };
-    F4.querySelectorAll(".feeAdd").forEach(c => c.onchange = () => { const d = (c.checked ? 1 : -1) * Number(c.dataset.v); feeAdded[c.dataset.k] = c.checked;
-      if (payStatus === "cong_no") { F4.ptotal.value = Math.max(0, (numOf(F4.ptotal) || amt() + numOf(F4.padv)) + d).toLocaleString("vi-VN"); calcDebt(); }
-      else F4.amount.value = Math.max(0, amt() + d).toLocaleString("vi-VN");
-      feeAddSum(); sync(); });
-    if (!t.pay && t.ship?.fee) F4.querySelectorAll(".feeAdd").forEach(c => { if (t.ship.fee[c.dataset.k + "Payer"] === "khach") { c.checked = true; c.onchange(); } });
+    // tổng = tiền hàng + phí chành xe đã tick → công nợ: điền Tổng công nợ (trừ tạm ứng = còn nợ); đã thanh toán: điền Số tiền
+    const feeSum = () => [...F4.querySelectorAll(".feeAdd:checked")].reduce((a, c) => a + Number(c.dataset.v), 0);
+    const recalc = () => { const g = numOf(F4.pgoods), f = feeSum();
+      $("#goodsInfo").innerHTML = g || f ? `Tiền hàng <b>${money(g)}</b>${[...F4.querySelectorAll(".feeAdd:checked")].map(c => ` + ${c.dataset.k === "ship" ? "phí ship" : "phí gửi hàng"} <b>${money(+c.dataset.v)}</b>`).join("")} = <b style="color:var(--ink)">${money(g + f)}</b>` : "";
+      if (!g && !f) return;
+      if (payStatus === "cong_no") { F4.ptotal.value = (g + f).toLocaleString("vi-VN"); calcDebt(); } else F4.amount.value = (g + f).toLocaleString("vi-VN"); };
+    F4.pgoods.addEventListener("input", () => { F4.pgoods.value = F4.pgoods.value.trim() === "" ? "" : numOf(F4.pgoods).toLocaleString("vi-VN"); recalc(); sync(); });
+    F4.querySelectorAll(".feeAdd").forEach(c => c.onchange = () => { feeAdded[c.dataset.k] = c.checked; recalc(); feeAddSum(); sync(); });
+    if (!t.pay && t.ship?.fee) F4.querySelectorAll(".feeAdd").forEach(c => { if (t.ship.fee[c.dataset.k + "Payer"] === "khach") c.checked = true; });
+    if (!t.pay) recalc();
     feeAddSum();
     calcDebt();
     sync();
@@ -6022,10 +6029,10 @@ window.APP_BUILD = "2026-11-22.11";
         paidDate: payStatus === "da_tt" ? F4.paidDate.value : "", method: payStatus === "da_tt" ? F4.method.value : ""};
       if (payStatus === "cong_no" && F4.ptotal.value.trim()) { pay.total = numOf(F4.ptotal); pay.advance = numOf(F4.padv);
         if (pay.advance > pay.total) { toast("Số tiền tạm ứng lớn hơn tổng công nợ – kiểm tra lại"); F4.padv.focus(); throw new Error("x"); } }
-      { const sf = {}; F4.querySelectorAll(".feeAdd:checked").forEach(c => sf[c.dataset.k] = Number(c.dataset.v)); if (Object.keys(sf).length) pay.shipFees = sf; }
+      { const sf = {}; F4.querySelectorAll(".feeAdd:checked").forEach(c => sf[c.dataset.k] = Number(c.dataset.v)); if (Object.keys(sf).length) pay.shipFees = sf; if (numOf(F4.pgoods)) pay.goods = numOf(F4.pgoods); }
       if (t.pay && t.pay.status === "cong_no") pay.debtSince = t.pay.debtSince || t.pay.at;
       else if (t.pay && t.pay.debtSince) pay.debtSince = t.pay.debtSince;   // sửa phiếu đã thu: giữ ngày bắt đầu nợ cũ
-      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.shipFees ? ` (gồm ${[pay.shipFees.ship ? "phí ship " + money(pay.shipFees.ship) : "", pay.shipFees.send ? "phí gửi hàng " + money(pay.shipFees.send) : ""].filter(Boolean).join(" + ")})` : ""}${pay.method ? " · " + pay.method : ""}${pay.total && pay.advance ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
+      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.shipFees ? ` (${pay.goods ? "tiền hàng " + money(pay.goods) + " + " : "gồm "}${[pay.shipFees.ship ? "phí ship " + money(pay.shipFees.ship) : "", pay.shipFees.send ? "phí gửi hàng " + money(pay.shipFees.send) : ""].filter(Boolean).join(" + ")})` : ""}${pay.method ? " · " + pay.method : ""}${pay.total && pay.advance ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
       if (edit) {
         const o0 = t.pay || {};   // so với số đang lưu (không phải số Giám đốc điền sẵn)
         if (payStatus === o0.status && pay.amount === Number(o0.amount) && pay.paidDate === (o0.paidDate || "") && pay.method === (o0.method || "") && pay.note === (o0.note || "") && (pay.total || 0) === (o0.total || 0) && (pay.advance || 0) === (o0.advance || 0) && o0.gd !== "tra") { toast("Chưa thay đổi gì"); throw new Error("x"); }
