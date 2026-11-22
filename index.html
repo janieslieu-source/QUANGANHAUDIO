@@ -3816,6 +3816,19 @@
   }
   /* ================= KHO ================= */
   let whDay = null;
+  const WH_TYPES = [["ban", "🛒", "Xuất làm sản phẩm mới"], ["thay", "🔧", "KT thay cho khách"], ["doi", "🔄", "Đổi cho khách hàng"], ["test", "🧪", "KT mượn test tạm"]];
+  const whTypes = new Set(WH_TYPES.map(t => t[0]));
+  function whOutEntries(day){
+    const E = [], tkBy = new Map(tickets.map(t => [t.code, t]));
+    orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === day && !o.cancel?.returned).forEach(o => (o.lines || []).forEach((l, i) =>
+      E.push({type: "ban", product: l.product + (l.gift ? " 🎁 (tặng)" : ""), qty: Number(l.qty) || 0, ref: o.code, customer: o.customer, phone: o.phone || "", at: o.exportedAt, sns: snOf(o, i), order: o, line: l})));
+    moves.forEach(m => { if (m.ext || !(Number(m.qty) < 0) || dayOf(m.at) !== day) return;
+      const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : null; if (!t) return;
+      const tk = tkBy.get(m.ref); E.push({type: t, product: m.product, qty: -Number(m.qty), ref: m.ref || "", customer: tk?.customer || "", phone: tk?.phone || "", at: m.at, sns: [], note: m.note || ""}); });
+    stock.forEach(x => { if (x.status !== "out" || !x.outAt || dayOf(x.outAt) !== day) return; const tk = tkBy.get(x.orderCode); if (!tk) return;
+      E.push({type: tk.exchange && keySN(tk.exchange.newSerial) === keySN(x.serial) ? "doi" : "thay", product: x.product, qty: 1, ref: tk.code, customer: tk.customer, phone: tk.phone || "", at: x.outAt, sns: [x.serial]}); });
+    return E.sort((a,b) => (a.at || "").localeCompare(b.at || ""));
+  }
   const dayOf = s => s ? iso(new Date(s)) : "";
   let whTab = "xuat";
   $("#whSeg").querySelectorAll("button").forEach(b => b.onclick = () => { whTab = b.dataset.w; renderWH(); });
@@ -3867,34 +3880,38 @@
     $("#whList").querySelectorAll("[data-xk]").forEach(b => b.onclick = () => openExport(b.dataset.xk));
     $("#whDay").value = whDay;
     // đơn đã hủy & hàng đã trả lại kho: không tính vào đơn đã xuất / hàng xuất
-    const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned).sort((a,b) => (a.exportedAt||"").localeCompare(b.exportedAt||""));
     const back = orders.filter(o => o.cancel?.returned && (dayOf(o.exportedAt) === whDay || dayOf(o.cancel.at) === whDay));
-    const sum = {}; done.forEach(o => (o.lines||[]).forEach(l => { const k = norm(l.product) + (l.gift ? "|tang" : ""); (sum[k] = sum[k] || {name: l.product + (l.gift ? " 🎁 (tặng)" : ""), qty: 0, orders: 0}); sum[k].qty += l.qty; sum[k].orders++; }));
-    const items = Object.values(sum).sort((a,b) => b.qty - a.qty), total = items.reduce((a,x) => a + x.qty, 0);
-    const [y, m, d] = whDay.split("-");
+    const E = whOutEntries(whDay), cnt = {}; WH_TYPES.forEach(([k]) => cnt[k] = E.filter(x => x.type === k).reduce((a, x) => a + x.qty, 0));
+    const sel = E.filter(x => whTypes.has(x.type)), done = [...new Map(sel.filter(x => x.order).map(x => [x.order.id, x.order])).values()];
+    const refs = new Set(sel.map(x => x.ref)).size;
+    const sum = {}; sel.forEach(x => { const k = x.type + "|" + norm(x.product); (sum[k] = sum[k] || {name: x.product, type: x.type, qty: 0, refs: new Set()}); sum[k].qty += x.qty; sum[k].refs.add(x.ref); });
+    const items = Object.values(sum).sort((a,b) => WH_TYPES.findIndex(t => t[0] === a.type) - WH_TYPES.findIndex(t => t[0] === b.type) || b.qty - a.qty), total = items.reduce((a,x) => a + x.qty, 0);
+    const [y, m, d] = whDay.split("-"), tl = k => WH_TYPES.find(t => t[0] === k);
     $("#whSum").innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${WH_TYPES.map(([k, ic, lb]) => `<label class="chip ${whTypes.has(k) ? "sel" : ""}" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" data-xt="${k}" ${whTypes.has(k) ? "checked" : ""} style="width:18px;height:18px;margin:0"> ${ic} ${lb} <b>(${cnt[k]})</b></label>`).join("")}</div>
       <div class="stats" style="grid-template-columns:repeat(3,1fr)">
-        <div class="stat c-info"><b>${done.length}</b><span>Đơn đã xuất</span></div>
+        <div class="stat c-info"><b>${refs}</b><span>Đơn / phiếu</span></div>
         <div class="stat c-ok"><b>${total}</b><span>Tổng số lượng</span></div>
         <div class="stat"><b>${items.length}</b><span>Mặt hàng</span></div></div>
       <h4 style="margin:14px 0 6px;font-size:14px">Hàng xuất ngày ${d}/${m}/${y}</h4>
-      ${items.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Số lượng</th><th>Số đơn</th></tr>${items.map(x => `<tr><td>${esc(x.name)}</td><td><b>${x.qty}</b></td><td>${x.orders}</td></tr>`).join("")}<tr><td><b>TỔNG</b></td><td><b>${total}</b></td><td>${done.length}</td></tr></table>` : `<div class="sub">Chưa xuất hàng nào trong ngày.</div>`}
-      ${done.length ? `<h4 style="margin:14px 0 6px;font-size:14px">Chi tiết đơn</h4><div class="list" id="whDone">${done.map(o => odCard(o)).join("")}</div>` : ""}
+      ${items.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Loại</th><th>SL</th><th>Đơn / phiếu</th></tr>${items.map(x => `<tr><td>${esc(x.name)}</td><td style="white-space:nowrap;font-size:12px">${tl(x.type)[1]} ${tl(x.type)[2]}</td><td><b>${x.qty}</b></td><td>${x.refs.size}</td></tr>`).join("")}<tr><td><b>TỔNG</b></td><td></td><td><b>${total}</b></td><td>${refs}</td></tr></table>` : `<div class="sub">${E.length ? "Không có hàng xuất thuộc loại đang tick." : "Chưa xuất hàng nào trong ngày."}</div>`}
+      ${done.length ? `<h4 style="margin:14px 0 6px;font-size:14px">Chi tiết đơn bán</h4><div class="list" id="whDone">${done.map(o => odCard(o)).join("")}</div>` : ""}
       ${back.length ? `<h4 style="margin:14px 0 6px;font-size:14px;color:var(--bad)">↩️ Đơn hủy – hàng đã trả lại kho (${back.length}) <span class="sub">không tính vào hàng xuất</span></h4><div class="list" id="whBack">${back.map(o => odCard(o)).join("")}</div>` : ""}`;
+    $("#whSum").querySelectorAll("[data-xt]").forEach(c => c.onchange = () => { c.checked ? whTypes.add(c.dataset.xt) : whTypes.delete(c.dataset.xt); renderWH(); });
     if ($("#whDone")) bindOd($("#whDone"));
     if ($("#whBack")) bindOd($("#whBack"));
   }
   $("#whDay").addEventListener("change", e => { whDay = e.target.value || iso(new Date()); renderWH(); });
   // File Excel hàng xuất kho trong ngày: mỗi seri 1 dòng, có hạn bảo hành
   $("#xlsWh").onclick = async () => {
-    const done = orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === whDay && !o.cancel?.returned).sort((a,b) => (a.exportedAt||"").localeCompare(b.exportedAt||""));
-    if (!done.length) { toast("Ngày này chưa có đơn xuất kho"); return; }
+    const SEL = whOutEntries(whDay).filter(x => whTypes.has(x.type)), done = [...new Map(SEL.filter(x => x.order).map(x => [x.order.id, x.order])).values()];
+    if (!SEL.length) { toast("Ngày này chưa có hàng xuất thuộc loại đang tick"); return; }
     const b = $("#xlsWh"); b.disabled = true;
     try {
       toast("Đang tạo file Excel…");
       await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
       const X = window.XLSX;
-      const head = ["STT", "Ngày xuất", "Giờ xuất", "Mã đơn", "Khách hàng", "Số điện thoại", "Địa chỉ", "Sản phẩm", "Loại", "Số lượng", "Số seri", "Bảo hành (tháng)", "Ngày bắt đầu BH", "Hạn bảo hành đến", "Gửi hàng", "Ghi chú"];
+      const head = ["STT", "Ngày xuất", "Giờ xuất", "Mã đơn / phiếu", "Khách hàng", "Số điện thoại", "Địa chỉ", "Sản phẩm", "Loại", "Số lượng", "Số seri", "Bảo hành (tháng)", "Ngày bắt đầu BH", "Hạn bảo hành đến", "Gửi hàng", "Ghi chú"];
       const rows = []; let n = 0;
       done.forEach(o => (o.lines || []).forEach((l, i) => {
         const sns = snOf(o, i), m = l.gift ? 0 : Number(l.months) || 0, start = o.saleDate || dayOf(o.exportedAt);
@@ -3906,15 +3923,19 @@
         if (sns.length) sns.forEach(sn => rows.push([++n, ...base, 1, sn, ...tail, ""]));
         else rows.push([++n, ...base, Number(l.qty) || 0, "", ...tail, snNote]);
       }));
+      // hàng xuất không theo đơn bán: Kỹ thuật thay cho khách, đổi cho khách, Kỹ thuật mượn test
+      SEL.filter(x => !x.order).forEach(x => { const lb = WH_TYPES.find(t => t[0] === x.type)[2], base = [fmt(dayOf(x.at)), fmtTime(x.at).slice(0, 5), x.ref, x.customer, x.phone, "", x.product, lb];
+        if (x.sns.length) x.sns.forEach(sn => rows.push([++n, ...base, 1, sn, "", "", "", "", x.note || ""]));
+        else rows.push([++n, ...base, x.qty, "", "", "", "", "", x.note || ""]); });
       const [y, mo, d] = whDay.split("-");
-      const ws = X.utils.aoa_to_sheet([[`${COMPANY} – HÀNG XUẤT KHO NGÀY ${d}/${mo}/${y}`], [`In lúc ${fmtTime(new Date().toISOString())} · ${done.length} đơn · ${rows.reduce((a,r) => a + (Number(r[9]) || 0), 0)} sản phẩm`], [], head, ...rows]);
+      const ws = X.utils.aoa_to_sheet([[`${COMPANY} – HÀNG XUẤT KHO NGÀY ${d}/${mo}/${y}`], [`In lúc ${fmtTime(new Date().toISOString())} · loại: ${WH_TYPES.filter(t => whTypes.has(t[0])).map(t => t[2]).join(", ")} · ${new Set(SEL.map(x => x.ref)).size} đơn / phiếu · ${rows.reduce((a,r) => a + (Number(r[9]) || 0), 0)} sản phẩm`], [], head, ...rows]);
       ws["!cols"] = [5, 11, 8, 15, 22, 13, 24, 32, 10, 9, 12, 10, 13, 15, 20, 22].map(w => ({wch: w}));
       ws["!merges"] = [{s: {r: 0, c: 0}, e: {r: 0, c: head.length - 1}}, {s: {r: 1, c: 0}, e: {r: 1, c: head.length - 1}}];
       ws["!autofilter"] = {ref: X.utils.encode_range({s: {r: 3, c: 0}, e: {r: 3 + rows.length, c: head.length - 1}})};
       // trang 2: tổng hợp theo sản phẩm
-      const sum = {}; done.forEach(o => (o.lines || []).forEach(l => { const k = l.product + (l.gift ? " (tặng)" : ""); sum[k] = (sum[k] || 0) + (Number(l.qty) || 0); }));
-      const ws2 = X.utils.aoa_to_sheet([["Sản phẩm", "Tổng số lượng"], ...Object.entries(sum).sort((a,b) => b[1] - a[1]), ["TỔNG", Object.values(sum).reduce((a,v) => a + v, 0)]]);
-      ws2["!cols"] = [{wch: 40}, {wch: 14}];
+      const sum = {}; SEL.forEach(x => { const lb = WH_TYPES.find(t => t[0] === x.type)[2], k = x.product + "\u0001" + lb; sum[k] = (sum[k] || 0) + x.qty; });
+      const ws2 = X.utils.aoa_to_sheet([["Sản phẩm", "Loại xuất", "Tổng số lượng"], ...Object.entries(sum).sort((a,b) => b[1] - a[1]).map(([k, v]) => [...k.split("\u0001"), v]), ["TỔNG", "", Object.values(sum).reduce((a,v) => a + v, 0)]]);
+      ws2["!cols"] = [{wch: 40}, {wch: 22}, {wch: 14}];
       const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Xuất kho"); X.utils.book_append_sheet(wb, ws2, "Tổng hợp");
       const out = X.write(wb, {bookType: "xlsx", type: "array"});
       await saveBlob(`Xuat-kho_${whDay}.xlsx`, new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}), "Đã lưu file Excel");
