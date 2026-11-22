@@ -2835,19 +2835,32 @@
     open("actBg");
   }
   function openFinishWithTest(t){
-    const F2 = $("#actForm"), L = tpOpen(t);
+    const F2 = $("#actForm"), L = tpOpen(t), pick = {};   // id -> "thay" | "tra"
     F2.innerHTML = `<div class="grab"></div><h2>✓ Hoàn tất – chuyển Vận chuyển</h2>
       <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
-      <label>Linh kiện test đang mượn – tick món <b>sẽ trả lại kho</b> <span class="sub">(bỏ tick nếu đã lắp luôn vào máy khách)</span></label>
-      ${L.map(p => `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="tpret" data-id="${esc(p.id)}" checked style="width:22px;height:22px;margin:0"> <span>${esc(p.name)} ×${p.qty} <span class="sub">${p.src === "kho" ? "(mượn kho)" : "(ngoài kho)"}</span></span></label>`).join("")}
+      <label>Linh kiện test – linh kiện nào lắp vào máy chạy tốt thì chọn <b>🔧 Thay cho khách</b> (xuất kho, tính tiền khách); còn lại <b>↩️ Trả về kho</b></label>
+      ${L.map(p => `<div style="padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px"><div style="font-size:15px;color:var(--ink)"><b>${esc(p.name)}</b> ×${p.qty} <span class="sub">${p.src === "kho" ? "(mượn kho)" : "(ngoài kho)"}</span></div>
+        <div class="seg tpseg" data-id="${esc(p.id)}" style="margin-top:6px"><button type="button" data-v="thay">🔧 Thay cho khách</button><button type="button" data-v="tra" class="on">↩️ Trả về kho</button></div></div>`).join("")}
       <label>Kết quả xử lý (tùy chọn)</label><textarea name="note"></textarea>
-      <div class="sub" style="margin-top:6px">Phiếu chuyển <b>Vận chuyển</b> ngay. Linh kiện còn mượn: mang trả Kho trong ngày – Kho bấm nhận lại ở mục <b>🧪 LK mượn</b>; cuối ngày chưa trả sẽ <b style="color:var(--bad)">cảnh báo đỏ</b>.</div>
+      <div class="sub" style="margin-top:6px">Phiếu chuyển <b>Vận chuyển</b> ngay. Linh kiện trả về kho: mang trả Kho trong ngày – Kho bấm <b>📥 Nhận lại</b> ở mục <b>🧪 LK mượn</b>; cuối ngày chưa trả sẽ <b style="color:var(--bad)">cảnh báo đỏ</b>.</div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn okb">✓ Hoàn tất</button></div>`;
+    L.forEach(p => pick[p.id] = "tra");
+    F2.querySelectorAll(".tpseg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => { pick[sg.dataset.id] = b.dataset.v; sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); }));
     actCtx = {run: async note => {
-      const ret = new Set([...document.querySelectorAll("#actForm .tpret")].filter(c => c.checked).map(c => c.dataset.id));
-      const parts = (t.testParts || []).map(p => p.returned || p.used ? p : ret.has(p.id) ? p : Object.assign({}, p, {used: true}));
-      const owe = parts.filter(p => !p.returned && !p.used), used = L.filter(p => !ret.has(p.id));
-      await advance(t, "xong", `${ACTION[t.action] || "Xử lý"} xong${note ? " – " + note : ""}${used.length ? ` · linh kiện test lắp vào máy: ${used.map(p => p.name).join(", ")}` : ""}${owe.length ? ` · còn phải trả kho: ${owe.map(p => `${p.name} ×${p.qty}`).join(", ")}` : ""}`, {testParts: parts});
+      const now = new Date().toISOString(), used = L.filter(p => pick[p.id] === "thay");
+      // linh kiện thay cho khách: chuyển từ "mượn test" sang "KT thay cho khách" (xuất kho hẳn, tính vào linh kiện của phiếu)
+      for (const p of used.filter(p => p.src === "kho")) {   // sửa dòng mượn test ban đầu thành "KT thay cho khách" (không đếm trùng, tồn giữ nguyên)
+        const m0 = moves.find(m => m.kind === "lk_test" && m.ref === t.code && norm(m.product) === norm(p.name) && Number(m.qty) === -p.qty && m.at === p.at);
+        if (m0) await put("mv", Object.assign({}, m0, {kind: "linhkien", note: `KT thay cho khách (từ linh kiện test) – ${t.product} SN ${t.serial}`, convertedAt: now}));
+        else { await put("mv", {id: "mv_" + uid(), product: p.name, qty: p.qty, at: now, kind: "lk_test_tra", ref: t.code, note: "Linh kiện test chuyển sang thay cho khách", by: actor()});
+          await put("mv", {id: "mv_" + uid(), product: p.name, qty: -p.qty, at: now, kind: "linhkien", ref: t.code, note: `KT thay cho khách (từ linh kiện test) – ${t.product} SN ${t.serial}`, by: actor()}); }
+      }
+      const parts = (t.testParts || []).map(p => p.returned || p.used ? p : pick[p.id] === "thay" ? Object.assign({}, p, {used: true, usedAt: now}) : p);
+      const owe = parts.filter(p => !p.returned && !p.used);
+      const extra = {testParts: parts};
+      if (used.length) { extra.partsUsed = (t.partsUsed || []).concat(used.map(p => ({name: p.name, qty: p.qty, src: p.src === "kho" ? "kho" : "ngoai", fromTest: true})));
+        extra.parts = [t.parts, ...used.map(p => `${p.name} x${p.qty}`)].filter(Boolean).join(", "); }
+      await advance(t, "xong", `${ACTION[t.action] || "Xử lý"} xong${note ? " – " + note : ""}${used.length ? ` · 🔧 thay cho khách: ${used.map(p => `${p.name} ×${p.qty}`).join(", ")}` : ""}${owe.length ? ` · ↩️ trả về kho: ${owe.map(p => `${p.name} ×${p.qty}`).join(", ")}` : ""}`, extra);
       toast(owe.length ? `Đã chuyển Vận chuyển – nhớ trả ${owe.length} linh kiện test cho Kho trong ngày` : "Đã chuyển Vận chuyển");
     }};
     open("actBg");
