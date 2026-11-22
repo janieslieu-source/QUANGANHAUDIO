@@ -538,6 +538,13 @@
       <div class="panel hide" data-w="xuat" id="nccPanel"><h3>📥 Hàng NCC chờ nhập kho <span class="sub" id="nccCnt"></span></h3>
         <div class="sub" style="margin:-4px 0 8px">Kế toán đã thanh toán / ghi nhận nhập hàng nhà cung cấp. Kiểm hàng rồi bấm <b>Duyệt nhập kho</b> – app tự cộng tồn kho.</div><div class="list" id="nccList"></div></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
+      <div class="panel" data-w="xuat"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
+        <div class="sub" style="margin:-4px 0 6px">Xuất hàng / linh kiện trong kho để làm mới, lắp thành sản phẩm cho khách. Bấm xuất → trừ kho ngay, tính vào loại “🆕 Xuất làm mới sản phẩm”.</div>
+        <div id="lmRows"></div><button type="button" class="btn sm" id="lmAdd" style="margin-top:6px">+ Thêm hàng xuất</button>
+        <div class="two"><div><label>Khách nhận *</label><input id="lmCus" placeholder="Tên khách" autocomplete="off"></div><div><label>Số điện thoại</label><input id="lmPhone" type="tel" inputmode="tel"></div></div>
+        <label>Làm thành sản phẩm gì *</label><input id="lmProd" placeholder="VD: Màn hình 22 inch Tomko (làm mới)" autocomplete="off">
+        <label>Ghi chú</label><input id="lmNote" placeholder="Tùy chọn" autocomplete="off">
+        <div class="btns"><button type="button" class="btn pri" id="lmGo">📦 Xuất kho làm mới</button></div></div>
       <div class="panel" data-w="xuat"><div class="row" style="align-items:center"><h3 style="margin:0">📊 Tổng hợp xuất kho</h3>
         <input type="date" id="whDay" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div id="whSum" style="margin-top:10px"></div>
@@ -2935,6 +2942,34 @@
     if (no) { const why = prompt("Lý do không duyệt?", ""); if (why === null) return;
       try { await put("ex", Object.assign({}, x, {status: "tuchoi", doneAt: now, doneBy: actor(), rejectNote: why.trim()})); pushTo("wh", "✖ Giám đốc không duyệt sửa tồn", `${x.product}: ${why.trim()}`, x.id); toast("Đã không duyệt"); } catch(err){} }
   }, true);
+
+  /* ================= 🆕 XUẤT LÀM MỚI SẢN PHẨM (không theo đơn bán) ================= */
+  function lmAddRow(){
+    $("#lmRows").insertAdjacentHTML("beforeend", `<div class="lmrow" style="margin-top:6px"><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="lmn" placeholder="Gõ model, hãng hoặc tên hàng trong kho" autocomplete="off"><div class="sugg hide"></div></div><input class="lmq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"><button type="button" class="btn sm lmrm" style="flex:0 0 auto;width:auto">✕</button></div><div class="sub lmh"></div></div>`);
+    const el = $("#lmRows").lastElementChild, inp = el.querySelector(".lmn"), q = el.querySelector(".lmq");
+    const upd = () => { const n = inp.value.trim(), k = n ? stockOf(n) : null, need = parseInt(q.value) || 1;
+      el.querySelector(".lmh").innerHTML = !n ? "" : k == null ? `<b style="color:var(--bad)">Không có trong kho</b>` : k >= need ? `<b style="color:var(--ok)">Tồn ${k} → còn ${k - need}</b>` : `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>`; };
+    attachPicker(inp, el.querySelector(".sugg"), upd, true); q.addEventListener("input", upd);
+    el.querySelector(".lmrm").onclick = () => { el.remove(); if (!$("#lmRows").children.length) lmAddRow(); };
+  }
+  if ($("#lmGo")) {
+    lmAddRow(); $("#lmAdd").onclick = () => { lmAddRow(); $("#lmRows").lastElementChild.querySelector(".lmn").focus(); };
+    $("#lmGo").onclick = async () => {
+      const rows = [...document.querySelectorAll("#lmRows .lmrow")].map(el => ({name: el.querySelector(".lmn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)})).filter(r => r.name);
+      const cus = $("#lmCus").value.trim(), prod = $("#lmProd").value.trim(), note = $("#lmNote").value.trim(), phone = $("#lmPhone").value.trim();
+      if (!rows.length) { toast("Chọn hàng cần xuất"); return; }
+      if (!cus) { toast("Nhập tên khách nhận"); $("#lmCus").focus(); return; }
+      if (!prod) { toast("Ghi làm thành sản phẩm gì"); $("#lmProd").focus(); return; }
+      const need = {}; for (const r of rows) { const ex = productNames().find(p => norm(p) === norm(r.name)); if (!ex || stockOf(ex) == null) { toast(`“${r.name}” không có trong kho`); return; } r.name = ex; need[norm(ex)] = (need[norm(ex)] || 0) + r.qty; }
+      for (const r of rows) { const k = stockOf(r.name) || 0; if (k < need[norm(r.name)]) { toast(`${r.name}: kho chỉ còn ${k}`); return; } }
+      const now = new Date().toISOString(), code = "LM" + iso(new Date()).slice(2).replace(/-/g, "") + "-" + uid().slice(-3).toUpperCase(), b = $("#lmGo"); b.disabled = true;
+      try {
+        await putMany("mv", rows.map(r => ({id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "lammoi", ref: code, customer: cus, phone, note: `Làm mới → ${prod}${note ? " · " + note : ""}`, by: actor()})));
+        toast(`Đã xuất kho ${rows.reduce((a, r) => a + r.qty, 0)} cái làm mới ${prod} cho ${cus} (${code})`);
+        $("#lmRows").innerHTML = ""; lmAddRow(); ["#lmCus", "#lmPhone", "#lmProd", "#lmNote"].forEach(s => $(s).value = ""); renderWH();
+      } catch(e){} finally { b.disabled = false; }
+    };
+  }
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -3493,7 +3528,7 @@
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
-  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
+  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lammoi: "Xuất làm mới sản phẩm", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
     doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
   const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
   function buildLedgers(){
@@ -3816,15 +3851,15 @@
   }
   /* ================= KHO ================= */
   let whDay = null;
-  const WH_TYPES = [["ban", "🛒", "Xuất làm sản phẩm mới"], ["thay", "🔧", "KT thay cho khách"], ["doi", "🔄", "Đổi cho khách hàng"], ["test", "🧪", "KT mượn test tạm"]];
+  const WH_TYPES = [["lammoi", "🆕", "Xuất làm mới sản phẩm"], ["thay", "🔧", "KT thay cho khách"], ["doi", "🔄", "Đổi cho khách hàng"], ["test", "🧪", "KT mượn test tạm"], ["ban", "🛒", "Xuất bán theo đơn"]];
   const whTypes = new Set(WH_TYPES.map(t => t[0]));
   function whOutEntries(day){
     const E = [], tkBy = new Map(tickets.map(t => [t.code, t]));
     orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === day && !o.cancel?.returned).forEach(o => (o.lines || []).forEach((l, i) =>
       E.push({type: "ban", product: l.product + (l.gift ? " 🎁 (tặng)" : ""), qty: Number(l.qty) || 0, ref: o.code, customer: o.customer, phone: o.phone || "", at: o.exportedAt, sns: snOf(o, i), order: o, line: l})));
     moves.forEach(m => { if (m.ext || !(Number(m.qty) < 0) || dayOf(m.at) !== day) return;
-      const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : null; if (!t) return;
-      const tk = tkBy.get(m.ref); E.push({type: t, product: m.product, qty: -Number(m.qty), ref: m.ref || "", customer: tk?.customer || "", phone: tk?.phone || "", at: m.at, sns: [], note: m.note || ""}); });
+      const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : m.kind === "lammoi" ? "lammoi" : null; if (!t) return;
+      const tk = tkBy.get(m.ref); E.push({type: t, product: m.product, qty: -Number(m.qty), ref: m.ref || "", customer: tk?.customer || m.customer || "", phone: tk?.phone || m.phone || "", at: m.at, sns: m.serials || [], note: m.note || ""}); });
     stock.forEach(x => { if (x.status !== "out" || !x.outAt || dayOf(x.outAt) !== day) return; const tk = tkBy.get(x.orderCode); if (!tk) return;
       E.push({type: tk.exchange && keySN(tk.exchange.newSerial) === keySN(x.serial) ? "doi" : "thay", product: x.product, qty: 1, ref: tk.code, customer: tk.customer, phone: tk.phone || "", at: x.outAt, sns: [x.serial]}); });
     return E.sort((a,b) => (a.at || "").localeCompare(b.at || ""));
