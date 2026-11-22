@@ -745,7 +745,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.10";
+window.APP_BUILD = "2026-11-22.11";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3235,7 +3235,12 @@ window.APP_BUILD = "2026-11-22.10";
         <div id="chanhF">
           <label>Tên chành xe *</label><input name="carrier" list="carrierList" placeholder="VD: Chành xe Phương Trang">
           <label>SĐT chành xe</label><input name="carrierPhone" type="tel" inputmode="tel">
-          <div class="two"><div><label>Phí ship *</label><input name="feeShip" inputmode="numeric" placeholder="VD: 30.000" autocomplete="off"></div><div><label>Phí gửi hàng <span class="sub">(không bắt buộc)</span></label><input name="feeSend" inputmode="numeric" placeholder="VD: 50.000" autocomplete="off"></div></div>
+          <label>Phí ship *</label>
+          <div class="seg fpay" data-f="ship"><button type="button" data-v="cty">🏢 Công ty trả</button><button type="button" data-v="khach">👤 Khách trả</button></div>
+          <input name="feeShip" class="hide" inputmode="numeric" placeholder="Số tiền phí ship – VD: 30.000" autocomplete="off" style="margin-top:6px">
+          <label>Phí gửi hàng <span class="sub">(không bắt buộc)</span></label>
+          <div class="seg fpay" data-f="send"><button type="button" data-v="cty">🏢 Công ty trả</button><button type="button" data-v="khach">👤 Khách trả</button></div>
+          <input name="feeSend" class="hide" inputmode="numeric" placeholder="Số tiền phí gửi hàng – VD: 50.000" autocomplete="off" style="margin-top:6px">
           <div class="sub" id="feeSum" style="margin-top:6px"></div>
         </div>
         <div id="bdF">
@@ -3263,17 +3268,23 @@ window.APP_BUILD = "2026-11-22.10";
     if (isOd && t.ship) { if (t.ship.method === "chanh") F3.carrier.value = t.ship.carrier || ""; else if (t.ship.method === "buudien") F3.post.value = t.ship.carrier || ""; }
     // phí ship + phí gửi hàng (chành xe): tự cộng, ghi vào Chi phí – Ship hàng
     const feeNum = el => Number(String(el?.value || "").replace(/[^\d]/g, "")) || 0;
+    const fpay = {ship: "", send: ""}, PAYER = {cty: "công ty trả", khach: "khách trả"};
+    F3.querySelectorAll(".fpay").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => { const f = sg.dataset.f; fpay[f] = fpay[f] === b.dataset.v ? "" : b.dataset.v;
+      sg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.v === fpay[f])); const inp = f === "ship" ? F3.feeShip : F3.feeSend; inp.classList.toggle("hide", !fpay[f]); if (fpay[f]) inp.focus(); else inp.value = ""; feeSync(); }));
     const feeSync = () => { const a = feeNum(F3.feeShip), b = feeNum(F3.feeSend);
       [F3.feeShip, F3.feeSend].forEach(el => { const n = feeNum(el); if (n && el.value !== n.toLocaleString("vi-VN")) el.value = n.toLocaleString("vi-VN"); });
-      $("#feeSum").innerHTML = a || b ? `🧮 Tổng phí: <b style="color:var(--ink)">${money(a + b)}</b>${a && b ? ` <span class="sub">(ship ${money(a)} + gửi hàng ${money(b)})</span>` : ""} → ghi vào <b>Chi phí – Ship hàng</b>` : ""; };
+      const kh = (fpay.ship === "khach" ? a : 0) + (fpay.send === "khach" ? b : 0);
+      $("#feeSum").innerHTML = a || b ? `🧮 Tổng chi phí: <b style="color:var(--ink)">${money(a + b)}</b>${a && b ? ` <span class="sub">(ship ${money(a)} – ${PAYER[fpay.ship]} + gửi hàng ${money(b)} – ${PAYER[fpay.send]})</span>` : ""} → ghi vào <b>Chi phí – Ship hàng</b>${kh ? `<br>👤 Khách trả <b>${money(kh)}</b> → Kế toán tính riêng trong công nợ khách` : ""}` : ""; };
     F3.feeShip.addEventListener("input", feeSync); F3.feeSend.addEventListener("input", feeSync);
     sync();
     actCtx = {run: async () => {
       const g = isGrab(shipMethod);
       const date = F3.date.value, carrier = (shipMethod === "chanh" ? F3.carrier.value : g ? F3.gDriver.value : F3.post.value).trim();
       if (shipMethod === "chanh" && !carrier) { toast("Hãy nhập tên chành xe"); F3.carrier.focus(); throw new Error("x"); }
-      if (shipMethod === "chanh" && !feeNum(F3.feeShip)) { toast("Hãy nhập phí ship (bắt buộc khi gửi chành xe)"); F3.feeShip.focus(); throw new Error("x"); }
-      const fee = shipMethod === "chanh" ? {ship: feeNum(F3.feeShip), send: feeNum(F3.feeSend)} : null; if (fee) fee.total = fee.ship + fee.send;
+      if (shipMethod === "chanh" && !fpay.ship) { toast("Phí ship: chọn 🏢 Công ty trả hoặc 👤 Khách trả"); F3.querySelector('.fpay[data-f="ship"]').scrollIntoView({block: "center"}); throw new Error("x"); }
+      if (shipMethod === "chanh" && !feeNum(F3.feeShip)) { toast("Hãy nhập số tiền phí ship (bắt buộc khi gửi chành xe)"); F3.feeShip.focus(); throw new Error("x"); }
+      const fee = shipMethod === "chanh" ? {ship: feeNum(F3.feeShip), shipPayer: fpay.ship, send: fpay.send ? feeNum(F3.feeSend) : 0, sendPayer: fpay.send && feeNum(F3.feeSend) ? fpay.send : ""} : null;
+      if (fee) { fee.total = fee.ship + fee.send; fee.khach = (fee.shipPayer === "khach" ? fee.ship : 0) + (fee.sendPayer === "khach" ? fee.send : 0); }
       if (!date) { toast("Hãy chọn ngày trả lại khách"); throw new Error("x"); }
       const ship = {method: shipMethod, carrier, carrierPhone: shipMethod === "chanh" ? F3.carrierPhone.value.trim() : g ? F3.gPhone.value.trim() : "",
         tracking: shipMethod === "buudien" ? F3.tracking.value.trim() : g ? F3.gTrip.value.trim() : "", date, note: F3.snote.value.trim(), at: new Date().toISOString(), ...(fee ? {fee} : {})};
@@ -3282,7 +3293,7 @@ window.APP_BUILD = "2026-11-22.10";
       if (isOd) c = await advanceOrder(t, "cho_tt", note, {ship});
       else { c = push(t, "cho_tt", note, {ship}); await put("tk", c); sendPush(c); }
       if (fee) try { await put("ex", {id: "ex_" + uid(), kind: "ship", date, amount: fee.total, ref: t.code, customer: t.customer, saleDate: t.saleDate || (t.createdAt || "").slice(0, 10), payer: "cty", charge: false,
-        note: `🚚 ${carrier}: phí ship ${money(fee.ship)}${fee.send ? " + phí gửi hàng " + money(fee.send) : ""}`, by: actor(), at: new Date().toISOString()}); } catch(e){}
+        custPart: fee.khach, note: `🚚 ${carrier}: phí ship ${money(fee.ship)} (${PAYER[fee.shipPayer]})${fee.send ? ` + phí gửi hàng ${money(fee.send)} (${PAYER[fee.sendPayer]})` : ""}`, by: actor(), at: new Date().toISOString()}); } catch(e){}
       toast("Đã lưu – đang tạo file Excel…");
       setTimeout(() => exportPdf(c), 300);
     }, after: () => setTimeout(() => { acGroup = isOd ? "od" : "tk"; goTo("ac", isOd ? `Vận chuyển đã gửi đơn ${t.code} (${t.customer}). Kế toán nhập mật mã để ghi nhận thanh toán.` : `Vận chuyển đã gửi: ${t.product} (SN ${t.serial}). Kế toán nhập mật mã để ghi nhận thanh toán.`); }, 600)};
@@ -5933,6 +5944,9 @@ window.APP_BUILD = "2026-11-22.10";
     F4.innerHTML = `<div class="grab"></div>
       <h2>${edit ? "✏️ Sửa chi phí" : "💰 Thanh toán"} – ${esc(t.code)}</h2>
       ${!edit && t.shipCharge && !t.shipChargeDone ? `<div class="reason">🚚 Phí ship tính lại khách: <b>${money(t.shipCharge)}</b> – nhớ cộng vào số tiền thanh toán / công nợ.</div>` : ""}
+      ${t.ship?.fee ? `<div class="reason" style="background:var(--card);border:1.5px solid var(--line);color:var(--ink)"><b>🚚 Phí chành xe</b> <span class="sub">(tick khoản khách trả → cộng riêng vào tiền khách)</span>
+        ${[["ship", "Phí ship"], ["send", "Phí gửi hàng"]].filter(([k]) => t.ship.fee[k]).map(([k, lb]) => `<label style="display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:14px;color:var(--ink)"><input type="checkbox" class="feeAdd" data-k="${k}" data-v="${t.ship.fee[k]}" style="width:20px;height:20px;margin:0;flex:0 0 auto"> <span style="flex:1;min-width:0;display:block">${lb}: <b>${money(t.ship.fee[k])}</b> <span class="sub">(Vận chuyển ghi: ${t.ship.fee[k + "Payer"] === "khach" ? "khách trả" : "công ty trả"})</span></span></label>`).join("")}
+        <div class="sub" id="feeAddSum" style="margin-top:6px"></div></div>` : ""}
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
       ${t.pay?.gd === "tra" ? `<div class="reason" style="background:var(--badbg);color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(t.pay.gdNote || "")}</b>${t.pay.gdFix ? `<br>Đã điền sẵn số Giám đốc sửa: <b>${esc(PAY[t.pay.gdFix.status] || "")} ${money(t.pay.gdFix.amount)}</b> – bấm Lưu là <b>hoàn tất</b> (Giám đốc không phải duyệt lại; nếu đổi sang số khác thì sẽ gửi Giám đốc duyệt)` : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
@@ -5991,6 +6005,15 @@ window.APP_BUILD = "2026-11-22.10";
       sync();
     });
     F4.querySelectorAll(".opt").forEach(o => o.onclick = () => { payStatus = o.dataset.ps; calcDebt(); sync(); setTimeout(() => (payStatus === "cong_no" && !F4.ptotal.value ? F4.ptotal : F4.amount).focus(), 50); });
+    // phí chành xe khách trả: tick → cộng / bỏ tick → trừ khỏi số tiền (tách riêng phí ship, phí gửi hàng)
+    const feeAdded = {}; (t.pay?.shipFees ? Object.keys(t.pay.shipFees) : []).forEach(k => { feeAdded[k] = true; const c = F4.querySelector(`.feeAdd[data-k="${k}"]`); if (c) c.checked = true; });
+    const feeAddSum = () => { const L = [...F4.querySelectorAll(".feeAdd:checked")]; if ($("#feeAddSum")) $("#feeAddSum").innerHTML = L.length ? `Đã cộng vào tiền khách: ${L.map(c => `${c.dataset.k === "ship" ? "phí ship" : "phí gửi hàng"} ${money(+c.dataset.v)}`).join(" + ")} = <b>${money(L.reduce((a, c) => a + +c.dataset.v, 0))}</b>` : ""; };
+    F4.querySelectorAll(".feeAdd").forEach(c => c.onchange = () => { const d = (c.checked ? 1 : -1) * Number(c.dataset.v); feeAdded[c.dataset.k] = c.checked;
+      if (payStatus === "cong_no") { F4.ptotal.value = Math.max(0, (numOf(F4.ptotal) || amt() + numOf(F4.padv)) + d).toLocaleString("vi-VN"); calcDebt(); }
+      else F4.amount.value = Math.max(0, amt() + d).toLocaleString("vi-VN");
+      feeAddSum(); sync(); });
+    if (!t.pay && t.ship?.fee) F4.querySelectorAll(".feeAdd").forEach(c => { if (t.ship.fee[c.dataset.k + "Payer"] === "khach") { c.checked = true; c.onchange(); } });
+    feeAddSum();
     calcDebt();
     sync();
     actCtx = {run: async () => {
@@ -5999,9 +6022,10 @@ window.APP_BUILD = "2026-11-22.10";
         paidDate: payStatus === "da_tt" ? F4.paidDate.value : "", method: payStatus === "da_tt" ? F4.method.value : ""};
       if (payStatus === "cong_no" && F4.ptotal.value.trim()) { pay.total = numOf(F4.ptotal); pay.advance = numOf(F4.padv);
         if (pay.advance > pay.total) { toast("Số tiền tạm ứng lớn hơn tổng công nợ – kiểm tra lại"); F4.padv.focus(); throw new Error("x"); } }
+      { const sf = {}; F4.querySelectorAll(".feeAdd:checked").forEach(c => sf[c.dataset.k] = Number(c.dataset.v)); if (Object.keys(sf).length) pay.shipFees = sf; }
       if (t.pay && t.pay.status === "cong_no") pay.debtSince = t.pay.debtSince || t.pay.at;
       else if (t.pay && t.pay.debtSince) pay.debtSince = t.pay.debtSince;   // sửa phiếu đã thu: giữ ngày bắt đầu nợ cũ
-      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.method ? " · " + pay.method : ""}${pay.total && pay.advance ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
+      let note = `${PAY[payStatus]}: ${money(pay.amount)}${pay.shipFees ? ` (gồm ${[pay.shipFees.ship ? "phí ship " + money(pay.shipFees.ship) : "", pay.shipFees.send ? "phí gửi hàng " + money(pay.shipFees.send) : ""].filter(Boolean).join(" + ")})` : ""}${pay.method ? " · " + pay.method : ""}${pay.total && pay.advance ? ` (tổng ${money(pay.total)}${pay.advance ? ` – tạm ứng ${money(pay.advance)}` : ""})` : ""}`;
       if (edit) {
         const o0 = t.pay || {};   // so với số đang lưu (không phải số Giám đốc điền sẵn)
         if (payStatus === o0.status && pay.amount === Number(o0.amount) && pay.paidDate === (o0.paidDate || "") && pay.method === (o0.method || "") && pay.note === (o0.note || "") && (pay.total || 0) === (o0.total || 0) && (pay.advance || 0) === (o0.advance || 0) && o0.gd !== "tra") { toast("Chưa thay đổi gì"); throw new Error("x"); }
