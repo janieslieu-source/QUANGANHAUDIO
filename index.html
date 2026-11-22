@@ -543,7 +543,7 @@
           <button type="button" class="opt optgap" data-os="grabgap"><span class="ic">🚨</span>Grab gấp</button>
         </div>
         <div id="oChanh" class="hide"><label>Tên chành xe *</label><input name="carrier" list="carrierList" placeholder="VD: Chành xe Phương Trang">
-          <div class="two"><div><label>Phí ship</label><input name="feeShip" inputmode="numeric" placeholder="VD: 30.000" autocomplete="off"></div><div><label>Phí gửi hàng <span class="sub">(không bắt buộc)</span></label><input name="feeSend" inputmode="numeric" placeholder="VD: 50.000" autocomplete="off"></div></div>
+          <div class="two"><div><label>Phí ship *</label><input name="feeShip" inputmode="numeric" placeholder="VD: 30.000" autocomplete="off"></div><div><label>Phí gửi hàng <span class="sub">(không bắt buộc)</span></label><input name="feeSend" inputmode="numeric" placeholder="VD: 50.000" autocomplete="off"></div></div>
           <div class="sub" id="feeSum" style="margin-top:6px"></div></div>
         <div id="oPost" class="hide"><label>Bưu cục / đơn vị</label><input name="post" placeholder="VD: Bưu điện VN, Viettel Post…"></div>
         <div id="oGap" class="hide reason" style="background:var(--badbg);color:var(--bad);margin-top:10px">🚨 Đơn GẤP: Kho và Vận chuyển sẽ bị báo động đỏ liên tục cho đến khi đơn được gửi đi.</div>
@@ -747,7 +747,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.8";
+window.APP_BUILD = "2026-11-22.9";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3547,6 +3547,7 @@ window.APP_BUILD = "2026-11-22.8";
     if (!sold.length) { toast("Hãy nhập ít nhất 1 hàng bán"); $("#olines .lp").focus(); return; }
     if (!saleShip && !lines.every(l => l.direct)) { toast("Hãy chọn phương thức gửi hàng"); return; }
     if (saleShip === "chanh" && !SF.carrier.value.trim()) { toast("Hãy nhập tên chành xe"); SF.carrier.focus(); return; }
+    if (saleShip === "chanh" && !feeNum(SF.feeShip)) { toast("Hãy nhập phí ship (bắt buộc với đơn gửi chành xe)"); SF.feeShip.focus(); return; }
     let tradeIn = null;
     if (SF.tiOn.checked) {
       const nq = Math.max(1, parseInt(SF.tiNewQ.value) || 1), oq = Math.max(1, parseInt(SF.tiOldQ.value) || 1), np = mny(SF.tiNewP.value), op = mny(SF.tiOldP.value);
