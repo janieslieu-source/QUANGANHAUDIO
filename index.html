@@ -97,7 +97,7 @@
   .oline > div:not(.full) > .sugg{right:-72px}
   .prow > div:not(.full) > .sugg{right:-78px}
   .oline.nhrow{grid-template-columns:1fr 88px} .nhrow > div:not(.full) > .sugg{right:-96px}
-  .lmrow .sugg{right:-132px} .tprow .sugg{right:-76px}
+  .lmrow .sugg{right:-132px}
   .sugg::-webkit-scrollbar{width:14px}
   .sugg::-webkit-scrollbar-track{background:var(--bg);border-radius:12px}
   .sugg::-webkit-scrollbar-thumb{background:var(--brand);border-radius:12px;border:3px solid var(--bg);min-height:48px}
@@ -607,6 +607,7 @@
         <div class="btns"><button class="btn" id="rpFile">📊 Tải báo cáo Excel</button></div></div>
       <div class="panel" data-w="lkm"><h3>🧪 Linh kiện Kỹ thuật mượn test <span class="sub" id="lkmSum"></span></h3>
         <div class="sub" style="margin:-4px 0 8px">Kỹ thuật mượn linh kiện trong kho để thử máy (đã tạm trừ kho). Kỹ thuật mang trả → Kho bấm <b>📥 Nhận lại</b> từng món (cộng lại kho). Cuối ngày chưa trả: <b style="color:var(--bad)">cảnh báo đỏ</b>; hôm sau Kỹ thuật mở app sẽ được nhắc.</div>
+        <div class="list" id="lkWaitList" style="margin-bottom:10px"></div>
         <div class="list" id="lkReqList" style="margin-bottom:10px"></div>
         <div class="list" id="lkmList"></div></div>
       <div class="panel" data-w="ls"><h3>📜 Lịch sử nhập – xuất kho</h3>
@@ -706,6 +707,7 @@
 
     <!-- ===== KỸ THUẬT ===== -->
     <section id="v-kt" class="hide">
+      <div class="panel" id="ktLkm"></div>
       <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
@@ -743,7 +745,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.5";
+window.APP_BUILD = "2026-11-22.7";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1419,7 +1421,7 @@ window.APP_BUILD = "2026-11-22.5";
   function renderAll(){
     dropIdx();
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); } catch(e){}
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); dirCostReminder(); drawKtLkm(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length + expenses.filter(x => x.kind === "kkreq" && x.status === "cho").length,
@@ -1550,7 +1552,7 @@ window.APP_BUILD = "2026-11-22.5";
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -2873,48 +2875,92 @@ window.APP_BUILD = "2026-11-22.5";
   }
 
   /* ================= 🧪 LINH KIỆN TEST: Kỹ thuật mượn kho để thử máy → trả lại → Kho xác nhận đủ → Vận chuyển ================= */
-  const tpOpen = t => (t?.testParts || []).filter(p => !p.returned && !p.used);
-  const tpDays = p => Math.floor((today() - new Date(iso(new Date(p.at)) + "T00:00:00")) / 864e5);
+  const LKM_DAYS = 3;                                                      // mượn quá 3 ngày → nhắc trả kho
+  const tpOpen = t => (t?.testParts || []).filter(p => !p.returned && !p.used && !p.wait && !p.rejected);
+  const tpWait = t => (t?.testParts || []).filter(p => p.wait && !p.rejected);
+  const tpDue = p => p.due || new Date(new Date(p.at).getTime() + LKM_DAYS * 864e5).toISOString();
+  const tpDays = p => Math.floor((today() - new Date(iso(new Date(tpDue(p))) + "T00:00:00")) / 864e5);   // > 0: số ngày quá hạn trả
+  const lkRecs = () => expenses.filter(x => x.kind === "lkmuon");
+  const lkAll = () => [...tickets, ...lkRecs()];
+  const lkFind = id => tickets.find(x => x.id === id) || lkRecs().find(x => x.id === id);
+  const lkLabel = t => t.kind === "lkmuon" ? "📦 Test hàng mới nhập" : "🔧 Test cho khách sửa chữa / bảo hành";
+  async function lkSave(t, note, extra){
+    if (t.kind === "lkmuon") { const now = new Date().toISOString(); await put("ex", Object.assign({}, t, extra, {updatedAt: now, history: (t.history || []).concat([{at: now, by: actor(), note}])})); }
+    else await advance(t, t.stage, note, extra);
+  }
   const lkReqLine = t => (t.lkReq || []).length ? `<div class="sub" style="margin-top:4px">🆕 LK chưa có trong kho: ${(t.lkReq || []).map(r => `${esc(r.name)} ×${r.qty} – ${r.status === "cho" ? `<b style="color:#b45309">chờ Kho duyệt</b>` : r.status === "ok" ? `<span style="color:var(--ok)">✔ Kho đã duyệt${r.reply ? ": " + esc(r.reply) : ""}</span>` : `<b style="color:var(--bad)">✖ Kho từ chối${r.reply ? ": " + esc(r.reply) : ""}</b>`}`).join(" · ")}</div>` : "";
   function tpLine(t){ const L = t.testParts || []; if (!L.length) return lkReqLine(t);
-    return `<div class="sub" style="margin-top:4px">🧪 LK test: ${L.map(p => `${esc(p.name)} ×${p.qty}${p.src === "ngoai" ? " (ngoài kho)" : ""} – ${p.returned ? `<span style="color:var(--ok)">✔ đã trả kho</span>` : p.used ? "dùng cho máy" : p.returning ? `<b style="color:#b45309">chờ Kho nhận</b>` : `<b style="color:${tpDays(p) > 0 ? "var(--bad)" : "#b45309"}">đang mượn${tpDays(p) > 0 ? ` – QUÁ ${tpDays(p)} ngày` : ""}</b>`}`).join(" · ")}</div>` + lkReqLine(t); }
-  function openTestParts(t){
-    const F2 = $("#actForm");
-    F2.innerHTML = `<div class="grab"></div><h2>🧪 Linh kiện test – đoán bệnh</h2>
-      <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
-      ${(t.testParts || []).length ? `<div class="found" style="margin-bottom:8px">${(t.testParts || []).map(p => `• ${esc(p.name)} ×${p.qty} ${p.src === "kho" ? "(đã xuất kho)" : "(tự điền)"} – ${p.returned ? "đã trả" : p.used ? "dùng cho máy" : "đang mượn"}`).join("<br>")}</div>` : ""}
-      <h3 style="margin:6px 0 2px;font-size:15px">🔍 Linh kiện 1, 2, 3… xuất kho để đoán bệnh</h3>
-      <div class="sub">Gõ model / hãng / tên linh kiện → chọn trong danh sách kho → <b>xuất kho</b>. Khi Hoàn tất: linh kiện chạy tốt chọn <b>Thay cho khách</b>, còn lại <b>Trả về kho</b>.</div>
-      <div id="tpRows"></div>
-      <button type="button" class="btn sm" id="tpAdd" style="margin-top:8px">+ Thêm linh kiện kho</button>
-      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu linh kiện test</button></div>`;
+    return `<div class="sub" style="margin-top:4px">🧪 LK test: ${L.map(p => `${esc(p.name)} ×${p.qty}${p.src === "ngoai" ? " (ngoài kho)" : ""} – ${p.returned ? `<span style="color:var(--ok)">✔ đã trả kho</span>` : p.used ? "dùng cho máy" : p.returning ? `<b style="color:#b45309">chờ Kho nhận</b>` : p.rejected ? `<b style="color:var(--bad)">✖ Kho từ chối${p.reply ? ": " + esc(p.reply) : ""}</b>` : p.wait ? `<b style="color:#b45309">⏳ chờ Kho đồng ý</b>` : `<b style="color:${tpDays(p) > 0 ? "var(--bad)" : "#b45309"}">đang mượn – hạn trả ${fmt(iso(new Date(tpDue(p))))}${tpDays(p) > 0 ? ` – QUÁ HẠN ${tpDays(p)} ngày` : ""}</b>`}`).join(" · ")}</div>` + lkReqLine(t); }
+  function openTestParts(t0){
+    const F2 = $("#actForm"); let pur = t0 ? "sc" : "";
+    const tks = () => tickets.filter(t => ["cho_kt", "dang_sua", "cho_lk"].includes(t.stage));
+    F2.innerHTML = `<div class="grab"></div><h2>🧪 Mượn linh kiện test</h2>
+      <label style="margin-top:0">Mượn để làm gì? *</label>
+      <div class="seg" id="lkPur"><button type="button" data-p="moi">📦 Test sản phẩm mới nhập về</button><button type="button" data-p="sc">🔧 Test cho khách sửa chữa – bảo hành</button></div>
+      <div id="lkPurBox"></div>
+      <div id="lkmBody" class="hide">
+        <div id="tpRows"></div>
+        <button type="button" class="btn sm" id="tpAdd" style="margin-top:10px">+ Thêm linh kiện</button>
+        <div class="sub" style="margin-top:10px">Gửi đề nghị → <b>Kho đồng ý</b> mới trừ kho. Mượn tối đa <b>${LKM_DAYS} ngày</b> – quá hạn app nhắc trả kho hoặc gia hạn.</div></div>
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">📨 Gửi Kho đồng ý</button></div>`;
     const addRow = focus => { const i = $("#tpRows").children.length + 1;
-      $("#tpRows").insertAdjacentHTML("beforeend", `<div class="tprow" style="margin-top:8px"><div class="sub" style="font-weight:600">Linh kiện ${i}</div><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="tpn" placeholder="🔍 Tìm linh kiện trong kho" autocomplete="off"><div class="sugg hide"></div></div><input class="tpq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div><div class="sub tph" style="margin-top:2px"></div><div class="tpsolw hide" style="margin-top:4px"><div class="sub" style="color:#b45309;font-weight:600">⚠️ Không có trong kho – ghi giải pháp, lưu riêng chờ Kho duyệt</div><input class="tpsol" placeholder="Giải pháp: VD mua ngoài, lấy từ máy khác, đặt NCC…" autocomplete="off"></div></div>`);
+      $("#tpRows").insertAdjacentHTML("beforeend", `<div class="tprow" style="margin-top:12px;padding:10px;border:1.5px solid var(--line);border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:14px">${pur === "moi" ? "Sản phẩm" : "Linh kiện"} ${i}</b>${i > 1 ? `<button type="button" class="btn sm tprm" style="width:auto;flex:0 0 auto;padding:4px 10px">✕</button>` : ""}</div>
+        <div style="position:relative;margin-top:6px"><input class="tpn" placeholder="🔍 Gõ model, hãng hoặc tên ${pur === "moi" ? "sản phẩm" : "linh kiện"} trong kho" autocomplete="off" style="width:100%"><div class="sugg hide"></div></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><span class="sub" style="white-space:nowrap">Số lượng mượn</span><input class="tpq" type="number" min="1" inputmode="numeric" value="1" style="width:90px"></div>
+        <div class="sub tph" style="margin-top:4px"></div>
+        <div class="tpsolw hide" style="margin-top:6px"><div class="sub" style="color:#b45309;font-weight:600">⚠️ Không có trong kho – ghi giải pháp, lưu riêng chờ Kho duyệt</div><input class="tpsol" placeholder="Giải pháp: VD mua ngoài, lấy từ máy khác, đặt NCC…" autocomplete="off"></div></div>`);
       const el = $("#tpRows").lastElementChild, inp = el.querySelector(".tpn"), q = el.querySelector(".tpq");
+      el.querySelector(".tprm")?.addEventListener("click", () => el.remove());
       const upd = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n)), k = ex ? stockOf(ex) : null, need = parseInt(q.value) || 1;
-        el.querySelector(".tph").innerHTML = !n ? "" : k != null && k >= need ? `<b style="color:var(--ok)">📦 Tồn ${k} → xuất ${need}, còn ${k - need}</b>` : k != null ? `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>` : `<b style="color:var(--bad)">Chưa chọn hàng trong kho</b>`; };
-      const solw = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n)); el.querySelector(".tpsolw").classList.toggle("hide", !n || !!(ex && stockOf(ex) != null)); if (ex && stockOf(ex) != null) upd(); else el.querySelector(".tph").innerHTML = ""; };
-      attachPicker(inp, el.querySelector(".sugg"), () => { upd(); solw(); }, true, true); q.addEventListener("input", upd); inp.addEventListener("input", solw); if (focus) inp.focus(); };
-    $("#tpAdd").onclick = () => addRow(true); addRow(true);
+        el.querySelector(".tph").innerHTML = !n || k == null ? "" : k >= need ? `<b style="color:var(--ok)">📦 Tồn ${k} → mượn ${need}, còn ${k - need}</b>` : `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>`;
+        el.querySelector(".tpsolw").classList.toggle("hide", !n || k != null || pur !== "sc");
+        if (n && k == null && pur === "moi") el.querySelector(".tph").innerHTML = `<b style="color:var(--bad)">Không có trong kho – chọn trong danh sách</b>`; };
+      attachPicker(inp, el.querySelector(".sugg"), upd, pur === "sc", true); q.addEventListener("input", upd); inp.addEventListener("input", upd); if (focus) inp.focus(); };
+    const drawPur = () => {
+      F2.querySelectorAll("#lkPur button").forEach(b => b.classList.toggle("on", b.dataset.p === pur));
+      $("#lkPurBox").innerHTML = pur === "sc" ? `<label>Phiếu sửa chữa / bảo hành *</label><select id="lkTk"><option value="">– Chọn phiếu –</option>${tks().map(t => `<option value="${esc(t.id)}" ${t0 && t0.id === t.id ? "selected" : ""}>${esc(t.code)} · ${esc(t.product)} · ${esc(t.customer)}</option>`).join("")}</select>`
+        : pur === "moi" ? `<label>Ghi chú hàng mới cần test</label><input id="lkNote" placeholder="VD: lô màn hình Tomko 22 inch nhập 21/11" autocomplete="off">` : "";
+      $("#lkmBody").classList.toggle("hide", !pur); $("#tpRows").innerHTML = ""; if (pur) addRow(!t0); };
+    F2.querySelectorAll("#lkPur button").forEach(b => b.onclick = () => { pur = b.dataset.p; drawPur(); });
+    $("#tpAdd").onclick = () => addRow(true); drawPur();
     actCtx = {run: async () => {
-      const rows = [...document.querySelectorAll("#tpRows .tprow")].map(el => ({el, name: el.querySelector(".tpn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".tpq").value) || 1)})).filter(r => r.name);
-      [...document.querySelectorAll("#tpRows .tprow")].forEach((el, i) => { const r = rows.find(x => x.el === el); if (r) r.sol = el.querySelector(".tpsol").value.trim(); });
-      if (!rows.length) { toast("Tìm và chọn linh kiện trong danh sách kho"); throw new Error("x"); }
-      const need = {}, req = [];
-      for (const r of rows.slice()) { const ex = productNames().find(p => norm(p) === norm(r.name)), k = ex ? stockOf(ex) : null;
-        if (k == null) { if (!r.sol) { toast(`“${r.name}” không có trong kho – ghi Giải pháp để gửi Kho duyệt`); throw new Error("x"); }
-          req.push(r); rows.splice(rows.indexOf(r), 1); continue; }
-        r.name = ex; need[norm(ex)] = (need[norm(ex)] || 0) + r.qty; if (k < need[norm(ex)]) { toast(`${ex}: kho chỉ còn ${k}`); throw new Error("x"); } }
-      const now = new Date().toISOString(), add = [];
-      for (const r of rows) { await put("mv", {id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "lk_test", ref: t.code, note: `Kỹ thuật mượn test – ${t.product} SN ${t.serial}`, by: actor()});
-        add.push({id: uid(), name: r.name, qty: r.qty, src: "kho", at: now, by: t.tech || actor()}); }
-      const rq = req.map(r => ({id: uid(), name: r.name, qty: r.qty, sol: r.sol, at: now, by: t.tech || actor(), status: "cho"}));
-      const extra = {}; if (add.length) extra.testParts = (t.testParts || []).concat(add); if (rq.length) extra.lkReq = (t.lkReq || []).concat(rq);
-      await advance(t, t.stage, [add.length ? `🧪 Linh kiện test xuất kho: ${add.map(p => `${p.name} ×${p.qty}`).join(", ")}` : "", rq.length ? `🆕 Linh kiện chưa có trong kho – chờ Kho duyệt: ${rq.map(p => `${p.name} ×${p.qty} (giải pháp: ${p.sol})`).join(", ")}` : ""].filter(Boolean).join(" · "), extra);
-      if (rq.length) pushTo("wh", "🆕 Linh kiện chưa có trong kho – chờ Kho duyệt", `${t.code}: ${rq.map(p => `${p.name} ×${p.qty}`).join(", ")}`);
-      toast([add.length ? `Đã xuất kho ${add.length} linh kiện test` : "", rq.length ? `${rq.length} linh kiện chưa có trong kho – đã gửi Kho duyệt` : ""].filter(Boolean).join(" · "));
+      if (!pur) { toast("Chọn mượn để làm gì: Test sản phẩm mới nhập về hoặc Test cho khách"); throw new Error("x"); }
+      const t = pur === "sc" ? tickets.find(x => x.id === $("#lkTk").value) : null;
+      if (pur === "sc" && !t) { toast("Chọn phiếu sửa chữa / bảo hành"); $("#lkTk").focus(); throw new Error("x"); }
+      const rows = [...document.querySelectorAll("#tpRows .tprow")].map(el => ({name: el.querySelector(".tpn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".tpq").value) || 1), sol: el.querySelector(".tpsol").value.trim()})).filter(r => r.name);
+      if (!rows.length) { toast("Tìm và chọn hàng trong danh sách kho"); throw new Error("x"); }
+      const need = {}, req = [], ok = [];
+      for (const r of rows) { const ex = productNames().find(p => norm(p) === norm(r.name)), k = ex ? stockOf(ex) : null;
+        if (k == null) { if (pur === "moi") { toast(`“${r.name}” không có trong kho – chọn trong danh sách`); throw new Error("x"); }
+          if (!r.sol) { toast(`“${r.name}” không có trong kho – ghi Giải pháp để gửi Kho duyệt`); throw new Error("x"); } req.push(r); continue; }
+        r.name = ex; need[norm(ex)] = (need[norm(ex)] || 0) + r.qty; if (k < need[norm(ex)]) { toast(`${ex}: kho chỉ còn ${k}`); throw new Error("x"); } ok.push(r); }
+      const now = new Date().toISOString(), by = (t && t.tech) || actor();
+      const add = ok.map(r => ({id: uid(), name: r.name, qty: r.qty, src: "kho", wait: true, at: now, by}));
+      const sum = add.map(p => `${p.name} ×${p.qty}`).join(", ");
+      if (pur === "moi") {
+        const code = "TEST-" + iso(new Date()).slice(5).replace("-", "") + "-" + uid().slice(-3).toUpperCase();
+        await put("ex", {id: "lm_" + uid(), kind: "lkmuon", code, product: "Test hàng mới nhập", serial: "", customer: $("#lkNote").value.trim() || "Test sản phẩm mới nhập về", tech: actor(), testParts: add, at: now, updatedAt: now, date: iso(new Date()), amount: 0, by: actor(), history: [{at: now, by: actor(), note: "Đề nghị mượn: " + sum}]});
+      } else {
+        const rq = req.map(r => ({id: uid(), name: r.name, qty: r.qty, sol: r.sol, at: now, by, status: "cho"}));
+        const extra = {}; if (add.length) extra.testParts = (t.testParts || []).concat(add); if (rq.length) extra.lkReq = (t.lkReq || []).concat(rq);
+        await advance(t, t.stage, [add.length ? `🧪 Đề nghị mượn linh kiện test – chờ Kho đồng ý: ${sum}` : "", rq.length ? `🆕 Linh kiện chưa có trong kho – chờ Kho duyệt: ${rq.map(p => `${p.name} ×${p.qty} (giải pháp: ${p.sol})`).join(", ")}` : ""].filter(Boolean).join(" · "), extra);
+      }
+      pushTo("wh", "🧪 Kỹ thuật đề nghị mượn linh kiện test", `${pur === "moi" ? "Test hàng mới nhập" : t.code}: ${sum || req.map(r => r.name).join(", ")}`);
+      toast([add.length ? `Đã gửi Kho – chờ Kho đồng ý ${add.length} món` : "", req.length ? `${req.length} món chưa có trong kho – chờ Kho duyệt` : ""].filter(Boolean).join(" · "));
     }};
     open("actBg");
+  }
+  /* mục Linh kiện mượn test trong tab Kỹ thuật */
+  function drawKtLkm(){
+    const box = $("#ktLkm"); if (!box) return;
+    const L = lkAll().filter(t => tpOpen(t).length || tpWait(t).length);
+    const n = L.reduce((a, t) => a + tpOpen(t).length + tpWait(t).length, 0);
+    box.innerHTML = `<div class="row" style="align-items:center"><h3 style="margin:0">🧪 Linh kiện mượn test ${n ? `<span class="sub">(${n} món)</span>` : ""}</h3><button type="button" class="btn pri sm" data-lknew style="width:auto;flex:0 0 auto">+ Mượn linh kiện test</button></div>
+      ${L.length ? L.map(t => `<div style="margin-top:10px;padding:10px;border:1.5px solid ${tpOpen(t).some(p => tpDays(p) > 0) ? "var(--bad)" : "var(--line)"};border-radius:12px">
+        <div style="font-size:14px"><b>${lkLabel(t)}</b> <span class="sub">· ${esc(t.code)}${t.kind === "lkmuon" ? " · " + esc(t.customer) : ` · ${esc(t.product)} · ${esc(t.customer)}`}</span></div>
+        ${tpWait(t).map(p => `<div style="font-size:14px;padding:4px 0">• <b>${esc(p.name)}</b> ×${p.qty} – <b style="color:#b45309">⏳ chờ Kho đồng ý</b></div>`).join("")}
+        ${tpOpen(t).map(p => `<div style="font-size:14px;padding:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="flex:1;min-width:0">• <b>${esc(p.name)}</b> ×${p.qty} – hạn trả <b>${fmt(iso(new Date(tpDue(p))))}</b>${tpDays(p) > 0 ? ` <b style="color:var(--bad)">⛔ QUÁ HẠN ${tpDays(p)} ngày – trả kho ngay</b>` : ""}</span>${tpDays(p) >= 0 ? `<button type="button" class="btn sm" data-lkext="${esc(t.id + ":" + p.id)}" style="width:auto;flex:0 0 auto;padding:5px 10px">🔁 Gia hạn ${LKM_DAYS} ngày</button>` : ""}</div>`).join("")}</div>`).join("")
+      : `<div class="sub" style="margin-top:6px">Chưa mượn linh kiện nào. Bấm <b>+ Mượn linh kiện test</b> → chọn Test sản phẩm mới nhập về hoặc Test cho khách sửa chữa – bảo hành.</div>`}`;
   }
   function openFinishWithTest(t){
     const F2 = $("#actForm"), L = tpOpen(t), pick = {};   // id -> "thay" | "tra"
@@ -2954,10 +3000,18 @@ window.APP_BUILD = "2026-11-22.5";
   }
   function drawLkm(){
     const box = $("#lkmList"); if (!box) return;
-    const L = tickets.filter(t => tpOpen(t).length).sort((a,b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
+    const L = lkAll().filter(t => tpOpen(t).length).sort((a,b) => (a.updatedAt || "").localeCompare(b.updatedAt || ""));
+    const W = lkAll().filter(t => tpWait(t).length), nw = W.reduce((a, t) => a + tpWait(t).length, 0);
     const n = L.reduce((a, t) => a + tpOpen(t).length, 0), late = L.filter(t => tpOpen(t).some(p => tpDays(p) > 0)).length;
     const RQ = tickets.filter(t => (t.lkReq || []).some(r => r.status === "cho")), nq = RQ.reduce((a, t) => a + t.lkReq.filter(r => r.status === "cho").length, 0);
-    $("#lkmCnt").textContent = (n + nq) || ""; $("#lkmCnt").classList.toggle("hide", !(n + nq));
+    $("#lkmCnt").textContent = (n + nq + nw) || ""; $("#lkmCnt").classList.toggle("hide", !(n + nq + nw));
+    const wBox = $("#lkWaitList"); if (wBox) { wBox.classList.toggle("hide", !nw);
+      wBox.innerHTML = nw ? `<h4 style="margin:4px 0 6px;font-size:15px;color:var(--brand)">⏳ Kỹ thuật đề nghị mượn – chờ Kho đồng ý (${nw})</h4>` + W.map(t => `<div class="item" style="cursor:default;border:2px solid var(--brand)"><div class="pname">${lkLabel(t)} <span class="sub">· ${esc(t.code)}</span></div>
+        <div class="sub">${t.kind === "lkmuon" ? esc(t.customer) : `${esc(t.product)} · SN ${esc(t.serial)} · 👤 ${esc(t.customer)}`}${t.tech ? ` · 👨‍🔧 ${esc(t.tech)}` : ""}</div>
+        ${tpWait(t).map(p => `<div style="padding:6px 0;border-top:1px dashed var(--line);font-size:14px"><div>• <b>${esc(p.name)}</b> ×${p.qty} <span class="sub">– tồn kho ${stockOf(p.name) ?? 0} · ${fmtTime(p.at)}</span></div>
+          ${(boss || role === "wh") ? `<div style="display:flex;gap:6px;margin-top:6px"><button type="button" class="btn okb sm" data-lwok="${esc(t.id + ":" + p.id)}">✅ Đồng ý cho mượn</button><button type="button" class="btn sm" data-lwno="${esc(t.id + ":" + p.id)}">✖ Từ chối</button></div>` : ""}</div>`).join("")}</div>`).join("") : ""; }
+    if ((boss || role === "wh") && nw && nw > (drawLkm._nw || 0) && !$("#app").classList.contains("hide")) { bannerQ.push({id: "lkwait", title: `🧪 ${nw} linh kiện Kỹ thuật đề nghị mượn – chờ Kho đồng ý`, text: W.map(t => t.code + ": " + tpWait(t).map(p => p.name + " ×" + p.qty).join(", ")).join("; "), to: "wh"}); nextBanner(); }
+    if (!$("#app").classList.contains("hide")) drawLkm._nw = nw;
     if ((boss || role === "wh") && nq && nq > (drawLkm._nq || 0) && !$("#app").classList.contains("hide")) { bannerQ.push({id: "lkreq", title: `🆕 ${nq} linh kiện chưa có trong kho – chờ Kho duyệt`, text: RQ.map(t => t.code + ": " + t.lkReq.filter(r => r.status === "cho").map(r => r.name).join(", ")).join("; "), to: "wh"}); nextBanner(); }
     if (!$("#app").classList.contains("hide")) drawLkm._nq = nq;
     const rqBox = $("#lkReqList"); if (rqBox) { rqBox.classList.toggle("hide", !nq);
@@ -2968,29 +3022,58 @@ window.APP_BUILD = "2026-11-22.5";
     $("#lkmSum").innerHTML = n ? `(${n} món${late ? ` · <b style="color:var(--bad)">${late} phiếu quá ngày</b>` : ""})` : "";
     box.innerHTML = L.length ? L.map(t => { const bad = tpOpen(t).some(p => tpDays(p) > 0);
       return `<div class="item" style="cursor:default;${bad ? "border:2px solid var(--bad);background:var(--badbg)" : ""}"><div class="pname">${bad ? "⛔ " : ""}${esc(t.product)} <span class="sub">· ${esc(t.code)} · SN ${esc(t.serial)}</span></div>
-        <div class="sub">👤 ${esc(t.customer)}${t.tech ? ` · 👨‍🔧 KTV ${esc(t.tech)}` : ""} · ${esc(STAGES[t.stage]?.label || "")}</div>
-        <div style="margin-top:4px;font-size:14px">${tpOpen(t).map(p => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed var(--line)"><div style="flex:1;min-width:0">• <b>${esc(p.name)}</b> ×${p.qty} ${p.src === "kho" ? "" : '<span class="sub">(ngoài kho)</span>'} – mượn ${fmtTime(p.at)}${tpDays(p) > 0 ? ` <b style="color:var(--bad)">QUÁ ${tpDays(p)} ngày chưa trả</b>` : ""}</div>${(boss || role === "wh") ? `<button type="button" class="btn okb" data-lkback="${esc(t.id + ":" + p.id)}" style="padding:5px 10px;font-size:13px;min-height:0;flex:0 0 auto;width:auto;white-space:nowrap">📥 Nhận lại</button>` : ""}</div>`).join("")}</div></div>`; }).join("")
+        <div class="sub">${t.kind === "lkmuon" ? "📦 Test hàng mới nhập · " : ""}👤 ${esc(t.customer)}${t.tech ? ` · 👨‍🔧 KTV ${esc(t.tech)}` : ""}${t.kind === "lkmuon" ? "" : " · " + esc(STAGES[t.stage]?.label || "")}</div>
+        <div style="margin-top:4px;font-size:14px">${tpOpen(t).map(p => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed var(--line)"><div style="flex:1;min-width:0">• <b>${esc(p.name)}</b> ×${p.qty} ${p.src === "kho" ? "" : '<span class="sub">(ngoài kho)</span>'} – mượn ${fmtTime(p.at)} · hạn trả ${fmt(iso(new Date(tpDue(p))))}${tpDays(p) > 0 ? ` <b style="color:var(--bad)">⛔ QUÁ HẠN ${tpDays(p)} ngày – nhắc Kỹ thuật trả</b>` : ""}</div>${(boss || role === "wh") ? `<button type="button" class="btn okb" data-lkback="${esc(t.id + ":" + p.id)}" style="padding:5px 10px;font-size:13px;min-height:0;flex:0 0 auto;width:auto;white-space:nowrap">📥 Nhận lại</button>` : ""}</div>`).join("")}</div></div>`; }).join("")
       : `<div class="empty">Không có linh kiện nào đang mượn test.</div>`;
   }
   // cuối ngày (từ 17h) còn linh kiện test chưa trả → cảnh báo đỏ cho Kho / Kỹ thuật / Giám đốc
+  function dirCostReminder(){
+    if (!(boss || role === "ac") || $("#app").classList.contains("hide") || new Date().getHours() < 17) return;
+    const L = dirNoCost(); if (!L.length) return;
+    let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_dc_rem") || "[]"); } catch(e){}
+    const key = iso(new Date()); if (seen.includes(key)) return;
+    try { localStorage.setItem("bh_dc_rem", JSON.stringify(seen.concat([key]).slice(-30))); } catch(e){}
+    bannerQ.push({id: "dircost", title: `🚚 ${L.length} hàng NCC giao thẳng chưa có giá nhập`, text: L.slice(0, 3).map(x => `${x.l.product} ×${x.l.qty} (${x.l.direct.ncc} – đơn ${x.o.code})`).join("; ") + " – vào mục Chi phí nhập giá để ghi nợ nhà cung cấp", to: boss ? "gd" : "ac"});
+    if (!bannerOn) nextBanner();
+  }
   function lkTestReminder(){
     if (!(boss || ["wh", "kt"].includes(role)) || $("#app").classList.contains("hide")) return;
-    const L = tickets.filter(t => tpOpen(t).length), late = L.filter(t => tpOpen(t).some(p => tpDays(p) > 0));
-    const eod = new Date().getHours() >= 17; if (!late.length && !(eod && L.length)) return;
+    const L = lkAll().filter(t => tpOpen(t).some(p => tpDays(p) > 0)), late = L;
+    const eod = false; if (!late.length) return;
     let seen = []; try { seen = JSON.parse(localStorage.getItem("bh_lk_rem") || "[]"); } catch(e){}
     const key = iso(new Date()) + (eod ? ":eod" : ":am"); if (seen.includes(key)) return;
     try { localStorage.setItem("bh_lk_rem", JSON.stringify(seen.concat([key]).slice(-60))); } catch(e){}
-    const n = L.reduce((a, t) => a + tpOpen(t).length, 0);
-    bannerQ.push({id: "lktest", title: `⛔ ${n} linh kiện test CHƯA TRẢ KHO${late.length ? ` (${late.length} phiếu từ hôm trước)` : ""}`, text: L.slice(0, 3).map(t => `${t.tech ? "KTV " + t.tech + ": " : ""}${tpOpen(t).map(p => p.name + " ×" + p.qty).join(", ")} (${t.code})`).join("; ") + (L.length > 3 ? "…" : "") + (role === "kt" ? " – mang trả Kho ngay" : " – Kho nhắc Kỹ thuật trả, bấm 📥 Nhận lại ở mục LK mượn"), to: role === "kt" ? "kt" : "wh"});
+    const n = L.reduce((a, t) => a + tpOpen(t).filter(p => tpDays(p) > 0).length, 0);
+    bannerQ.push({id: "lktest", title: `⛔ ${n} linh kiện mượn test QUÁ HẠN ${LKM_DAYS} NGÀY chưa trả kho`, text: L.slice(0, 3).map(t => `${t.tech ? "KTV " + t.tech + ": " : ""}${tpOpen(t).map(p => p.name + " ×" + p.qty).join(", ")} (${t.code})`).join("; ") + (L.length > 3 ? "…" : "") + (role === "kt" ? " – trả Kho ngay hoặc bấm 🔁 Gia hạn ở mục Linh kiện mượn test" : " – Kho hỏi lại Kỹ thuật, nhắc trả; nhận thì bấm 📥 Nhận lại ở mục LK mượn"), to: role === "kt" ? "kt" : "wh"});
     if (!bannerOn) nextBanner();
   }
   document.addEventListener("click", async e => {
     const bk = e.target.closest("[data-lkback]");
-    if (bk) { e.stopPropagation(); const [tid, pid] = bk.dataset.lkback.split(":"), t = tickets.find(x => x.id === tid), p = t && (t.testParts || []).find(x => x.id === pid); if (!p || p.returned) return;
+    if (bk) { e.stopPropagation(); const [tid, pid] = bk.dataset.lkback.split(":"), t = lkFind(tid), p = t && (t.testParts || []).find(x => x.id === pid); if (!p || p.returned) return;
       if (!confirm(`Kho đã nhận lại ${p.name} ×${p.qty} từ Kỹ thuật?`)) return; const now = new Date().toISOString(); bk.disabled = true;
       try { if (p.src === "kho") await put("mv", {id: "mv_" + uid(), product: p.name, qty: p.qty, at: now, kind: "lk_test_tra", ref: t.code, note: `Kỹ thuật trả linh kiện test – ${t.product} SN ${t.serial}`, by: actor()});
-        await advance(t, t.stage, `📥 Kho đã nhận lại linh kiện test: ${p.name} ×${p.qty}`, {testParts: t.testParts.map(x => x.id === pid ? Object.assign({}, x, {returned: true, returning: false, returnedAt: now}) : x)});
+        await lkSave(t, `📥 Kho đã nhận lại linh kiện test: ${p.name} ×${p.qty}`, {testParts: t.testParts.map(x => x.id === pid ? Object.assign({}, x, {returned: true, returning: false, returnedAt: now}) : x)});
         toast(`Đã nhận lại ${p.name}${p.src === "kho" ? " – cộng lại kho" : ""}`); } catch(err){ bk.disabled = false; }
+      return; }
+    if (e.target.closest("[data-lknew]")) { e.stopPropagation(); return openTestParts(null); }
+    const wok = e.target.closest("[data-lwok]"), wno = e.target.closest("[data-lwno]"), ext = e.target.closest("[data-lkext]");
+    if (wok || wno || ext) { e.stopPropagation(); const [tid, pid] = (wok || wno || ext).dataset[wok ? "lwok" : wno ? "lwno" : "lkext"].split(":"), t = lkFind(tid), p = t && (t.testParts || []).find(x => x.id === pid); if (!p) return;
+      const now = new Date().toISOString(), upd = ch => (t.testParts || []).map(x => x.id === pid ? Object.assign({}, x, ch) : x), ref = t.code;
+      try {
+        if (wok) { if (!p.wait) return; const k = stockOf(p.name) ?? 0; if (k < p.qty) { toast(`${p.name}: kho chỉ còn ${k}`); return; }
+          if (!confirm(`Đồng ý cho Kỹ thuật mượn ${p.name} ×${p.qty}? (trừ kho, hạn trả ${LKM_DAYS} ngày)`)) return;
+          await put("mv", {id: "mv_" + uid(), product: p.name, qty: -p.qty, at: now, kind: "lk_test", ref, note: `Kỹ thuật mượn test – ${t.kind === "lkmuon" ? "test hàng mới nhập" : t.product + " SN " + t.serial}`, by: actor()});
+          const due = new Date(Date.now() + LKM_DAYS * 864e5).toISOString();
+          await lkSave(t, `✅ Kho đồng ý cho mượn: ${p.name} ×${p.qty} – hạn trả ${fmt(iso(new Date(due)))}`, {testParts: upd({wait: false, at: now, okAt: now, okBy: actor(), due})});
+          pushTo("kt", "✅ Kho đồng ý cho mượn linh kiện", `${ref}: ${p.name} ×${p.qty} – hạn trả ${LKM_DAYS} ngày`); toast("Đã đồng ý – trừ kho, báo Kỹ thuật"); }
+        if (wno) { if (!p.wait) return; const why = prompt(`Từ chối cho mượn "${p.name}" – lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do từ chối"); return; }
+          await lkSave(t, `✖ Kho từ chối cho mượn: ${p.name} ×${p.qty} – ${why.trim()}`, {testParts: upd({wait: false, rejected: true, reply: why.trim(), doneAt: now})});
+          pushTo("kt", "✖ Kho từ chối cho mượn linh kiện", `${ref}: ${p.name} – ${why.trim()}`); toast("Đã từ chối – báo Kỹ thuật"); }
+        if (ext) { const base = Math.max(Date.now(), new Date(tpDue(p)).getTime()), due = new Date(base + LKM_DAYS * 864e5).toISOString();
+          if (!confirm(`Gia hạn mượn ${p.name} thêm ${LKM_DAYS} ngày (đến ${fmt(iso(new Date(due)))})?`)) return;
+          await lkSave(t, `🔁 Gia hạn mượn ${p.name} ×${p.qty} đến ${fmt(iso(new Date(due)))}`, {testParts: upd({due, ext: (p.ext || 0) + 1})});
+          pushTo("wh", "🔁 Kỹ thuật gia hạn mượn linh kiện", `${ref}: ${p.name} đến ${fmt(iso(new Date(due)))}`); toast("Đã gia hạn"); }
+      } catch(err){}
       return; }
     const rok = e.target.closest("[data-rqok]"), rno = e.target.closest("[data-rqno]");
     if (rok || rno) { e.stopPropagation(); const [tid, rid] = (rok || rno).dataset[rok ? "rqok" : "rqno"].split(":"), t = tickets.find(x => x.id === tid), r = t && (t.lkReq || []).find(x => x.id === rid); if (!r || r.status !== "cho") return;
@@ -3212,7 +3295,8 @@ window.APP_BUILD = "2026-11-22.5";
       ${gift ? `<div class="full sub" style="color:#be185d">🎁 Hàng tặng</div>`
         : `<div class="full" style="display:flex;align-items:center;gap:8px"><span class="sub" style="white-space:nowrap">Bảo hành</span><select class="lm">${WMONTHS.map(m => `<option value="${m}" ${Number(l.months ?? 12) === m ? "selected" : ""}>${m ? m + " tháng" : "Không bảo hành"}</option>`).join("")}</select></div>
           <div class="full"><label style="display:flex;align-items:center;gap:8px;margin:2px 0 0;font-size:14px;color:var(--ink)"><input type="checkbox" class="ldir" ${l.direct ? "checked" : ""} style="width:20px;height:20px;margin:0"> 🚚 Giao thẳng từ nhà cung cấp <span class="sub">(không qua kho)</span></label>
-            <div class="ldirw ${l.direct ? "" : "hide"}" style="position:relative;margin-top:6px"><input class="lncc" value="${esc(l.direct?.ncc || "")}" placeholder="Tên nhà cung cấp giao thẳng *" autocomplete="off"><div class="sugg hide"></div></div></div>`}
+            <div class="ldirw ${l.direct ? "" : "hide"}" style="position:relative;margin-top:6px"><input class="lncc" value="${esc(l.direct?.ncc || "")}" placeholder="Tên nhà cung cấp giao thẳng *" autocomplete="off">
+              <input class="lcost" value="${l.direct?.cost ? Number(l.direct.cost).toLocaleString("vi-VN") : ""}" inputmode="numeric" placeholder="Giá nhập / 1 SP (không bắt buộc) – để ghi nợ NCC" autocomplete="off" style="margin-top:6px"></div></div>`}
     </div>`;
   }
   function addLine(l, gift){
@@ -3222,13 +3306,10 @@ window.APP_BUILD = "2026-11-22.5";
     el.querySelector(".rm").onclick = () => { if (gift || $("#olines").children.length > 1) { el.remove(); refreshAllLineStock(); } else toast("Đơn cần ít nhất 1 hàng bán"); };
     const lp = el.querySelector(".lp");
     const dir = el.querySelector(".ldir");
-    if (dir) { const ni = el.querySelector(".lncc"), nsg = el.querySelector(".ldirw .sugg");
+    if (dir) { const ni = el.querySelector(".lncc");
       dir.onchange = () => { el.querySelector(".ldirw").classList.toggle("hide", !dir.checked); el.classList.toggle("dirline", dir.checked); refreshAllLineStock(); if (dir.checked && !ni.value) ni.focus(); };
       el.classList.toggle("dirline", dir.checked);
-      const showN = () => { const q = norm(ni.value), L = nccNames().filter(n => !q || norm(n).includes(q)).slice(0, 12);
-        nsg.innerHTML = L.map(n => `<div class="sg" data-n="${esc(n)}" style="grid-template-columns:1fr"><span class="sgn">🏭 ${esc(n)}</span></div>`).join(""); nsg.classList.toggle("hide", !L.length);
-        nsg.querySelectorAll(".sg").forEach(b => b.onclick = () => { ni.value = b.dataset.n; nsg.classList.add("hide"); }); };
-      ni.addEventListener("focus", showN); ni.addEventListener("input", showN); ni.addEventListener("blur", () => setTimeout(() => nsg.classList.add("hide"), 200)); }
+    }
     const onPick = () => {
       const p = findProduct(lp.value) || stock.find(x => norm(x.product) === norm(lp.value));
       const lm = el.querySelector(".lm");
@@ -3336,6 +3417,13 @@ window.APP_BUILD = "2026-11-22.5";
   }
   upgradeProdInputs(document);
   new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 && (n.matches?.('input[list="prodList"]') ? upgradeProdInputs(n.parentNode) : upgradeProdInputs(n))))).observe(document.body, {childList: true, subtree: true});
+  // dòng NCC giao thẳng có giá nhập → ghi tiền hàng phải trả NCC (vào Chi phí – Nợ nhà cung cấp, không qua Kho duyệt nhập)
+  async function dirPayable(o, l){
+    const amt = Math.round(Number(l.direct.cost) * (Number(l.qty) || 1));
+    await put("ex", {id: "ex_" + uid(), kind: "nhap", date: o.saleDate || iso(new Date()), amount: amt, supplier: l.direct.ncc, product: l.product, qty: Number(l.qty) || 1, unit: Number(l.direct.cost), vatQty: 0, vatRate: 0, unitVat: 0,
+      paid: 0, debt: amt, payMode: "debt", whStatus: "direct", direct: true, ref: o.code, orderCode: o.code, note: `🚚 NCC giao thẳng cho khách ${o.customer} – đơn ${o.code}`, by: actor(), at: new Date().toISOString()});
+  }
+  const dirNoCost = () => orders.filter(o => o.stage !== "huy").flatMap(o => (o.lines || []).map((l, i) => ({o, l, i})).filter(x => x.l.direct && !x.l.direct.cost && !x.l.direct.noCost));
   const nccNames = () => [...new Map([...expenses.filter(x => x.ncc || x.supplier).map(x => x.ncc || x.supplier), ...orders.flatMap(o => (o.lines || []).map(l => l.direct?.ncc).filter(Boolean))].filter(Boolean).map(n => [norm(n), n])).values()].sort((a,b) => a.localeCompare(b, "vi"));
   const allLineEls = () => [...$("#olines").children, ...$("#glines").children];
   function refreshAllLineStock(){ allLineEls().forEach(showLineStock); }
@@ -3443,7 +3531,7 @@ window.APP_BUILD = "2026-11-22.5";
   SF.onsubmit = async e => {
     e.preventDefault();
     const sold = [...$("#olines").children].map(el => Object.assign({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: Number(el.querySelector(".lm").value)},
-      el.querySelector(".ldir")?.checked ? {direct: {ncc: el.querySelector(".lncc").value.trim()}} : {})).filter(l => l.product);
+      el.querySelector(".ldir")?.checked ? {direct: Object.assign({ncc: el.querySelector(".lncc").value.trim()}, (n => n ? {cost: n} : {})(Number(el.querySelector(".lcost").value.replace(/[^\d]/g, "")) || 0))} : {})).filter(l => l.product);
     { const bad = sold.find(l => l.direct && !l.direct.ncc); if (bad) { toast(`${bad.product}: nhập tên nhà cung cấp giao thẳng`); [...$("#olines").children].find(el => el.querySelector(".ldir")?.checked && !el.querySelector(".lncc").value.trim())?.querySelector(".lncc").focus(); return; } }
     const gifts = [...$("#glines").children].map(el => ({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: 0, gift: true})).filter(l => l.product);
     const lines = sold.concat(gifts);
@@ -3478,6 +3566,7 @@ window.APP_BUILD = "2026-11-22.5";
     const allDirect = lines.every(l => l.direct);   // cả đơn giao thẳng từ NCC → không qua Kho / Vận chuyển, chuyển Kế toán
     if (allDirect) { o.stage = "cho_tt"; o.directAt = now; o.history = [{stage: "cho_tt", at: now, by: actor(), note: `${orderSummary({lines})} · 🚚 Giao thẳng từ NCC ${[...new Set(lines.map(l => l.direct.ncc))].join(", ")} – không qua kho`}]; }
     try { await put("od", o); } catch(err){ return; }
+    for (const l of lines.filter(l => l.direct?.cost)) await dirPayable(o, l);
     if (allDirect) { lastOrderId = o.id; pushTo("ac", `🔔 Kế toán: đơn ${o.code} – ${o.customer} (giao thẳng từ NCC)`, orderSummary(o), o.id); resetSale(); toast("Đã lưu đơn giao thẳng từ NCC – chuyển Kế toán"); return; }
     lastOrderId = o.id;
     pushTo("wh", `${o.ship.method === "grabgap" ? "🚨 GẤP – GRAB GẤP! " : "🔔 "}Kho: đơn ${o.code} – ${o.customer}`, orderSummary(o), o.id);
@@ -5166,7 +5255,7 @@ window.APP_BUILD = "2026-11-22.5";
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -5224,6 +5313,7 @@ window.APP_BUILD = "2026-11-22.5";
           <div class="exph" style="margin-top:8px"></div>
           <label>Ghi chú</label><input class="exn" placeholder="Tùy chọn">
           <div class="btns"><button type="button" class="btn pri exgo">💾 Lưu khoản chi</button></div></details>
+        <div class="panel exdirbox hide" style="margin:12px 0 0;padding:10px;border:2px solid #f59e0b"><b style="font-size:14px;color:#b45309">🚚 Hàng NCC giao thẳng chưa có giá nhập</b><div class="sub">Nhập giá để app ghi tiền phải trả nhà cung cấp.</div><div class="exdir" style="margin-top:6px"></div></div>
         <div class="panel exsupbox hide" style="margin:12px 0 0;padding:10px"><b style="font-size:14px">💳 Nợ nhà cung cấp</b><div class="exsup" style="margin-top:6px"></div></div>
         <div class="row" style="align-items:center;margin-top:14px;gap:8px"><b style="font-size:14px">📊 Tổng hợp chi phí</b><input type="date" class="exday" style="width:auto;padding:7px 9px;font-size:14px"></div>
         <div class="seg exseg" style="margin-top:6px"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button></div>
@@ -5358,6 +5448,15 @@ window.APP_BUILD = "2026-11-22.5";
         ${S.kh ? `<div class="stat c-info"><b style="font-size:15px">${money(S.kh)}</b><span>👤 Khách tự trả (${S.nKh})</span></div>` : ""}
         ${S.shipCharge ? `<div class="stat c-ok"><b style="font-size:15px">${money(S.shipCharge)}</b><span>🚚 Phí ship tính lại khách</span></div>` : ""}</div>
       ${Object.keys(S.cat).length ? `<table class="ptable" style="margin-top:8px"><tr><th style="text-align:left;width:auto">Công ty đã chi theo loại</th><th>Số khoản</th><th style="width:110px">Số tiền</th></tr>${Object.entries(S.cat).sort((a,b) => b[1].amt - a[1].amt).map(([k,v]) => `<tr><td>${esc(k)}</td><td>${v.n}</td><td><b>${money(v.amt)}</b></td></tr>`).join("")}</table>` : ""}`;
+    const DN = dirNoCost(); $h(".exdirbox").classList.toggle("hide", !DN.length);
+    $h(".exdir").innerHTML = DN.map(x => `<div style="padding:8px 0;border-top:1px dashed var(--line);font-size:14px"><div><b>${esc(x.l.product)}</b> ×${x.l.qty} · 🏭 ${esc(x.l.direct.ncc)}</div><div class="sub">Đơn ${esc(x.o.code)} · ${esc(x.o.customer)} · ${fmt(x.o.saleDate)}</div>
+      <div style="display:flex;gap:6px;margin-top:6px"><input class="dcv" data-k="${esc(x.o.id + ":" + x.i)}" inputmode="numeric" placeholder="Giá nhập / 1 SP" style="flex:1;min-width:0"><button type="button" class="btn pri sm dcgo" data-k="${esc(x.o.id + ":" + x.i)}" style="width:auto;flex:0 0 auto">💾 Ghi nợ NCC</button><button type="button" class="btn sm dcno" data-k="${esc(x.o.id + ":" + x.i)}" style="width:auto;flex:0 0 auto" title="Không có giá / đã trả">✕</button></div></div>`).join("");
+    host.querySelectorAll(".dcgo, .dcno").forEach(b => b.onclick = async () => { const [oid, i] = b.dataset.k.split(":"), o = orders.find(x => x.id === oid), l = o?.lines?.[+i]; if (!l) return;
+      const cost = b.classList.contains("dcgo") ? Number((host.querySelector(`.dcv[data-k="${b.dataset.k}"]`).value || "").replace(/[^\d]/g, "")) || 0 : 0;
+      if (b.classList.contains("dcgo") && !cost) { toast("Nhập giá nhập"); return; }
+      if (b.classList.contains("dcno") && !confirm("Bỏ qua – không ghi nợ NCC cho dòng này?")) return;
+      const lines = o.lines.map((x, k) => k === +i ? Object.assign({}, x, {direct: Object.assign({}, x.direct, cost ? {cost} : {noCost: true})}) : x);
+      try { await put("od", Object.assign({}, o, {lines, updatedAt: new Date().toISOString()})); if (cost) await dirPayable(o, lines[+i]); toast(cost ? `Đã ghi nợ ${l.direct.ncc}: ${money(cost * l.qty)}` : "Đã bỏ qua"); } catch(e){} });
     const sup = supplierDebts().filter(r => Math.round(r.debt) !== 0);
     $h(".exsupbox").classList.toggle("hide", !sup.length);
     $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b>${r.debt > 0.5 && r.since ? (r.late ? `<div class="sub" style="color:var(--bad);font-weight:700">⏰ quá hạn ${r.age - SUP_DAYS} ngày</div>` : `<div class="sub">hạn trả ${fmt(r.due)}</div>`) : ""}</td></tr>`).join("")}</table>
