@@ -2807,30 +2807,40 @@
     return `<div class="sub" style="margin-top:4px">🧪 LK test: ${L.map(p => `${esc(p.name)} ×${p.qty}${p.src === "ngoai" ? " (ngoài kho)" : ""} – ${p.returned ? `<span style="color:var(--ok)">✔ đã trả kho</span>` : p.used ? "dùng cho máy" : p.returning ? `<b style="color:#b45309">chờ Kho nhận</b>` : `<b style="color:${tpDays(p) > 0 ? "var(--bad)" : "#b45309"}">đang mượn${tpDays(p) > 0 ? ` – QUÁ ${tpDays(p)} ngày` : ""}</b>`}`).join(" · ")}</div>`; }
   function openTestParts(t){
     const F2 = $("#actForm");
-    F2.innerHTML = `<div class="grab"></div><h2>🧪 Linh kiện test – mượn kho để thử máy</h2>
+    F2.innerHTML = `<div class="grab"></div><h2>🧪 Linh kiện test – đoán bệnh</h2>
       <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
-      ${(t.testParts || []).length ? `<div class="found" style="margin-bottom:8px">${(t.testParts || []).map(p => `• ${esc(p.name)} ×${p.qty} ${p.src === "kho" ? "(đã tạm trừ kho)" : "(ngoài kho)"} – ${p.returned ? "đã trả" : p.used ? "dùng cho máy" : "đang mượn"}`).join("<br>")}</div>` : ""}
-      <div class="sub">Tìm linh kiện trong kho: <b>có trong kho → tạm trừ kho</b>; không có thì tự gõ tên (chỉ ghi lại). Sửa xong nhớ trả lại kho khi bấm Hoàn tất.</div>
+      ${(t.testParts || []).length ? `<div class="found" style="margin-bottom:8px">${(t.testParts || []).map(p => `• ${esc(p.name)} ×${p.qty} ${p.src === "kho" ? "(đã xuất kho)" : "(tự điền)"} – ${p.returned ? "đã trả" : p.used ? "dùng cho máy" : "đang mượn"}`).join("<br>")}</div>` : ""}
+      <h3 style="margin:6px 0 2px;font-size:15px">🔍 Linh kiện 1, 2, 3… xuất kho để đoán bệnh</h3>
+      <div class="sub">Gõ model / hãng / tên linh kiện → chọn trong danh sách kho → <b>xuất kho</b>. Khi Hoàn tất: linh kiện chạy tốt chọn <b>Thay cho khách</b>, còn lại <b>Trả về kho</b>.</div>
       <div id="tpRows"></div>
-      <button type="button" class="btn sm" id="tpAdd" style="margin-top:8px">+ Thêm linh kiện</button>
+      <button type="button" class="btn sm" id="tpAdd" style="margin-top:8px">+ Thêm linh kiện kho</button>
+      <h3 style="margin:16px 0 2px;font-size:15px">🧪 KT mượn test tạm – tự điền</h3>
+      <div class="sub">Linh kiện không lấy từ kho: tự ghi tên, số lượng, ghi chú (chỉ ghi lại, không trừ kho).</div>
+      <div id="tfRows"></div>
+      <button type="button" class="btn sm" id="tfAdd" style="margin-top:8px">+ Thêm dòng tự điền</button>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu linh kiện test</button></div>`;
-    const addRow = () => { $("#tpRows").insertAdjacentHTML("beforeend", `<div class="tprow" style="margin-top:8px"><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="tpn" placeholder="Tìm linh kiện trong kho hoặc tự gõ" autocomplete="off"><div class="sugg hide"></div></div><input class="tpq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div><div class="sub tph" style="margin-top:2px"></div></div>`);
+    const addRow = focus => { const i = $("#tpRows").children.length + 1;
+      $("#tpRows").insertAdjacentHTML("beforeend", `<div class="tprow" style="margin-top:8px"><div class="sub" style="font-weight:600">Linh kiện ${i}</div><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="tpn" placeholder="🔍 Tìm linh kiện trong kho" autocomplete="off"><div class="sugg hide"></div></div><input class="tpq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div><div class="sub tph" style="margin-top:2px"></div></div>`);
       const el = $("#tpRows").lastElementChild, inp = el.querySelector(".tpn"), q = el.querySelector(".tpq");
-      const upd = () => { const n = inp.value.trim(), k = n ? stockOf(n) : null, need = parseInt(q.value) || 1;
-        el.querySelector(".tph").innerHTML = !n ? "" : k != null && k >= need ? `<b style="color:var(--ok)">📦 Có trong kho: tồn ${k} → tạm trừ ${need}</b>` : k != null ? `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>` : `<b style="color:#7c3aed">✍️ Ngoài kho – chỉ ghi lại</b>`; };
-      attachPicker(inp, el.querySelector(".sugg"), upd, true); q.addEventListener("input", upd); inp.focus(); };
-    $("#tpAdd").onclick = addRow; addRow();
+      const upd = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n)), k = ex ? stockOf(ex) : null, need = parseInt(q.value) || 1;
+        el.querySelector(".tph").innerHTML = !n ? "" : k != null && k >= need ? `<b style="color:var(--ok)">📦 Tồn ${k} → xuất ${need}, còn ${k - need}</b>` : k != null ? `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>` : `<b style="color:var(--bad)">Chưa chọn hàng trong kho</b>`; };
+      attachPicker(inp, el.querySelector(".sugg"), upd, true, true); q.addEventListener("input", upd); if (focus) inp.focus(); };
+    const addFree = focus => { $("#tfRows").insertAdjacentHTML("beforeend", `<div class="tfrow" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"><input class="tfn" placeholder="Tên linh kiện" autocomplete="off" style="flex:1 1 60%;min-width:0"><input class="tfq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"><input class="tfg" placeholder="Ghi chú (tùy chọn)" autocomplete="off" style="flex:1 1 100%"></div>`); if (focus) $("#tfRows").lastElementChild.querySelector(".tfn").focus(); };
+    $("#tpAdd").onclick = () => addRow(true); $("#tfAdd").onclick = () => addFree(true); addRow(true); addFree(false);
     actCtx = {run: async () => {
       const rows = [...document.querySelectorAll("#tpRows .tprow")].map(el => ({name: el.querySelector(".tpn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".tpq").value) || 1)})).filter(r => r.name);
-      if (!rows.length) { toast("Tìm hoặc gõ tên linh kiện test"); throw new Error("x"); }
-      const now = new Date().toISOString(), add = [];
+      const free = [...document.querySelectorAll("#tfRows .tfrow")].map(el => ({name: el.querySelector(".tfn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".tfq").value) || 1), note: el.querySelector(".tfg").value.trim()})).filter(r => r.name);
+      if (!rows.length && !free.length) { toast("Tìm linh kiện trong kho hoặc tự điền linh kiện mượn test"); throw new Error("x"); }
+      const need = {};
       for (const r of rows) { const ex = productNames().find(p => norm(p) === norm(r.name)), k = ex ? stockOf(ex) : null;
-        if (k != null && k < r.qty) { toast(`${ex}: kho chỉ còn ${k}`); throw new Error("x"); }
-        const src = k != null ? "kho" : "ngoai", name = ex || r.name;
-        if (src === "kho") await put("mv", {id: "mv_" + uid(), product: name, qty: -r.qty, at: now, kind: "lk_test", ref: t.code, note: `Kỹ thuật mượn test – ${t.product} SN ${t.serial}`, by: actor()});
-        add.push({id: uid(), name, qty: r.qty, src, at: now, by: t.tech || actor()}); }
-      await advance(t, t.stage, `🧪 Mượn linh kiện test: ${add.map(p => `${p.name} ×${p.qty}${p.src === "kho" ? "" : " (ngoài kho)"}`).join(", ")}`, {testParts: (t.testParts || []).concat(add)});
-      toast(`Đã ghi ${add.length} linh kiện test${add.some(p => p.src === "kho") ? " – đã tạm trừ kho" : ""}`);
+        if (k == null) { toast(`“${r.name}” không có trong kho – chọn trong danh sách, hoặc ghi ở phần tự điền`); throw new Error("x"); }
+        r.name = ex; need[norm(ex)] = (need[norm(ex)] || 0) + r.qty; if (k < need[norm(ex)]) { toast(`${ex}: kho chỉ còn ${k}`); throw new Error("x"); } }
+      const now = new Date().toISOString(), add = [];
+      for (const r of rows) { await put("mv", {id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "lk_test", ref: t.code, note: `Kỹ thuật mượn test – ${t.product} SN ${t.serial}`, by: actor()});
+        add.push({id: uid(), name: r.name, qty: r.qty, src: "kho", at: now, by: t.tech || actor()}); }
+      for (const r of free) add.push({id: uid(), name: r.name, qty: r.qty, src: "ngoai", note: r.note, at: now, by: t.tech || actor()});
+      await advance(t, t.stage, `🧪 Linh kiện test: ${add.map(p => `${p.name} ×${p.qty}${p.src === "kho" ? " (xuất kho)" : " (tự điền" + (p.note ? ": " + p.note : "") + ")"}`).join(", ")}`, {testParts: (t.testParts || []).concat(add)});
+      toast(`Đã ghi ${add.length} linh kiện test${rows.length ? ` – đã xuất kho ${rows.length} món` : ""}`);
     }};
     open("actBg");
   }
@@ -2839,7 +2849,7 @@
     F2.innerHTML = `<div class="grab"></div><h2>✓ Hoàn tất – chuyển Vận chuyển</h2>
       <div style="margin-bottom:6px"><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}</span></div>
       <label>Linh kiện test – linh kiện nào lắp vào máy chạy tốt thì chọn <b>🔧 Thay cho khách</b> (xuất kho, tính tiền khách); còn lại <b>↩️ Trả về kho</b></label>
-      ${L.map(p => `<div style="padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px"><div style="font-size:15px;color:var(--ink)"><b>${esc(p.name)}</b> ×${p.qty} <span class="sub">${p.src === "kho" ? "(mượn kho)" : "(ngoài kho)"}</span></div>
+      ${L.map(p => `<div style="padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px"><div style="font-size:15px;color:var(--ink)"><b>${esc(p.name)}</b> ×${p.qty} <span class="sub">${p.src === "kho" ? "(xuất kho)" : "(tự điền)"}</span></div>
         <div class="seg tpseg" data-id="${esc(p.id)}" style="margin-top:6px"><button type="button" data-v="thay">🔧 Thay cho khách</button><button type="button" data-v="tra" class="on">↩️ Trả về kho</button></div></div>`).join("")}
       <label>Kết quả xử lý (tùy chọn)</label><textarea name="note"></textarea>
       <div class="sub" style="margin-top:6px">Phiếu chuyển <b>Vận chuyển</b> ngay. Linh kiện trả về kho: mang trả Kho trong ngày – Kho bấm <b>📥 Nhận lại</b> ở mục <b>🧪 LK mượn</b>; cuối ngày chưa trả sẽ <b style="color:var(--bad)">cảnh báo đỏ</b>.</div>
