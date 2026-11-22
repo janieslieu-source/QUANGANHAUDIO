@@ -743,7 +743,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-22.4";
+window.APP_BUILD = "2026-11-22.5";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3198,7 +3198,7 @@ window.APP_BUILD = "2026-11-22.4";
   const WMONTHS = [0,3,6,12,18,24,36];
   const snOf = (o, i) => (o.lines?.[i]?.serials) || (Array.isArray(o.serials?.[i]) ? o.serials[i] : []) || [];
   const snAll = o => (o.lines || []).flatMap((l, i) => snOf(o, i));
-  const orderSummary = o => (o.lines || []).map(l => `${l.gift ? "🎁 " : ""}${l.product} x${l.qty}${l.gift ? " (tặng)" : ""}`).join(", ");
+  const orderSummary = o => (o.lines || []).map(l => `${l.gift ? "🎁 " : ""}${l.product} x${l.qty}${l.gift ? " (tặng)" : ""}${l.direct ? ` (🚚 NCC ${l.direct.ncc} giao thẳng)` : ""}`).join(", ");
   const oCode = () => "DH" + iso(new Date()).replace(/-/g,"").slice(2) + "-" + Math.random().toString(36).slice(2,5).toUpperCase();
   const SF = $("#saleForm");
   let saleShip = null, lastOrderId = null;
@@ -3210,7 +3210,9 @@ window.APP_BUILD = "2026-11-22.4";
         <div class="sugg hide"></div><div class="lsim chips" style="flex-wrap:wrap;margin-top:6px"></div></div>
       <div><input class="lq" type="number" min="1" inputmode="numeric" value="${l.qty || 1}" title="Số lượng"></div>
       ${gift ? `<div class="full sub" style="color:#be185d">🎁 Hàng tặng</div>`
-        : `<div class="full" style="display:flex;align-items:center;gap:8px"><span class="sub" style="white-space:nowrap">Bảo hành</span><select class="lm">${WMONTHS.map(m => `<option value="${m}" ${Number(l.months ?? 12) === m ? "selected" : ""}>${m ? m + " tháng" : "Không bảo hành"}</option>`).join("")}</select></div>`}
+        : `<div class="full" style="display:flex;align-items:center;gap:8px"><span class="sub" style="white-space:nowrap">Bảo hành</span><select class="lm">${WMONTHS.map(m => `<option value="${m}" ${Number(l.months ?? 12) === m ? "selected" : ""}>${m ? m + " tháng" : "Không bảo hành"}</option>`).join("")}</select></div>
+          <div class="full"><label style="display:flex;align-items:center;gap:8px;margin:2px 0 0;font-size:14px;color:var(--ink)"><input type="checkbox" class="ldir" ${l.direct ? "checked" : ""} style="width:20px;height:20px;margin:0"> 🚚 Giao thẳng từ nhà cung cấp <span class="sub">(không qua kho)</span></label>
+            <div class="ldirw ${l.direct ? "" : "hide"}" style="position:relative;margin-top:6px"><input class="lncc" value="${esc(l.direct?.ncc || "")}" placeholder="Tên nhà cung cấp giao thẳng *" autocomplete="off"><div class="sugg hide"></div></div></div>`}
     </div>`;
   }
   function addLine(l, gift){
@@ -3219,6 +3221,14 @@ window.APP_BUILD = "2026-11-22.4";
     const el = box.lastElementChild;
     el.querySelector(".rm").onclick = () => { if (gift || $("#olines").children.length > 1) { el.remove(); refreshAllLineStock(); } else toast("Đơn cần ít nhất 1 hàng bán"); };
     const lp = el.querySelector(".lp");
+    const dir = el.querySelector(".ldir");
+    if (dir) { const ni = el.querySelector(".lncc"), nsg = el.querySelector(".ldirw .sugg");
+      dir.onchange = () => { el.querySelector(".ldirw").classList.toggle("hide", !dir.checked); el.classList.toggle("dirline", dir.checked); refreshAllLineStock(); if (dir.checked && !ni.value) ni.focus(); };
+      el.classList.toggle("dirline", dir.checked);
+      const showN = () => { const q = norm(ni.value), L = nccNames().filter(n => !q || norm(n).includes(q)).slice(0, 12);
+        nsg.innerHTML = L.map(n => `<div class="sg" data-n="${esc(n)}" style="grid-template-columns:1fr"><span class="sgn">🏭 ${esc(n)}</span></div>`).join(""); nsg.classList.toggle("hide", !L.length);
+        nsg.querySelectorAll(".sg").forEach(b => b.onclick = () => { ni.value = b.dataset.n; nsg.classList.add("hide"); }); };
+      ni.addEventListener("focus", showN); ni.addEventListener("input", showN); ni.addEventListener("blur", () => setTimeout(() => nsg.classList.add("hide"), 200)); }
     const onPick = () => {
       const p = findProduct(lp.value) || stock.find(x => norm(x.product) === norm(lp.value));
       const lm = el.querySelector(".lm");
@@ -3326,6 +3336,7 @@ window.APP_BUILD = "2026-11-22.4";
   }
   upgradeProdInputs(document);
   new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 && (n.matches?.('input[list="prodList"]') ? upgradeProdInputs(n.parentNode) : upgradeProdInputs(n))))).observe(document.body, {childList: true, subtree: true});
+  const nccNames = () => [...new Map([...expenses.filter(x => x.ncc || x.supplier).map(x => x.ncc || x.supplier), ...orders.flatMap(o => (o.lines || []).map(l => l.direct?.ncc).filter(Boolean))].filter(Boolean).map(n => [norm(n), n])).values()].sort((a,b) => a.localeCompare(b, "vi"));
   const allLineEls = () => [...$("#olines").children, ...$("#glines").children];
   function refreshAllLineStock(){ allLineEls().forEach(showLineStock); }
   function showLineStock(el){
@@ -3335,8 +3346,9 @@ window.APP_BUILD = "2026-11-22.4";
       sim.innerHTML = c.length ? `<span class="sub">Ý bạn là:</span> ` + c.map(p => `<button type="button" class="chip simc" data-n="${esc(p)}">${esc(p)} <b>(${stockOf(p) ?? 0})</b></button>`).join("") : "";
       sim.querySelectorAll(".simc").forEach(b => b.onclick = () => { el.querySelector(".lp").value = b.dataset.n; el.querySelector(".lp").dispatchEvent(new Event("change")); }); }
     if (!name) { box.textContent = ""; return; }
+    if (el.querySelector(".ldir")?.checked) { box.innerHTML = `<b style="color:#7c3aed">🚚 Giao thẳng từ NCC – không trừ kho</b>`; return; }
     // tổng số lượng của sản phẩm này trên cả hàng bán và hàng tặng
-    const n = stockOf(name), q = allLineEls().filter(x => norm(x.querySelector(".lp").value) === norm(name)).reduce((a,x) => a + (parseInt(x.querySelector(".lq").value) || 1), 0);
+    const n = stockOf(name), q = allLineEls().filter(x => norm(x.querySelector(".lp").value) === norm(name) && !x.querySelector(".ldir")?.checked).reduce((a,x) => a + (parseInt(x.querySelector(".lq").value) || 1), 0);
     if (n == null) { box.innerHTML = `<b style="color:var(--warn)">Chưa có trong kho</b>` + (linkOf(name) ? " · " + linkA(name, "🔗 Xem") + " " + copyBtn(name, "📋 Copy") : ""); return; }
     box.innerHTML = (n >= q ? `<b style="color:var(--ok)">Tồn kho: ${n}</b>` : `<b style="color:var(--bad)">Tồn kho: ${n} – thiếu ${q - n}${allLineEls().filter(x => norm(x.querySelector(".lp").value) === norm(name)).length > 1 ? " (tính cả bán + tặng)" : ""}</b>`) + (linkOf(name) ? " · " + linkA(name, "🔗 Xem") + " " + copyBtn(name, "📋 Copy") : "");
   }
@@ -3430,12 +3442,14 @@ window.APP_BUILD = "2026-11-22.4";
   const swLine = o => (o.software || []).length ? `<div class="sub" style="margin-top:4px;color:var(--ink)">${o.software.map(x => `💿 <b>${esc(x.name)}</b> × ${x.qty} · ${x.term === "vv" ? "♾️ Vĩnh viễn" : `📅 1 năm – hết hạn <b style="color:${x.until < iso(new Date()) ? "var(--bad)" : "inherit"}">${fmt(x.until)}</b>`}${x.key ? ` · mã ${esc(x.key)}` : ""}`).join("<br>")}</div>` : "";
   SF.onsubmit = async e => {
     e.preventDefault();
-    const sold = [...$("#olines").children].map(el => ({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: Number(el.querySelector(".lm").value)})).filter(l => l.product);
+    const sold = [...$("#olines").children].map(el => Object.assign({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: Number(el.querySelector(".lm").value)},
+      el.querySelector(".ldir")?.checked ? {direct: {ncc: el.querySelector(".lncc").value.trim()}} : {})).filter(l => l.product);
+    { const bad = sold.find(l => l.direct && !l.direct.ncc); if (bad) { toast(`${bad.product}: nhập tên nhà cung cấp giao thẳng`); [...$("#olines").children].find(el => el.querySelector(".ldir")?.checked && !el.querySelector(".lncc").value.trim())?.querySelector(".lncc").focus(); return; } }
     const gifts = [...$("#glines").children].map(el => ({product: el.querySelector(".lp").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lq").value) || 1), months: 0, gift: true})).filter(l => l.product);
     const lines = sold.concat(gifts);
     if (!SF.customer.value.trim()) { toast("Hãy nhập tên khách hàng"); SF.customer.focus(); return; }
     if (!sold.length) { toast("Hãy nhập ít nhất 1 hàng bán"); $("#olines .lp").focus(); return; }
-    if (!saleShip) { toast("Hãy chọn phương thức gửi hàng"); return; }
+    if (!saleShip && !lines.every(l => l.direct)) { toast("Hãy chọn phương thức gửi hàng"); return; }
     if (saleShip === "chanh" && !SF.carrier.value.trim()) { toast("Hãy nhập tên chành xe"); SF.carrier.focus(); return; }
     let tradeIn = null;
     if (SF.tiOn.checked) {
@@ -3461,7 +3475,10 @@ window.APP_BUILD = "2026-11-22.4";
       customer: SF.customer.value.trim(), phone: SF.phone.value.trim(), address: SF.address.value.trim(), lines,
       ship: {method: saleShip, carrier: saleShip === "chanh" ? SF.carrier.value.trim() : saleShip === "buudien" ? SF.post.value.trim() : ""}, note: SF.onote.value.trim(), ...(SF.otest.value ? {test: true} : {}), ...(tradeIn ? {tradeIn} : {}), ...(software.length ? {software} : {}),
       stage: "cho_xk", updatedAt: now, history: [{stage: "cho_xk", at: now, by: actor(), note: orderSummary({lines})}]};
+    const allDirect = lines.every(l => l.direct);   // cả đơn giao thẳng từ NCC → không qua Kho / Vận chuyển, chuyển Kế toán
+    if (allDirect) { o.stage = "cho_tt"; o.directAt = now; o.history = [{stage: "cho_tt", at: now, by: actor(), note: `${orderSummary({lines})} · 🚚 Giao thẳng từ NCC ${[...new Set(lines.map(l => l.direct.ncc))].join(", ")} – không qua kho`}]; }
     try { await put("od", o); } catch(err){ return; }
+    if (allDirect) { lastOrderId = o.id; pushTo("ac", `🔔 Kế toán: đơn ${o.code} – ${o.customer} (giao thẳng từ NCC)`, orderSummary(o), o.id); resetSale(); toast("Đã lưu đơn giao thẳng từ NCC – chuyển Kế toán"); return; }
     lastOrderId = o.id;
     pushTo("wh", `${o.ship.method === "grabgap" ? "🚨 GẤP – GRAB GẤP! " : "🔔 "}Kho: đơn ${o.code} – ${o.customer}`, orderSummary(o), o.id);
     resetSale(); toast("Đã xác nhận đơn – chuyển Kho");
@@ -3477,7 +3494,7 @@ window.APP_BUILD = "2026-11-22.4";
         ${o.phone ? `<div class="sub">📞 ${esc(o.phone)}</div>` : ""}
         ${o.address ? `<div class="sub">📍 ${esc(o.address)}</div>` : ""}</div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      <div style="margin-top:6px;font-size:14px">${(o.lines||[]).map((l,i) => `• ${l.gift ? '<span class="tag gift">🎁 Tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "hàng tặng" : l.months ? l.months + " tháng BH" : "không BH"})</span>${snOf(o,i).length || (l.photos || []).length ? `<div class="sub" style="margin-left:12px">${snOf(o,i).length ? "SN: " + snOf(o,i).map(esc).join(", ") : ""} ${photoBtn(l.photos, "Seri – " + l.product)}</div>` : ""}`).join("<br>")}</div>
+      <div style="margin-top:6px;font-size:14px">${(o.lines||[]).map((l,i) => `• ${l.gift ? '<span class="tag gift">🎁 Tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "hàng tặng" : l.months ? l.months + " tháng BH" : "không BH"})</span>${l.direct ? ` <span class="tag" style="background:rgba(124,58,237,.12);color:#7c3aed">🚚 NCC ${esc(l.direct.ncc)} giao thẳng</span>` : ""}${snOf(o,i).length || (l.photos || []).length ? `<div class="sub" style="margin-left:12px">${snOf(o,i).length ? "SN: " + snOf(o,i).map(esc).join(", ") : ""} ${photoBtn(l.photos, "Seri – " + l.product)}</div>` : ""}`).join("<br>")}</div>
       <div class="sub" style="margin-top:4px">🚚 ${OSHIP[o.ship?.method] || ""}${o.ship?.carrier ? " " + esc(o.ship.carrier) : ""}${o.ship?.tracking ? " · MVĐ " + esc(o.ship.tracking) : ""}${o.ship?.date ? " · <b>gửi " + fmt(o.ship.date) + "</b>" : ""}${o.exportedAt ? " · xuất kho " + fmtTime(o.exportedAt) : ""}</div>
       ${tiLine(o)}${swLine(o)}
       ${o.note ? `<div class="sub" style="margin-top:4px">📝 ${esc(o.note)}</div>` : ""}
@@ -3967,7 +3984,7 @@ window.APP_BUILD = "2026-11-22.4";
   const whTypes = new Set(WH_TYPES.map(t => t[0]));
   function whOutEntries(day){
     const E = [], tkBy = new Map(tickets.map(t => [t.code, t]));
-    orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === day && !o.cancel?.returned).forEach(o => (o.lines || []).forEach((l, i) =>
+    orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === day && !o.cancel?.returned).forEach(o => (o.lines || []).forEach((l, i) => !l.direct &&
       E.push({type: "ban", product: l.product + (l.gift ? " 🎁 (tặng)" : ""), qty: Number(l.qty) || 0, ref: o.code, customer: o.customer, phone: o.phone || "", at: o.exportedAt, sns: snOf(o, i), order: o, line: l})));
     moves.forEach(m => { if (m.ext || !(Number(m.qty) < 0) || dayOf(m.at) !== day) return;
       const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : m.kind === "lammoi" ? "lammoi" : null; if (!t) return;
@@ -4060,7 +4077,7 @@ window.APP_BUILD = "2026-11-22.4";
       const X = window.XLSX;
       const head = ["STT", "Ngày xuất", "Giờ xuất", "Mã đơn / phiếu", "Khách hàng", "Số điện thoại", "Địa chỉ", "Sản phẩm", "Loại", "Số lượng", "Số seri", "Bảo hành (tháng)", "Ngày bắt đầu BH", "Hạn bảo hành đến", "Gửi hàng", "Ghi chú"];
       const rows = []; let n = 0;
-      done.forEach(o => (o.lines || []).forEach((l, i) => {
+      done.forEach(o => (o.lines || []).forEach((l, i) => { if (l.direct) return;
         const sns = snOf(o, i), m = l.gift ? 0 : Number(l.months) || 0, start = o.saleDate || dayOf(o.exportedAt);
         const until = m && start ? fmt(iso(expiry(start, m))) : "";
         const ship = `${OSHIP[o.ship?.method] || ""} ${o.ship?.carrier || ""}`.trim().replace(/^🚨\s*/, "");
@@ -4108,7 +4125,8 @@ window.APP_BUILD = "2026-11-22.4";
       <div class="sub">${esc(o.customer)}${o.phone ? " · " + esc(o.phone) : ""} · bán ${fmt(o.saleDate)} · 🚚 ${OSHIP[o.ship?.method]||""} ${esc(o.ship?.carrier||"")}</div>
       ${(o.lines||[]).map((l,i) => `<div class="oline" style="grid-template-columns:1fr">
         <div>${l.gift ? '<span class="tag gift">🎁 Hàng tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "tặng kèm" : l.months ? l.months + " tháng BH" : "không BH"})</span></div>
-        <div class="seg xkmode" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-x="nhap" style="font-size:13px;padding:8px 4px">🔢 Nhập seri</button><button type="button" data-x="anh" style="font-size:13px;padding:8px 4px">📷 Ảnh seri</button><button type="button" data-x="khong" style="font-size:13px;padding:8px 4px">➖ Không seri</button></div>
+        ${l.direct ? `<div class="found" style="margin-top:6px;color:#7c3aed">🚚 NCC <b>${esc(l.direct.ncc)}</b> giao thẳng cho khách – <b>Kho không xuất, không trừ kho</b></div>` : ""}
+        <div class="seg xkmode ${l.direct ? "hide" : ""}" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-x="nhap" style="font-size:13px;padding:8px 4px">🔢 Nhập seri</button><button type="button" data-x="anh" style="font-size:13px;padding:8px 4px">📷 Ảnh seri</button><button type="button" data-x="khong" style="font-size:13px;padding:8px 4px">➖ Không seri</button></div>
         <div class="sub xkhint" data-i="${i}"></div>
         <div class="xksn" data-i="${i}"><label class="xklbl" style="margin-top:4px"></label>
           ${(() => { const av = inStock(l.product); return av.length ? `<div class="row" style="align-items:center;margin:6px 0 4px"><span class="sub">Kho còn <b>${av.length}</b> seri – bấm để chọn:</span>
@@ -4125,7 +4143,7 @@ window.APP_BUILD = "2026-11-22.4";
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">✅ Xác nhận xuất kho</button></div>`;
     const snList = i => F5.querySelector(`.sn[data-i="${i}"]`).value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
     // cách xác nhận seri từng dòng: nhap = gõ/chọn seri · anh = chụp ảnh tem seri (không cần gõ) · khong = hàng nhỏ, không seri
-    const modes = (o.lines||[]).map((l,i) => snOf(o,i).length || inStock(l.product).length ? "nhap" : (noSerial(l.product) || !l.months) ? "khong" : "anh");
+    const modes = (o.lines||[]).map((l,i) => l.direct ? "khong" : snOf(o,i).length || inStock(l.product).length ? "nhap" : (noSerial(l.product) || !l.months) ? "khong" : "anh");
     const XKHINT = {nhap: "Có thể chụp ảnh tem seri – app tự đọc số seri điền vào ô.", anh: "📷 Quét bằng camera, chụp ảnh tem hoặc gõ seri – chỉ cần 1 trong các cách. Ảnh không bắt buộc khi đã có số seri; chưa có seri thì chụp ít nhất 1 ảnh để đối chiếu.", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
     const drawModes = () => (o.lines||[]).forEach((l,i) => {
       const m = modes[i];
@@ -4134,7 +4152,7 @@ window.APP_BUILD = "2026-11-22.4";
       F5.querySelector(`.xksn[data-i="${i}"] .xklbl`).textContent = m === "anh" ? `Số seri (quét / đọc từ ảnh / gõ – kiểm tra lại, có thể sửa) – tối đa ${l.qty * snPerOf(l.product)} seri`
         : `Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty * snPerOf(l.product)} seri${snPerOf(l.product) > 1 ? ` (${l.qty} bộ × ${snPerOf(l.product)} seri)` : ""} (${SN_HINT})`;
       F5.querySelector(`.xkph[data-i="${i}"]`).classList.toggle("hide", m === "khong");
-      F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = XKHINT[m] + (m === "khong" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
+      F5.querySelector(`.xkhint[data-i="${i}"]`).textContent = l.direct ? "" : XKHINT[m] + (m === "khong" && l.months ? " Seri không được ghi vào sổ bảo hành tự động." : "");
       sync();
     });
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
@@ -4222,7 +4240,7 @@ window.APP_BUILD = "2026-11-22.4";
       await advanceOrder(o, "cho_vc", `${warnSn.length ? `⚠️ Kho duyệt xuất seri cảnh báo ${warnSn.join(", ")}: ${$("#xkApproveNote").value.trim()} · ` : ""}Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
       // phần không lấy từ kho seri (hàng không seri, đối chiếu bằng ảnh, seri gõ tay lúc xuất) -> trừ theo số lượng
       // (tính TRƯỚC khi đánh dấu seri đã xuất, để không trừ kho 2 lần)
-      const mvOut = (o.lines || []).map((l, i) => { const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
+      const mvOut = (o.lines || []).map((l, i) => { if (l.direct) return null; const fromSn = serials[i].filter(sn => { const x = findStock(sn); return x && x.status === "in"; }).length, rest = Number(l.qty || 0) - fromSn;
         return rest > 0 ? {id: "mv_" + uid(), product: l.product, qty: -rest, at: now, kind: "xuat", ref: o.code} : null; }).filter(Boolean);
       // trừ tồn kho: đánh dấu seri đã xuất
       const outs = serials.flat().map(findStock).filter(Boolean).map(x => Object.assign({}, x, {status: "out", orderCode: o.code, customer: o.customer, outAt: now}));
