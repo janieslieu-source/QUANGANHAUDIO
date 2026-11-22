@@ -155,6 +155,20 @@
   #urgentBar.open{left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 10px);border-radius:14px;padding:14px 40px 14px 14px}
   #urgentBar.open::after{content:"✕";position:absolute;top:8px;right:12px;font-size:18px}
   body.typing #urgentBar{display:none}
+  #urgentBar, #banner{display:none !important}
+  #whSeg{flex-wrap:wrap} #whSeg > button{flex:1 1 calc(25% - 8px);min-width:0}
+  body.hasgap main{padding-bottom:84px}
+  #bellBtn{position:fixed;right:14px;bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:46;width:58px;height:58px;border-radius:50%;border:3px solid #fff;background:#dc2626;color:#fff;font-size:24px;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer;padding:0}
+  #bellBtn.blink{animation:barblink 1s steps(2) infinite}
+  #bellBtn b{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;padding:0 5px;border-radius:11px;background:#fff;color:#b91c1c;font-size:13px;font-weight:900;line-height:22px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  #bellPanel{position:fixed;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 82px);z-index:47;max-width:520px;margin:0 auto;background:var(--card);color:var(--ink);border:2px solid #dc2626;border-radius:16px;
+    box-shadow:0 12px 32px rgba(0,0,0,.35);max-height:62vh;overflow-y:auto;overscroll-behavior:contain}
+  #bellPanel .bph{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:800;position:sticky;top:0;background:var(--card)}
+  #bellPanel .bpi{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px;line-height:1.35}
+  #bellPanel .bpi b{display:block;font-size:14px} #bellPanel .bpi span{color:var(--muted);font-size:13px}
+  #bellPanel .bpi.urg{background:rgba(220,38,38,.08)} #bellPanel .bpi.urg b{color:#b91c1c}
+  .sheet-bg.show ~ #bellBtn, .sheet-bg.show ~ #bellPanel, body.typing #bellBtn, body.typing #bellPanel{display:none !important}
   .tab.gaptab{animation:flagblink .6s steps(2) infinite;color:#fff}
   .newitem{border:2px solid var(--brand)!important;box-shadow:0 0 0 4px rgba(29,78,216,.18);animation:pulse 1.6s ease 0s 3}
   .whoff{display:none!important}
@@ -721,6 +735,8 @@
 <div id="pdfStage"></div>
 <div class="toast" id="toast"></div>
 <div id="urgentBar" class="hide"></div>
+<button type="button" id="bellBtn" class="hide" aria-label="Thông báo">🔔<b id="bellN"></b></button>
+<div id="bellPanel" class="hide"></div>
 
 <script>
 (function(){
@@ -941,23 +957,42 @@
     if (!bannerOn) nextBanner();
     else if (bannerCur === o.id) { clearTimeout(nextBanner._t); clearInterval(reRing); $("#banner").classList.remove("show"); setTimeout(nextBanner, 300); }
   }
+  let bellList = [];
   function nextBanner(){
-    const b = bannerQ.shift(); if (!b){ bannerOn = false; bannerCur = null; return; }
-    bannerOn = true; bannerTarget = b.to; bannerCur = b.id; bannerCur0 = b.id;
-    $("#bnTitle").textContent = b.title; $("#bnText").textContent = b.text;
-    $("#banner").classList.add("show");
-    const ringIt = b.id === "debt" || b.to === role || (boss && b.to === "gd") || (b.to === role);
-    if (ringIt && Date.now() - softLast >= 20000) { softLast = Date.now(); beep(1); }   // việc mới chuyển tới bộ phận mình: reo ngay 1 hồi
-    clearTimeout(nextBanner._t); clearInterval(reRing);
-    const mine = b.to && (b.to === role || (boss && b.to === "gd"));
-    $("#banner").classList.toggle("urgent", !!mine);
-    $("#bnText").textContent = b.text + (mine ? " — Bấm vào đây để xử lý" : "");
-    if (mine) {
-      // việc của bộ phận đang mở: khung đứng yên đến khi bấm; chuông nhắc 15 giây do vòng nhắc việc lo
-    } else {
-      nextBanner._t = setTimeout(() => { $("#banner").classList.remove("show"); setTimeout(nextBanner, 350); }, 8000);
-    }
+    let ring = false;
+    while (bannerQ.length) { const b = bannerQ.shift();
+      bellList = [Object.assign({at: Date.now()}, b), ...bellList.filter(x => x.id !== b.id)].slice(0, 40);
+      if (b.id === "debt" || b.to === role || (boss && b.to === "gd")) ring = true; }
+    bannerOn = false; bannerCur = null;
+    if (ring && Date.now() - softLast >= 20000) { softLast = Date.now(); beep(1); }   // việc mới tới bộ phận mình: reo 1 hồi
+    drawBell();
   }
+  function drawBell(){
+    const bar = $("#urgentBar"), urg = !bar.classList.contains("hide") && bar.textContent.trim(), m = urg && bar.textContent.match(/\d+/);
+    const n = (urg ? (m ? +m[0] : 1) : 0) + bellList.length;
+    $("#bellBtn").classList.toggle("hide", !n); $("#bellN").textContent = n > 99 ? "99+" : n;
+    $("#bellBtn").classList.toggle("blink", !!urg && !bar.classList.contains("calm"));
+    if (!n) $("#bellPanel").classList.add("hide");
+    if (!$("#bellPanel").classList.contains("hide")) drawBellPanel();
+  }
+  function drawBellPanel(){
+    const bar = $("#urgentBar"), urg = !bar.classList.contains("hide") && bar.textContent.trim();
+    $("#bellPanel").innerHTML = `<div class="bph"><span>🔔 Thông báo</span><span style="display:flex;gap:6px">${bellList.length ? `<button type="button" class="btn sm" data-bclr>Xóa hết</button>` : ""}<button type="button" class="btn sm" data-bx>✕</button></span></div>`
+      + (urg ? `<div class="bpi urg" data-bu><b>${esc(bar.textContent)}</b></div>` : "")
+      + bellList.map((x, i) => `<div class="bpi${x.to && (x.to === role || (boss && x.to === "gd")) ? " urg" : ""}" data-bi="${i}"><b>${esc(x.title)}</b><span>${esc(x.text)}</span></div>`).join("")
+      + (!urg && !bellList.length ? `<div class="bpi sub">Không có thông báo.</div>` : "");
+  }
+  $("#bellBtn").onclick = e => { e.stopPropagation(); const P = $("#bellPanel"); if (P.classList.contains("hide")) { drawBellPanel(); P.classList.remove("hide"); } else P.classList.add("hide"); };
+  $("#bellPanel").onclick = e => { e.stopPropagation(); const P = $("#bellPanel");
+    if (e.target.closest("[data-bx]")) { P.classList.add("hide"); return; }
+    if (e.target.closest("[data-bclr]")) { bellList = []; drawBell(); drawBellPanel(); return; }
+    if (e.target.closest("[data-bu]")) { P.classList.add("hide"); const bar = $("#urgentBar"), sc = bar.dataset.scroll; bar.dataset.scroll = ""; goTo(bar.dataset.to);
+      const el = sc && $("#" + sc); if (el && !el.closest(".hide")) setTimeout(() => el.scrollIntoView({behavior: "smooth", block: "start"}), 150); else window.scrollTo({top: 0, behavior: "smooth"}); return; }
+    const it = e.target.closest("[data-bi]"); if (!it) return; const x = bellList[+it.dataset.bi]; if (!x) return;
+    bellList = bellList.filter(y => y !== x); P.classList.add("hide"); drawBell();
+    if (x.to && !$("#app").classList.contains("hide")) { goTo(x.to); if (x.id && (x.to === role || boss)) focusItem(x.id); } };
+  document.addEventListener("click", e => { if (!e.target.closest("#bellPanel,#bellBtn")) $("#bellPanel").classList.add("hide"); });
+  new MutationObserver(() => drawBell()).observe($("#urgentBar"), {childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["class"]});
   $("#banner").onclick = () => {
     clearInterval(reRing);
     $("#banner").classList.remove("show"); clearTimeout(nextBanner._t); setTimeout(nextBanner, 350);
