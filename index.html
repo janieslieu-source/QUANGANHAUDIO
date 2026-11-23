@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.7";
+window.APP_BUILD = "2026-11-23.8";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -4239,9 +4239,11 @@ window.APP_BUILD = "2026-11-23.7";
     const exName = v => productNames().find(p => norm(p) === norm(v));
     box.innerHTML = L.map(x => {
       const exact = exName(x.product), sug = nccSuggest(x.product).filter(p => p !== exact);
-      const st = nccSel[x.id] || (nccSel[x.id] = exact || sug[0] ? {m: "co", name: exact || sug[0], sn: false} : {m: "moi", name: x.product, sn: false});
+      const sn0 = x.hasSn != null ? !!x.hasSn : exact || sug[0] ? hasSnOf(exact || sug[0]) : false;
+      const st = nccSel[x.id] || (nccSel[x.id] = exact || sug[0] ? {m: "co", name: exact || sug[0], sn: sn0} : {m: "moi", name: x.product, sn: sn0});
       const amt = exAmt(x), paid = Number(x.paid) || 0;
       return `<div class="item" style="cursor:default" data-ncc="${esc(x.id)}">
+        <div class="nccsnw"><div class="seg nccsn" style="margin:0 0 6px"><button type="button" data-sn="1" class="${st.sn ? "on" : ""}">🔢 Có seri</button><button type="button" data-sn="0" class="${st.sn ? "" : "on"}">➖ Không có seri</button></div></div>
         <div class="pname">📦 ${esc(x.product)} × <b>${x.qty}</b></div>
         <div class="sub">🏭 ${esc(x.supplier || "")} · ngày nhập ${fmt(x.date)} · ${money(amt)}${x.unit ? ` (${money(x.unit)}/SP)` : ""}</div>
         <div class="sub">${paid >= amt ? "✅ Đã thanh toán đủ" : `💳 Đã trả ${money(paid)} – <b style="color:var(--bad)">còn nợ ${money(amt - paid)}</b>`} · KT: ${esc(x.by || "")}</div>
@@ -4249,7 +4251,6 @@ window.APP_BUILD = "2026-11-23.7";
         <label style="display:flex;justify-content:space-between;gap:8px"><span class="ncclbl"></span><span class="nccstk" style="text-align:right"></span></label>
         <div style="position:relative"><input class="nccn" value="${esc(st.name)}" autocomplete="off"><div class="sugg hide"></div></div>
         <div class="nccsim" style="margin-top:6px"></div>
-        <div class="nccsnw"><div class="seg nccsn" style="margin-top:6px"><button type="button" data-sn="0" class="${st.sn ? "" : "on"}">➖ Không có seri</button><button type="button" data-sn="1" class="${st.sn ? "on" : ""}">🔢 Có seri (bảo hành)</button></div></div>
         <div class="cardbtns"><button class="btn danger" data-nccno="${esc(x.id)}">✖ Không nhập</button><button class="btn okb" data-nccok="${esc(x.id)}">✅ Duyệt nhập kho</button></div></div>`; }).join("");
     box.querySelectorAll("[data-ncc]").forEach(el => { const id = el.dataset.ncc, st = nccSel[id], q = c => el.querySelector(c), inp = q(".nccn");
       const x0 = expenses.find(e => e.id === id), sug = nccSuggest(x0.product);
@@ -4259,7 +4260,7 @@ window.APP_BUILD = "2026-11-23.7";
         inp.placeholder = co ? "Gõ model, hãng hoặc tên SP" : "Gõ tên sản phẩm mới";
         q(".nccstk").innerHTML = !st.name ? "" : co ? (ex ? `<b style="color:var(--ok)">♻️ Hàng cũ · tồn ${n ?? 0} → ${(n ?? 0) + x0.qty}</b>` : `<b style="color:var(--bad)">Chưa có trong kho – chọn “Sản phẩm mới”</b>`)
           : (ex ? `<b style="color:var(--bad)">Đã có trong kho – chọn “Có sẵn trong kho”</b>` : `<b style="color:var(--info)">🆕 Tạo mới · tồn ${x0.qty}</b>`);
-        q(".nccsnw").classList.toggle("hide", co);
+
         const chips = co ? sug.filter(p => norm(p) !== norm(st.name)) : [];
         q(".nccsim").innerHTML = chips.length ? `<span class="sub">Gợi ý gần giống:</span> ` + chips.map(p => `<button type="button" class="chip" data-n="${esc(p)}">${esc(p)} <b>(${stockOf(p) ?? 0})</b></button>`).join("") : "";
         q(".nccsim").querySelectorAll("[data-n]").forEach(c => c.onclick = () => { inp.value = c.dataset.n; upd(); }); };
@@ -4278,7 +4279,8 @@ window.APP_BUILD = "2026-11-23.7";
           if (isNew) { const used = new Set(products.map(p => p.id)); let pid = prId(name), k = 2; while (used.has(pid)) pid = prId(name) + "-" + (k++);
             await put("pr", Object.assign({id: pid, name, months: 12, noSerial: !st.sn, createdAt: now, updatedAt: now}, cost ? {lastCost: Object.assign({at: now}, cost)} : {})); }
           else if (findProduct(name) && cost) await put("pr", Object.assign({}, findProduct(name), {lastCost: Object.assign({at: now}, cost), updatedAt: now}));
-          const hasSn = isNew ? st.sn : !noSerial(name);
+          const hasSn = !!st.sn;
+          if (!isNew && hasSnOf(name) !== hasSn) await setSnFlag(name, hasSn);
           await put("mv", Object.assign({id: "mv_" + uid(), product: name, qty: x.qty, at: now, kind: "nhap", ref: `Nhập hàng NCC – ${x.supplier || ""}`, by: actor(), exId: x.id}, hasSn ? {snByPhoto: true} : {}, cost ? {cost} : {}));
           await put("ex", Object.assign({}, x, {whStatus: "done", whAt: now, whBy: actor(), whProduct: name}));
           delete nccSel[id];
@@ -4443,6 +4445,7 @@ window.APP_BUILD = "2026-11-23.7";
       ${(o.lines||[]).map((l,i) => `<div class="oline" style="grid-template-columns:1fr">
         <div>${l.gift ? '<span class="tag gift">🎁 Hàng tặng</span>' : ""}<b>${esc(l.product)}</b> ${linkA(l.product)} × ${l.qty} <span class="sub">(${l.gift ? "tặng kèm" : l.months ? l.months + " tháng BH" : "không BH"})</span></div>
         ${l.direct ? `<div class="found" style="margin-top:6px;color:#7c3aed">🚚 NCC <b>${esc(l.direct.ncc)}</b> giao thẳng cho khách – <b>Kho không xuất, không trừ kho</b></div>` : ""}
+        ${l.direct ? "" : `<div class="seg xksnt" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-v="1">🔢 Có seri</button><button type="button" data-v="0">➖ Không có seri</button></div>`}
         <div class="seg xkmode ${l.direct ? "hide" : ""}" data-i="${i}" style="margin:6px 0 2px"><button type="button" data-x="nhap" style="font-size:13px;padding:8px 4px">🔢 Nhập seri</button><button type="button" data-x="anh" style="font-size:13px;padding:8px 4px">📷 Ảnh seri</button><button type="button" data-x="khong" style="font-size:13px;padding:8px 4px">➖ Không seri</button></div>
         <div class="sub xkhint" data-i="${i}"></div>
         <div class="xksn" data-i="${i}"><label class="xklbl" style="margin-top:4px"></label>
@@ -4464,7 +4467,9 @@ window.APP_BUILD = "2026-11-23.7";
     const XKHINT = {nhap: "Có thể chụp ảnh tem seri – app tự đọc số seri điền vào ô.", anh: "📷 Quét bằng camera, chụp ảnh tem hoặc gõ seri – chỉ cần 1 trong các cách. Ảnh không bắt buộc khi đã có số seri; chưa có seri thì chụp ít nhất 1 ảnh để đối chiếu.", khong: "➖ Hàng nhỏ / không có seri – chỉ trừ tồn kho theo số lượng."};
     const drawModes = () => (o.lines||[]).forEach((l,i) => {
       const m = modes[i];
-      F5.querySelectorAll(`.xkmode[data-i="${i}"] button`).forEach(b => b.classList.toggle("on", b.dataset.x === m));
+      F5.querySelectorAll(`.xkmode[data-i="${i}"] button`).forEach(b => { b.classList.toggle("on", b.dataset.x === m); if (b.dataset.x === "khong") b.classList.add("hide"); });
+      F5.querySelectorAll(`.xksnt[data-i="${i}"] button`).forEach(b => b.classList.toggle("on", (b.dataset.v === "1") === (m !== "khong")));
+      F5.querySelector(`.xkmode[data-i="${i}"]`)?.classList.toggle("hide", m === "khong" || !!l.direct);
       F5.querySelector(`.xksn[data-i="${i}"]`).classList.toggle("hide", m === "khong");
       F5.querySelector(`.xksn[data-i="${i}"] .xklbl`).textContent = m === "anh" ? `Số seri (quét / đọc từ ảnh / gõ – kiểm tra lại, có thể sửa) – tối đa ${l.qty * snPerOf(l.product)} seri`
         : `Số seri ${l.months ? "*" : "(nếu có)"} – mỗi dòng 1 seri, cần ${l.qty * snPerOf(l.product)} seri${snPerOf(l.product) > 1 ? ` (${l.qty} bộ × ${snPerOf(l.product)} seri)` : ""} (${SN_HINT})`;
@@ -4473,6 +4478,8 @@ window.APP_BUILD = "2026-11-23.7";
       sync();
     });
     F5.querySelectorAll(".xkmode button").forEach(b => b.onclick = () => { modes[Number(b.parentElement.dataset.i)] = b.dataset.x; drawModes(); });
+    F5.querySelectorAll(".xksnt button").forEach(b => b.onclick = () => { const i = Number(b.parentElement.dataset.i), l = o.lines[i];
+      modes[i] = b.dataset.v === "1" ? (snOf(o, i).length || inStock(l.product).length || l.months ? "nhap" : "anh") : "khong"; drawModes(); });
     const setsOf = i => { const per = snPerOf(o.lines[i].product), seen = new Set(), out = [], free = [];
       snList(i).forEach(sn => { const x = findStock(sn); if (x && x.subSerials?.length) { if (!seen.has(keySN(x.serial))) { seen.add(keySN(x.serial)); out.push([x.serial, ...x.subSerials]); } } else free.push(sn); });
       for (let k = 0; k < free.length; k += per) out.push(free.slice(k, k + per));
@@ -4590,6 +4597,10 @@ window.APP_BUILD = "2026-11-23.7";
   const findProduct = name => dataIdx().prMap.get(norm(name));
   // mặt hàng nhỏ được đánh dấu "không cần seri" (Kho bật trong thông tin sản phẩm)
   const noSerial = name => !!findProduct(name)?.noSerial;
+  // sản phẩm có quản lý seri không: theo đánh dấu của sản phẩm; chưa đánh dấu thì xem trong kho có hàng seri không
+  const hasSnOf = name => { const p = findProduct(name); return p && p.noSerial != null ? !p.noSerial : stock.some(x => norm(x.product) === norm(name)); };
+  async function setSnFlag(name, has){ const now = new Date().toISOString(), p = findProduct(name);
+    await put("pr", Object.assign({}, p || {id: prId(name), name, months: 12, createdAt: now}, {noSerial: !has, updatedAt: now})); }
   /* ---------- Gộp tên sản phẩm trùng ---------- */
   const MERGES = [["Loa smartk mini", "Loa mini SmartK"]];   // gộp sẵn theo yêu cầu (chạy tự động 1 lần khi Kho/GĐ mở app)
   let merging = false;
@@ -4671,9 +4682,11 @@ window.APP_BUILD = "2026-11-23.7";
     $("#stockSum").textContent = stock.length || products.length ? `Tồn ${totalIn} · ${g.size} mặt hàng` : "";
     const more = rows.length - 100; rows = rows.slice(0, 100);
     $("#stockTable").innerHTML = rows.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Tồn</th><th>Đã xuất</th></tr>
-      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td style="white-space:nowrap"><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b>${(boss || role === "wh") ? ` <button type="button" class="cpy" data-kkedit="${esc(r.name)}" title="Sửa số lượng tồn (Giám đốc duyệt)" style="padding:2px 6px">✏️</button>` : ""}${kkPending(r.name) ? ` <span title="Đang chờ Giám đốc duyệt sửa số lượng">⏳</span>` : ""}</td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
+      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${(() => { const on = hasSnOf(r.name); return `<span class="snt" data-snt="${esc(r.name)}" style="display:inline-flex;gap:4px;margin:0 0 4px;font-size:12px"><button type="button" class="chip ${on ? "sel" : ""}" data-v="1" style="padding:2px 8px;font-size:12px">${on ? "☑" : "☐"} Có seri</button><button type="button" class="chip ${on ? "" : "sel"}" data-v="0" style="padding:2px 8px;font-size:12px">${on ? "☐" : "☑"} Không seri</button></span><br>`; })()}${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td style="white-space:nowrap"><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b>${(boss || role === "wh") ? ` <button type="button" class="cpy" data-kkedit="${esc(r.name)}" title="Sửa số lượng tồn (Giám đốc duyệt)" style="padding:2px 6px">✏️</button>` : ""}${kkPending(r.name) ? ` <span title="Đang chờ Giám đốc duyệt sửa số lượng">⏳</span>` : ""}</td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng tồn. Bấm “Nhập hàng từ file Excel” để tải danh sách lên."}</div>`;
-    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout]")) return; showStockOf(tr.dataset.p); });
+    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout],[data-snt]")) return; showStockOf(tr.dataset.p); });
+    $("#stockTable").querySelectorAll("[data-snt] button").forEach(b => b.onclick = async e => { e.stopPropagation(); const name = b.parentElement.dataset.snt, want = b.dataset.v === "1";
+      if (hasSnOf(name) === want) return; try { await setSnFlag(name, want); toast(`${name}: ${want ? "có seri" : "không có seri"}`); drawStock(); } catch(err){} });
     $("#stockTable").querySelectorAll("[data-stout]").forEach(b => b.onclick = e => { e.stopPropagation(); showOutStats(b.dataset.stout); });
   }
   $("#stQ").addEventListener("input", drawStock);
@@ -5168,12 +5181,12 @@ window.APP_BUILD = "2026-11-23.7";
   function nhAddRow(){
     $("#nhRows").insertAdjacentHTML("beforeend", `<div class="oline nhrow" data-m="co">
       <button type="button" class="rm" title="Xóa">✕</button>
-      <div class="full"><div class="seg nhseg" style="margin:0 28px 6px 0"><button type="button" data-m="co" class="on">📦 Có sẵn trong kho</button><button type="button" data-m="moi">🆕 Sản phẩm mới</button></div></div>
+      <div class="full nhsnopt"><div class="seg" style="margin:0 28px 6px 0"><button type="button" data-s="1">🔢 Có seri</button><button type="button" data-s="0" class="on">➖ Không có seri</button></div>
+        <div class="sub nhsnhint"></div></div>
+      <div class="full"><div class="seg nhseg" style="margin:0 0 6px 0"><button type="button" data-m="co" class="on">📦 Có sẵn trong kho</button><button type="button" data-m="moi">🆕 Sản phẩm mới</button></div></div>
       <div class="full"><label style="margin-top:0;display:flex;justify-content:space-between;gap:8px"><span class="nhlbl">Chọn sản phẩm · Số lượng</span><span class="lstk nhstk"></span></label></div>
       <div style="position:relative"><input class="nhn" placeholder="Gõ model, hãng hoặc tên SP" autocomplete="off"><div class="sugg hide"></div></div>
       <div><input class="nhq" type="number" min="1" inputmode="numeric" value="1"></div>
-      <div class="full nhsnopt"><div class="seg" style="margin:4px 0"><button type="button" data-s="0" class="on">➖ Không có seri</button><button type="button" data-s="1">🔢 Có seri</button></div>
-        <div class="sub nhsnhint"></div></div>
       <div class="full nhsnbox"><div class="nhsetw" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0 4px"><span class="sub">Mỗi sản phẩm có</span><select class="nhsp" style="width:auto;padding:6px 8px">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}">${n} số seri${n > 1 ? " (hàng bộ)" : ""}</option>`).join("")}</select></div><div class="sub nhsetinfo"></div><div class="nhsns"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn sm pri nhscan">📷 Quét seri bằng camera</button><button type="button" class="btn sm nhsnadd">+ Thêm dòng seri</button><button type="button" class="btn sm nhseqbtn" style="border-color:var(--brand);color:var(--brand)">🔢 Dãy seri liên tiếp</button></div>
         <div class="found nhseq hide" style="margin-top:8px"><b>🔢 Tạo dãy seri liên tiếp</b><div class="sub" style="margin:2px 0 6px">Quét / gõ <b>seri đầu tiên</b> (sai thì sửa), nhập <b>số lượng</b> → app tự nhảy số: 52527725, 52527726, 52527727…</div>
           <label style="margin-top:0">Seri đầu tiên</label><div class="snrow"><input class="nhseq1" inputmode="numeric" placeholder="VD: 52527725" autocomplete="off"><button type="button" class="scanbtn nhseqscan">📷 Quét</button></div>
@@ -5597,13 +5610,17 @@ window.APP_BUILD = "2026-11-23.7";
         if (k === "nhap") {
           const vr = () => Math.max(0, Number(String($h(".exvr").value).replace(",", ".")) || 0) / 100;
           host._lines = () => [...host.querySelectorAll(".exln")].map(el => { const q = parseInt(el.querySelector(".exlq").value) || 0, u = money0(el.querySelector(".exlu")), v = el.querySelector(".exlv").checked;
-            return {el, product: el.querySelector(".exlp").value.trim(), qty: q, unit: u, vat: v, total: Math.round(q * u * (1 + (v ? vr() : 0)))}; });
+            return {el, product: el.querySelector(".exlp").value.trim(), qty: q, unit: u, vat: v, sn: !!el._sn, total: Math.round(q * u * (1 + (v ? vr() : 0)))}; });
           const addLn = () => { const box = $h(".exlines"); if (box.children.length >= 10) { toast("Tối đa 10 dòng hàng"); return; } const i = box.children.length + 1;
             box.insertAdjacentHTML("beforeend", `<div class="exln" style="margin-top:8px;padding:8px;border:1.5px solid var(--line);border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Dòng ${i}</b>${i > 1 ? `<button type="button" class="btn sm exlrm" style="width:auto;flex:0 0 auto;padding:3px 10px">✕</button>` : ""}</div>
+              <div class="seg exlsn" style="margin-top:4px"><button type="button" data-s="1">🔢 Có seri</button><button type="button" data-s="0" class="on">➖ Không có seri</button></div>
               <div style="margin-top:4px"><input class="exlp" list="prodList" autocomplete="off" placeholder="Sản phẩm nhập" style="width:100%"></div>
               <div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input class="exlq" type="number" min="1" inputmode="numeric" value="1" title="Số lượng" style="width:70px;flex:0 0 auto"><input class="exlu" inputmode="numeric" placeholder="Đơn giá / 1 SP" style="flex:1;min-width:0"><label style="display:flex;align-items:center;gap:4px;margin:0;font-size:13px;color:var(--ink);flex:0 0 auto"><input type="checkbox" class="exlv" style="width:18px;height:18px;margin:0"> VAT</label></div>
               <div class="sub exlt" style="margin-top:4px"></div></div>`);
-            const el = box.lastElementChild; fmtMoneyInput(el.querySelector(".exlu")); el.querySelector(".exlrm")?.addEventListener("click", () => { el.remove(); [...box.children].forEach((x, k) => x.querySelector("b").textContent = "Dòng " + (k + 1)); host._calc(); }); };
+            const el = box.lastElementChild; fmtMoneyInput(el.querySelector(".exlu")); el._sn = false;
+            const setSn = v => { el._sn = v; el.querySelectorAll(".exlsn button").forEach(x => x.classList.toggle("on", (x.dataset.s === "1") === v)); };
+            el.querySelectorAll(".exlsn button").forEach(x => x.onclick = () => { el._snT = true; setSn(x.dataset.s === "1"); });
+            el.querySelector(".exlp").addEventListener("change", () => { const n = el.querySelector(".exlp").value.trim(); if (!el._snT && n && findProduct(n)) setSn(hasSnOf(n)); }); el.querySelector(".exlrm")?.addEventListener("click", () => { el.remove(); [...box.children].forEach((x, k) => x.querySelector("b").textContent = "Dòng " + (k + 1)); host._calc(); }); };
           $h(".exladd").onclick = () => { addLn(); $h(".exlines").lastElementChild.querySelector(".exlp").focus(); };
           $h(".exlines").addEventListener("input", () => host._calc()); $h(".exlines").addEventListener("change", () => host._calc());
           addLn();
@@ -5650,7 +5667,7 @@ window.APP_BUILD = "2026-11-23.7";
             const paidAll = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid"))), r = Math.max(0, Number(String(v(".exvr")).replace(",", ".")) || 0), batch = "nh_" + uid();
             let left = paidAll; multi = L.map((x, i) => { const pd = i === L.length - 1 ? left : Math.round(paidAll * x.total / amount); left -= pd;
               return Object.assign({}, rec, {id: "ex_" + uid(), amount: x.total, supplier: v(".exsupn"), product: x.product, qty: x.qty, vatQty: x.vat ? x.qty : 0, vatRate: x.vat ? r : 0, unit: x.unit, unitVat: Math.round(x.unit * (1 + (x.vat ? r / 100 : 0))),
-                paid: pd, debt: x.total - pd, payMode: host._payMode, whStatus: "cho", batch, batchN: L.length}); }); }
+                paid: pd, debt: x.total - pd, payMode: host._payMode, whStatus: "cho", batch, batchN: L.length, hasSn: x.sn}); }); }
           else if (false) { const qty = 0, c = null;
             need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
             const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
