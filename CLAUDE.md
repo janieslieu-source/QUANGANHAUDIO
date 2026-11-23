@@ -38,6 +38,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Kho:** xuất kho theo loại (Xuất làm mới sản phẩm, KT thay cho khách, Đổi cho khách, KT mượn test, Xuất bán theo đơn), tổng hợp + Excel; trả tiền NCC → Kho duyệt nhập hàng; sửa số tồn cần GĐ duyệt; kiểm kê theo file.
 - **Kỹ thuật – Xuất làm mới sản phẩm:** chọn hàng trong kho → gửi Kho duyệt xuất (ex kind `lmreq`) → Kho duyệt mới trừ kho (mv `lammoi`).
 - **Kỹ thuật – Nâng cấp sản phẩm:** sản phẩm cũ + linh kiện → trừ kho ngay (mv `nangcap`) → Kho duyệt nhập sản phẩm mới (mv `nangcap_nhap`, tạo sản phẩm nếu chưa có); từ chối thì hoàn kho (`nangcap_huy`). Bản ghi ex kind `upreq`.
+- **Kho – Bổ sung seri (mục Tồn kho):** hàng tồn theo số lượng → ghi seri (gõ / quét / ảnh) → tạo bản ghi `st` + mv `gan_seri` âm cùng số lượng, tổng tồn không đổi.
 - **Kế toán – Nhập hàng NCC:** nhiều dòng (tối đa 10) có số lượng, đơn giá, VAT; mỗi dòng 1 bản ghi `nhap` chờ Kho duyệt nhập.
 - **Giám đốc – Báo cáo cuối ngày:** tồn kho + doanh thu ngày, tải Excel.
 - **Thông báo:** tất cả gom vào nút chuông đỏ góc dưới phải, bấm mới hiện; ẩn khi đang gõ.
