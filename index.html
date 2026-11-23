@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.14";
+window.APP_BUILD = "2026-11-23.15";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1292,6 +1292,15 @@ window.APP_BUILD = "2026-11-23.14";
   }
 
   // sổ bảo hành: bản ghi của app trước, sau đó dữ liệu nhập từ file thống kê
+  // số seri của bộ hàng (VD HDMI 1-2 = 3 seri): hiện đủ seri hiện tại + seri cũ đã đổi (đầu thu / đầu phát)
+  function snSetHtml(t){
+    const r = findReg(t.serial) || (t.partSwap ? findReg(t.partSwap.newSerial) : null), cur = r ? [r.serial, ...(r.subSerials || [])].filter(Boolean) : [t.serial];
+    const sw = [...(r?.swaps || [])]; if (t.partSwap && !sw.some(x => keySN(x.new) === keySN(t.partSwap.newSerial))) sw.push({part: t.partSwap.label, old: t.partSwap.oldSerial, new: t.partSwap.newSerial, ticket: t.code});
+    const isNew = sn => sw.some(x => keySN(x.new) === keySN(sn));
+    let h = cur.length > 1 ? `<div>Bộ ${cur.length} seri:</div>` + cur.map((sn, i) => `<div>${i + 1}. <b style="${isNew(sn) ? "color:var(--ok)" : ""}">${esc(sn)}</b>${isNew(sn) ? ' <span class="tag" style="background:rgba(22,163,74,.12);color:var(--ok)">mới</span>' : ""}${keySN(sn) === keySN(t.serial) ? ' <span class="sub">(seri nhận)</span>' : ""}</div>`).join("") : `<b>${esc(cur[0] || t.serial)}</b>`;
+    if (sw.length) h += sw.map(x => `<div class="sub" style="margin-top:2px">🔁 Đổi ${esc((x.part || "bộ phận").toLowerCase())}: <s>${esc(x.old)}</s> → <b style="color:var(--ok)">${esc(x.new)}</b>${x.ticket ? ` · ${esc(x.ticket)}` : ""}</div>`).join("");
+    return h;
+  }
   function findReg(sn){ const k0 = keySN(sn); if (!k0) return null;
     const one = k => reg.find(r => keySN(r.serial) === k) || reg.find(r => (r.subSerials || []).some(x => keySN(x) === k)) || riIdx.get(k) || null;
     return one(k0) || (/^\d{5}$/.test(k0) ? one("525" + k0) : null); }   // gõ 5 số cuối (23622) cũng tìm ra 52523622
@@ -1509,7 +1518,7 @@ window.APP_BUILD = "2026-11-23.14";
         <dt>Mã phiếu</dt><dd>${esc(t.code)}</dd>
         <dt>Khách hàng</dt><dd>${esc(t.customer)}</dd>
         <dt>Điện thoại</dt><dd>${esc(t.phone)||"—"}</dd>
-        <dt>Số seri</dt><dd>${esc(t.serial)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
+        <dt>Số seri</dt><dd>${snSetHtml(t)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
         ${t.type==="bh" && t.purchaseDate ? `<dt>Bảo hành</dt><dd>Mua ${fmt(t.purchaseDate)}, ${t.months} tháng – lúc nhận: ${esc(t.warrantyText)}</dd>` : ""}
         <dt>Lỗi</dt><dd>${esc(t.issue)||(t.issueLater ? "📞 Chưa rõ – chờ Giám đốc liên hệ khách" : "—")}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền)</span>` : ""}</dd>${t.ktCheck ? `<dt>KT kiểm tra</dt><dd>${t.ktCheck.confirmed.length ? "✔ Đúng lỗi: " + esc(t.ktCheck.confirmed.join(", ")) : "Lỗi khách báo không đúng"}${t.ktCheck.notConfirmed?.length ? "<br>✖ Không thấy: " + esc(t.ktCheck.notConfirmed.join(", ")) : ""}${t.ktCheck.added?.length ? "<br><b>➕ Lỗi thêm: " + esc(t.ktCheck.added.join(", ")) + "</b>" : ""}</dd>` : ""}
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
@@ -2653,7 +2662,7 @@ window.APP_BUILD = "2026-11-23.14";
     const F2 = $("#actForm");
     F2.innerHTML = `<div class="grab"></div>
       <h2><span class="tag ${t.type}">${TYPE[t.type]}</span>${esc(t.product)}</h2>
-      <dl class="kv"><dt>Số seri</dt><dd>${esc(t.serial)}</dd><dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
+      <dl class="kv"><dt>Số seri</dt><dd>${snSetHtml(t)}</dd><dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
         ${isBH ? `<dt>Bảo hành</dt><dd>${esc(t.warrantyText)}${oldExp ? ` (hết hạn ${oldExp})` : ""}</dd>` : ""}
         <dt>Tra cứu BH</dt><dd>${wBadge(t.serial).replace('margin-top:4px;', '')}</dd>
         ${(t.history||[]).filter(h => h.note && h.by === "Giám đốc").map(h => `<dt>GĐ ghi chú</dt><dd>${esc(h.note)}</dd>`).join("")}</dl>
