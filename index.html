@@ -437,6 +437,8 @@
 
           <div id="issueWrap" class="hide">
             <label>Mô tả lỗi / tình trạng *</label><textarea name="issue"></textarea>
+            <label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:8px;cursor:pointer"><input type="checkbox" name="accOn" style="width:20px;height:20px;margin:0"> 📦 Có phụ kiện kèm theo máy</label>
+            <div id="accW" class="hide"><input name="acc" placeholder="Ghi rõ tên phụ kiện: VD remote, dây nguồn, adapter, 2 micro, túi đựng…" autocomplete="off" style="margin-top:6px"></div>
             <label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px dashed var(--line);border-radius:12px;margin-top:8px;cursor:pointer"><input type="checkbox" name="issueLater" style="width:22px;height:22px;margin:0"> <span>📞 <b>Chưa rõ lỗi – liên hệ khách sau</b><br><span class="sub">Giám đốc liên hệ khách, điền lỗi rồi chuyển Kỹ thuật</span></span></label>
 <input type="hidden" name="ttest" value="">
             <div class="btns"><button class="btn pri" type="submit" id="recvBtn">Gửi</button></div>
@@ -797,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.17";
+window.APP_BUILD = "2026-11-23.18";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1497,13 +1499,16 @@ window.APP_BUILD = "2026-11-23.17";
     if (detailId && $("#detailBg").classList.contains("show")) showDetail(detailId);
   }
   const isLate = t => !CLOSED.includes(t.stage) && daysSince(t.createdAt) > LATE_DAYS;
+  const accLine = t => t.accessories ? `<div style="margin-top:4px;font-size:14px;color:#7c3aed">📦 Phụ kiện kèm theo: <b>${esc(t.accessories)}</b></div>` : "";
+  { const F0 = document.querySelector('[name="accOn"]')?.form; if (F0) { const sync = () => { $("#accW").classList.toggle("hide", !F0.accOn.checked); if (F0.accOn.checked) F0.acc.focus(); };
+    F0.accOn.addEventListener("change", sync); F0.addEventListener("reset", () => setTimeout(() => $("#accW").classList.add("hide"), 0)); } }
   function tkCard(t, btns){
     const st = STAGES[t.stage] || {label:t.stage, cls:""};
     return `<div class="item ${isLate(t) ? "lateitem" : ""}" data-id="${esc(t.id)}">
       <div class="row"><div><div class="pname"><span class="tag ${t.type}">${TYPE[t.type]}</span>${t.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(t.product)}</div>
         <div class="sub">SN ${esc(t.serial)} · ${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div></div>
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
-      ${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${tpLine(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
+      ${accLine(t)}${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${tpLine(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
@@ -1532,7 +1537,7 @@ window.APP_BUILD = "2026-11-23.17";
         <dt>Điện thoại</dt><dd>${esc(t.phone)||"—"}</dd>
         <dt>Số seri</dt><dd>${snSetHtml(t)}</dd>${t.actCode ? `<dt>Mã kích hoạt</dt><dd>${esc(t.actCode)}</dd>` : ""}${t.actCodeNew ? `<dt>Mã kích hoạt mới</dt><dd><b>${esc(t.actCodeNew)}</b></dd>` : ""}
         ${t.type==="bh" && t.purchaseDate ? `<dt>Bảo hành</dt><dd>Mua ${fmt(t.purchaseDate)}, ${t.months} tháng – lúc nhận: ${esc(t.warrantyText)}</dd>` : ""}
-        <dt>Lỗi</dt><dd>${esc(t.issue)||(t.issueLater ? "📞 Chưa rõ – chờ Giám đốc liên hệ khách" : "—")}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền)</span>` : ""}</dd>${t.ktCheck ? `<dt>KT kiểm tra</dt><dd>${t.ktCheck.confirmed.length ? "✔ Đúng lỗi: " + esc(t.ktCheck.confirmed.join(", ")) : "Lỗi khách báo không đúng"}${t.ktCheck.notConfirmed?.length ? "<br>✖ Không thấy: " + esc(t.ktCheck.notConfirmed.join(", ")) : ""}${t.ktCheck.added?.length ? "<br><b>➕ Lỗi thêm: " + esc(t.ktCheck.added.join(", ")) + "</b>" : ""}</dd>` : ""}
+        ${t.accessories ? `<dt>Phụ kiện kèm</dt><dd><b style="color:#7c3aed">📦 ${esc(t.accessories)}</b></dd>` : ""}<dt>Lỗi</dt><dd>${esc(t.issue)||(t.issueLater ? "📞 Chưa rõ – chờ Giám đốc liên hệ khách" : "—")}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền)</span>` : ""}</dd>${t.ktCheck ? `<dt>KT kiểm tra</dt><dd>${t.ktCheck.confirmed.length ? "✔ Đúng lỗi: " + esc(t.ktCheck.confirmed.join(", ")) : "Lỗi khách báo không đúng"}${t.ktCheck.notConfirmed?.length ? "<br>✖ Không thấy: " + esc(t.ktCheck.notConfirmed.join(", ")) : ""}${t.ktCheck.added?.length ? "<br><b>➕ Lỗi thêm: " + esc(t.ktCheck.added.join(", ")) + "</b>" : ""}</dd>` : ""}
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
         ${t.exchange ? `<dt>Seri cũ</dt><dd>${esc(t.exchange.oldSerial)}</dd><dt>Seri mới đổi</dt><dd><b>${esc(t.exchange.newSerial)}</b>${t.exchange.newProduct && t.exchange.newProduct !== t.product ? ` – ${esc(t.exchange.newProduct)}` : ""}</dd><dt>BH tiếp đến</dt><dd><b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(BH mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}</dd>` : ""}
         ${t.partsUsed ? `<dt>Linh kiện thay</dt><dd>${t.partsUsed.map(u => `${esc(u.name)} × ${u.qty} – ${u.src === "thao" ? `🔩 tháo từ ${esc(u.donor)} (SN ${esc(u.donorSerial)})` : u.src === "ngoai" ? "🧩 linh kiện ngoài" : "📦 lấy từ kho"}`).join("<br>")}</dd>` : t.parts ? `<dt>Linh kiện thay</dt><dd>${esc(t.parts)}</dd>` : ""}
@@ -1821,7 +1826,8 @@ window.APP_BUILD = "2026-11-23.17";
     else if (F.purchaseDate.value) { pd = F.purchaseDate.value; mo = Number(F.months.value); }
     // cập nhật sổ sản phẩm theo seri
     const regRec = Object.assign({}, r && !r.fromFile ? r : {id: uid(), createdAt: new Date().toISOString()}, r && r.fromFile ? {custCode: r.custCode || "", importedFrom: r.fromFile, replacedBy: r.replacedBy, replacedFrom: r.replacedFrom} : {}, base, pd ? {purchaseDate: pd, months: Number(mo)} : {}, {updatedAt: new Date().toISOString()});
-    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, F.ttest.value ? {test: true} : {}, issueLater ? {issueLater: true} : {}, {history: []}, base);
+    if (F.accOn.checked && !F.acc.value.trim()) { toast("Ghi rõ tên phụ kiện kèm theo máy – hoặc bỏ tick"); F.acc.focus(); return; }
+    const t0 = Object.assign({id: uid(), code: code(), type: recvType, issue, createdAt: new Date().toISOString(), }, F.accOn.checked ? {accessories: F.acc.value.trim()} : {}, F.actCode2.value.trim() ? {actCodeNew: F.actCode2.value.trim()} : F.actCode.value.trim() ? {actCode: F.actCode.value.trim()} : {}, F.ttest.value ? {test: true} : {}, issueLater ? {issueLater: true} : {}, {history: []}, base);
     if (recvType === "bh") { t0.purchaseDate = pd; t0.months = Number(mo); t0.warrantyText = remain(pd, mo).text; }
     const isEx = recvType === "bh" && bhMode === "doimoi";
     let newRec = null;
@@ -2674,7 +2680,7 @@ window.APP_BUILD = "2026-11-23.17";
     const F2 = $("#actForm");
     F2.innerHTML = `<div class="grab"></div>
       <h2><span class="tag ${t.type}">${TYPE[t.type]}</span>${esc(t.product)}</h2>
-      <dl class="kv"><dt>Số seri</dt><dd>${snSetHtml(t)}</dd><dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
+      <dl class="kv"><dt>Số seri</dt><dd>${snSetHtml(t)}</dd>${t.accessories ? `<dt>Phụ kiện kèm</dt><dd><b style="color:#7c3aed">📦 ${esc(t.accessories)}</b></dd>` : ""}<dt>Lỗi</dt><dd><b>${esc(t.issue)}</b></dd>
         ${isBH ? `<dt>Bảo hành</dt><dd>${esc(t.warrantyText)}${oldExp ? ` (hết hạn ${oldExp})` : ""}</dd>` : ""}
         <dt>Tra cứu BH</dt><dd>${wBadge(t.serial).replace('margin-top:4px;', '')}</dd>
         ${(t.history||[]).filter(h => h.note && h.by === "Giám đốc").map(h => `<dt>GĐ ghi chú</dt><dd>${esc(h.note)}</dd>`).join("")}</dl>
@@ -3548,7 +3554,8 @@ window.APP_BUILD = "2026-11-23.17";
         <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}${t.address ? " · " + esc(t.address) : ""}</div>
         <div class="sub">Bán hàng chọn: ${OSHIP[t.ship?.method] || "—"} ${esc(t.ship?.carrier || "")}</div>`
       : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>
-        <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""} · ${esc(STAGES[t.stage].label)}</div>`}
+        <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""} · ${esc(STAGES[t.stage].label)}</div>
+        ${t.accessories ? `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:2px solid #7c3aed;border-radius:12px;margin-top:8px;cursor:pointer;background:rgba(124,58,237,.06)"><input type="checkbox" name="accChk" style="width:20px;height:20px;margin:0"> <span>📦 Đã gửi kèm phụ kiện: <b>${esc(t.accessories)}</b></span></label>` : ""}`}
       <label>Hình thức gửi *</label>
       <div class="choice">
         <button type="button" class="opt" data-m="chanh"><span class="ic">🚛</span>Chành xe</button>
@@ -3606,6 +3613,7 @@ window.APP_BUILD = "2026-11-23.17";
       const g = isGrab(shipMethod);
       const date = F3.date.value, carrier = (shipMethod === "chanh" ? F3.carrier.value : g ? F3.gDriver.value : F3.post.value).trim();
       if (shipMethod === "chanh" && !carrier) { toast("Hãy nhập tên chành xe"); F3.carrier.focus(); throw new Error("x"); }
+      if (F3.accChk && !F3.accChk.checked) { toast(`Kiểm tra & tick “Đã gửi kèm phụ kiện: ${t.accessories}”`); F3.accChk.scrollIntoView({block: "center"}); throw new Error("x"); }
       if (shipMethod === "chanh" && !fpay.ship) { toast("Phí ship: chọn 🏢 Công ty trả hoặc 👤 Khách trả"); F3.querySelector('.fpay[data-f="ship"]').scrollIntoView({block: "center"}); throw new Error("x"); }
       if (shipMethod === "chanh" && !feeNum(F3.feeShip)) { toast("Hãy nhập số tiền phí ship (bắt buộc khi gửi chành xe)"); F3.feeShip.focus(); throw new Error("x"); }
       const fee = shipMethod === "chanh" ? {ship: feeNum(F3.feeShip), shipPayer: fpay.ship, send: fpay.send ? feeNum(F3.feeSend) : 0, sendPayer: fpay.send && feeNum(F3.feeSend) ? fpay.send : ""} : null;
@@ -3613,7 +3621,7 @@ window.APP_BUILD = "2026-11-23.17";
       if (!date) { toast("Hãy chọn ngày trả lại khách"); throw new Error("x"); }
       const ship = {method: shipMethod, carrier, carrierPhone: shipMethod === "chanh" ? F3.carrierPhone.value.trim() : g ? F3.gPhone.value.trim() : "",
         tracking: shipMethod === "buudien" ? F3.tracking.value.trim() : g ? F3.gTrip.value.trim() : "", date, note: F3.snote.value.trim(), at: new Date().toISOString(), ...(fee ? {fee} : {})};
-      const note = `${shipText({ship:{method:shipMethod, carrier}}, true)} · ${isOd ? "gửi" : "trả"} ngày ${fmt(date)}`;
+      const note = `${shipText({ship:{method:shipMethod, carrier}}, true)} · ${isOd ? "gửi" : "trả"} ngày ${fmt(date)}${!isOd && t.accessories ? ` · 📦 kèm phụ kiện: ${t.accessories}` : ""}`;
       let c;
       if (isOd) c = await advanceOrder(t, "cho_tt", note, {ship});
       else { c = push(t, "cho_tt", note, {ship}); await put("tk", c); sendPush(c); }
