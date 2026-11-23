@@ -568,7 +568,7 @@
     <section id="v-wh" class="hide">
       <div class="seg" id="whSeg"><button data-w="xuat">📦 Xuất kho<span class="cnt hide" id="nccBtnCnt"></span></button><button data-w="ton">🏷️ Tồn kho</button><button data-w="thao">🔩 LK tháo máy</button><button data-w="ngoai">🧩 LK ngoài</button><button data-w="doi">🔄 Hàng đổi</button><button data-w="muon">🤝 Mượn hàng<span class="cnt hide" id="muonCnt"></span></button><button data-w="lkm">🧪 LK mượn<span class="cnt hide" id="lkmCnt"></span></button><button data-w="ls">📜 Lịch sử</button></div>
       <div class="panel odpanel hide" id="seedBox"></div>
-      <div class="panel hide" data-w="xuat" id="nccPanel"><h3>📥 Hàng NCC chờ nhập kho <span class="sub" id="nccCnt"></span></h3>
+      <div class="panel hide" data-w="xuat ton" id="nccPanel" style="border:2px solid #f59e0b"><h3>📥 Hàng NCC chờ nhập kho <span class="sub" id="nccCnt"></span></h3>
         <div class="sub" style="margin:-4px 0 8px">Kế toán đã thanh toán / ghi nhận nhập hàng nhà cung cấp. Kiểm hàng rồi bấm <b>Duyệt nhập kho</b> – app tự cộng tồn kho.</div><div class="list" id="nccList"></div></div>
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.23";
+window.APP_BUILD = "2026-11-23.24";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -4454,7 +4454,7 @@ window.APP_BUILD = "2026-11-23.23";
   function renderWH(){
     whDay = whDay || iso(new Date());
     $("#whSeg").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === whTab));
-    document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", el.dataset.w !== whTab); });
+    document.querySelectorAll("#v-wh [data-w]").forEach(el => { if (el.tagName !== "BUTTON") el.classList.toggle("whoff", !el.dataset.w.split(" ").includes(whTab)); });
     drawThao(); drawExt(); drawExchanges(); drawLoans(); drawNccIn(); drawLkm(); if (whTab === "ls") drawLedger();
     drawSeed(); drawStock(); drawReport(); drawNhapHist();
     if (!$("#nhRows").children.length) nhAddRow();
@@ -5771,7 +5771,7 @@ window.APP_BUILD = "2026-11-23.23";
         else if (k === "luong") F.innerHTML = `<label>Tên nhân viên *</label><input class="exemp" list="exEmpList" autocomplete="off" placeholder="VD: Lê Ngọc Danh">
           <div class="two"><div><label>Lương tháng</label><input class="exmon" type="month" value="${iso(new Date()).slice(0, 7)}"></div><div>${dateF("Ngày trả lương")}</div></div>
           <label>Số tiền (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 8.000.000">`;
-        else if (k === "tranoncc") F.innerHTML = `<label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="Chọn nhà cung cấp">
+        else if (k === "tranoncc") F.innerHTML = `<div class="reason" style="margin-top:6px">💡 <b>Trả nợ NCC</b> chỉ ghi tiền đã trả cho nợ cũ – <b>không tạo hàng nhập kho</b>. Muốn Kho duyệt nhập hàng: chọn <b>📦 Nhập hàng mới</b>, điền hàng + số lượng + đơn giá.</div><label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="Chọn nhà cung cấp">
           <div class="sub exsupdebt" style="margin-top:4px"></div>
           <div class="two"><div><label>Số tiền trả (đ) *</label><input class="exa" inputmode="numeric" placeholder="VD: 20.000.000"></div><div>${dateF("Ngày trả")}</div></div>
           <div class="sub exdebt" style="margin-top:6px"></div>`;
