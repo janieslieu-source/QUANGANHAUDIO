@@ -729,6 +729,7 @@
         <label>Linh kiện nâng cấp (xuất kho)</label>
         <div id="uppRows"></div><button type="button" class="btn sm" id="uppAdd" style="margin-top:6px">+ Thêm linh kiện</button>
         <label>Sản phẩm mới *</label>
+        <div class="chips" id="upQuick" style="flex-wrap:wrap;margin-bottom:6px"><button type="button" class="chip" data-uq="kd">📶 Màn hình có dây → không dây</button><button type="button" class="chip" data-uq="3in1">🖥️ Màn hình có dây → đầu liền màn 3 in 1</button></div>
         <div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input id="upNew" placeholder="Tên sản phẩm mới sau nâng cấp" autocomplete="off"><div class="sugg hide"></div></div><input id="upNewQ" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div>
         <div class="sub" id="upNewH" style="margin-top:2px"></div>
         <label>Ghi chú</label><input id="upNote" placeholder="Tùy chọn" autocomplete="off">
@@ -771,7 +772,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.4";
+window.APP_BUILD = "2026-11-23.5";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3262,6 +3263,12 @@ window.APP_BUILD = "2026-11-23.4";
       $("#upNewH").innerHTML = !n ? "" : ex ? `♻️ Đã có trong kho – tồn ${stockOf(ex) ?? 0} → sau khi Kho duyệt: ${(stockOf(ex) ?? 0) + (parseInt($("#upNewQ").value) || 1)}` : `🆕 Sản phẩm mới – Kho duyệt sẽ tạo mới trong kho`; };
     attachPicker(oldI, oldI.nextElementSibling, oldH, false, true); oldI.addEventListener("input", oldH); $("#upOldQ").addEventListener("input", oldH);
     attachPicker(newI, newI.nextElementSibling, newH, false); newI.addEventListener("input", newH); $("#upNewQ").addEventListener("input", () => { $("#upNewQ")._t = true; newH(); });
+    // chọn nhanh: tự đặt tên sản phẩm mới từ tên màn hình cũ
+    $("#upQuick").querySelectorAll("[data-uq]").forEach(b => b.onclick = () => { const o = oldI.value.trim(); if (!o) { toast("Chọn sản phẩm cũ (màn hình có dây) trước"); oldI.focus(); return; }
+      const size = (o.match(/(\d{2})\s*(inch|in|\x22)/i) || [])[1];
+      let nm = b.dataset.uq === "kd" ? (/có dây/i.test(o) ? o.replace(/có dây/i, "không dây") : o + " không dây")
+        : "Đầu karaoke online liền màn 3 in 1" + (size ? " " + size + " inch" : "") + (/tomko/i.test(o) ? " Tomko" : "");
+      const ex = productNames().find(p => norm(p) === norm(nm)); newI.value = ex || nm; newH(); newI.focus(); });
     lmAddRow("upp"); $("#uppAdd").onclick = () => { lmAddRow("upp"); $("#uppRows").lastElementChild.querySelector(".lmn").focus(); };
     $("#upGo").onclick = async () => {
       const oq = Math.max(1, parseInt($("#upOldQ").value) || 1), nq = Math.max(1, parseInt($("#upNewQ").value) || 1), newName = newI.value.trim(), note = $("#upNote").value.trim();
