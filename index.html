@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.26";
+window.APP_BUILD = "2026-11-23.27";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -863,7 +863,7 @@ window.APP_BUILD = "2026-11-23.26";
   const TYPE = {bh:"Bảo hành", sc:"Sửa chữa"};
   const ACTION = {sua:"Sửa chữa", thaymoi:"Thay mới", doimoi:"Đổi mới", doidau:"Đổi đầu thu / phát"};
   const exText = t => t.exchange ? `SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
-  const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)"};
+  const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)", congtrinh:"🏗️ Lắp tại công trình"};
   // Quy định seri hàng công ty: bắt đầu bằng 525, tổng cộng 8 chữ số (VD: 52526789)
   // + seri hãng Tomko: bắt đầu bằng 900 hoặc 1845 (độ dài không cố định, 6–20 ký tự)
   const SN_RULE = /^(525\d{5}|900[0-9A-Z]{3,17}|1845[0-9A-Z]{2,16})$/i, SN_HINT = "8 chữ số bắt đầu bằng 525 – hoặc seri Tomko bắt đầu bằng 900 / 1845";
@@ -3498,8 +3498,22 @@ window.APP_BUILD = "2026-11-23.26";
           if (kk === "back") await putMany("mv", act.map(a => ({id: "mv_" + uid(), product: a.name, qty: a.n, at, kind: "congtrinh_tra", ref: x.code, note: `Công trình ${x.name} trả về kho`, by: actor()})));
           const left = rows.reduce((t, r) => t + r.qty - (r.back || 0) - (r.used || 0), 0);
           await save(Object.assign({rows}, left ? {} : {status: "done", doneAt: at}), `${kk === "back" ? "↩️ Trả về kho" : "✅ Đã lắp"}: ${act.map(a => a.name + " ×" + a.n).join(", ")} – ${x.name}${left ? "" : " · công trình đã chốt xong"}`, kk === "back" ? (role === "wh" ? "kt" : "wh") : null); };
-        if (k === "done") { if (!confirm(`Chốt đã lắp TẤT CẢ hàng còn ở công trình "${x.name}"?\n${L.map(r => "• " + r.name + " ×" + r.left).join("\n")}`)) return;
-          await finish(L.map(r => ({name: r.name, n: r.left})), "done"); return; }
+        if (k === "done") { const F = $("#actForm"), num = el => Number(String(el.value).replace(/[^\d]/g, "")) || 0;
+          const lastPrice = name => { for (const o of orders.slice().sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))) { const l = (o.lines || []).find(l => norm(l.product) === norm(name) && l.price); if (l) return l.price; } return 0; };
+          F.innerHTML = `<div class="grab"></div><h2>✅ Chốt đã lắp – ${esc(x.name)}</h2><div class="sub" style="margin-bottom:6px">👤 ${esc(x.customer)} · 📍 ${esc(x.address)}<br>Lắp tất cả hàng còn ở công trình – điền <b>đơn giá</b> để chuyển <b>Kế toán – công nợ công trình</b>.</div>
+            ${L.map((r, i) => `<div style="padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(r.name)}</b><span>× <b>${r.left}</b></span></div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><input class="ctpu" data-i="${i}" inputmode="numeric" placeholder="Đơn giá / 1 SP" value="${lastPrice(r.name) ? Number(lastPrice(r.name)).toLocaleString("vi-VN") : ""}" style="flex:1;min-width:0"><b class="ctpt" data-i="${i}" style="white-space:nowrap;min-width:100px;text-align:right"></b></div></div>`).join("")}
+            <div class="found" id="ctpSum" style="margin-top:8px"></div>
+            <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn okb">✅ Chốt & chuyển Kế toán</button></div>`;
+          const calc = () => { let t = 0; F.querySelectorAll(".ctpu").forEach(el => { const i = +el.dataset.i, v = num(el) * L[i].left; t += v; F.querySelector(`.ctpt[data-i="${i}"]`).textContent = v ? money(v) : ""; }); $("#ctpSum").innerHTML = `🧮 Tổng tiền công trình: <b>${money(t)}</b>`; return t; };
+          F.querySelectorAll(".ctpu").forEach(el => el.addEventListener("input", () => { el.value = el.value.trim() === "" ? "" : num(el).toLocaleString("vi-VN"); calc(); })); calc();
+          actCtx = {run: async () => { const total = calc(); if (!total && !confirm("Chưa điền giá – vẫn chốt (Kế toán ghi 0 đ)?")) throw new Error("x");
+            const at = new Date().toISOString(), lines = L.map((r, i) => ({product: r.name, qty: r.left, months: findProduct(r.name)?.months ?? 12, price: num(F.querySelector(`.ctpu[data-i="${i}"]`))}));
+            await finish(L.map(r => ({name: r.name, n: r.left})), "done");
+            await put("od", {id: "od_" + uid(), code: x.code, saleDate: iso(new Date()), createdAt: at, customer: x.customer, phone: x.phone || "", address: x.address, lines, congtrinh: {id: x.id, name: x.name}, ctTotal: total,
+              ship: {method: "congtrinh", carrier: ""}, note: `Công trình ${x.name}`, stage: "cho_tt", updatedAt: at, history: [{stage: "cho_tt", at, by: actor(), note: `🏗️ Chốt lắp công trình ${x.name} – ${money(total)} → Kế toán`}]});
+            pushTo("ac", "🏗️ Công nợ công trình", `${x.name} – ${x.customer}: ${money(total)}`); toast(`Đã chốt lắp – chuyển Kế toán ${money(total)}`); }};
+          open("actBg"); return; }
         // trả về kho: bảng tick từng món + số lượng
         const F = $("#actForm");
         F.innerHTML = `<div class="grab"></div><h2>↩️ Trả về kho – ${esc(x.name)}</h2><div class="sub" style="margin-bottom:6px">Tick món trả về kho, sửa số lượng nếu trả một phần.</div>
@@ -3520,6 +3534,7 @@ window.APP_BUILD = "2026-11-23.26";
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
     if (s.method === "chanh") return `${/^chành/i.test(s.carrier||"") ? "" : "Chành xe "}${e(s.carrier)}${s.carrierPhone ? " (" + e(s.carrierPhone) + ")" : ""}`;
+    if (s.method === "congtrinh") return "🏗️ Lắp tại công trình" + (t.address ? " – " + e(t.address) : "");
     if (isGrab(s.method)) return `${SHIP[s.method]}${s.carrier ? " · tài xế " + e(s.carrier) : ""}${s.carrierPhone ? " (" + e(s.carrierPhone) + ")" : ""}${s.tracking ? " · mã chuyến " + e(s.tracking) : ""}`;
     return `Bưu điện${s.carrier ? " " + e(s.carrier) : ""}${s.tracking ? " · Mã vận đơn " + e(s.tracking) : ""}`;
   }
@@ -3954,7 +3969,7 @@ window.APP_BUILD = "2026-11-23.26";
     const urg = isUrgent(o);
     return `<div class="item oditem ${urg ? "urgentod" : (o.id === lastOrderId && o.stage === "cho_xk" ? "newitem" : "")}" data-od="${esc(o.id)}">
       ${urg ? `<div class="gapflag">🚨 ĐƠN GẤP – GRAB GẤP 🚨</div>` : ""}
-      <div class="row"><div><div class="pname"><span class="tag od">🛒 Đơn bán</span>${o.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(o.code)} · ${esc(o.customer)}</div>
+      <div class="row"><div><div class="pname">${o.congtrinh ? `<span class="tag" style="background:rgba(29,78,216,.12);color:var(--brand)">🏗️ Công trình</span>` : `<span class="tag od">🛒 Đơn bán</span>`}${o.test ? `<span class="tag" style="background:#ede9fe;color:#6d28d9">🧪 TEST</span>` : ""}${esc(o.code)} · ${esc(o.customer)}</div>
         <div class="sub">Ngày bán ${fmt(o.saleDate)} · tạo lúc ${fmtTime(o.createdAt)}</div>
         ${o.phone ? `<div class="sub">📞 ${esc(o.phone)}</div>` : ""}
         ${o.address ? `<div class="sub">📍 ${esc(o.address)}</div>` : ""}</div>
@@ -6390,7 +6405,7 @@ window.APP_BUILD = "2026-11-23.26";
     const req = !edit && hasPayReq(t) ? t.payReq : null, debt0 = Number(t.pay?.amount) || 0;
     // Giám đốc đã báo khách trả: điền sẵn – trả đủ = Đã thanh toán; trả một phần = Công nợ với số còn lại
     const p = req ? Object.assign({}, t.pay, preset === "cong_no" ? {amount: Math.max(0, debt0 - Number(req.amount)), note: `Khách trả ${money(req.amount)} ngày ${fmt(req.date)} (${req.method})${req.note ? " – " + req.note : ""}`}
-      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || (t.loanTotal ? {amount: t.loanTotal, total: t.loanTotal, advance: 0} : t.tradeIn?.diff > 0 ? {amount: t.tradeIn.diff, total: t.tradeIn.diff, advance: 0} : {}));
+      : {amount: Number(req.amount), paidDate: req.date, method: req.method, note: req.note || ""}) : t.pay?.gd === "tra" && t.pay.gdFix ? Object.assign({}, t.pay, t.pay.gdFix, {total: t.pay.gdFix.total, advance: t.pay.gdFix.advance}) : (t.pay || (t.loanTotal ? {amount: t.loanTotal, total: t.loanTotal, advance: 0} : t.ctTotal ? {amount: t.ctTotal, total: t.ctTotal, advance: 0} : t.tradeIn?.diff > 0 ? {amount: t.tradeIn.diff, total: t.tradeIn.diff, advance: 0} : {}));
     payStatus = preset || p.status || null;
     const F4 = $("#actForm");
     F4.innerHTML = `<div class="grab"></div>
@@ -6402,11 +6417,11 @@ window.APP_BUILD = "2026-11-23.26";
       ${req ? `<div class="reason" style="background:var(--okbg);color:var(--ok)">💵 Giám đốc báo khách đã trả <b>${money(req.amount)}</b> · ${esc(req.method)} · ngày ${fmt(req.date)} (đang nợ ${money(debt0)})${req.note ? "<br>📝 " + esc(req.note) : ""}<br>Đã điền sẵn – kiểm tra rồi bấm xác nhận.${Number(req.amount) < debt0 ? " Khách trả một phần: ghi Công nợ với số còn lại." : ""}</div>` : ""}
       ${t.pay?.gd === "tra" ? `<div class="reason" style="background:var(--badbg);color:var(--bad)">↩️ Giám đốc yêu cầu xem lại: <b>${esc(t.pay.gdNote || "")}</b>${t.pay.gdFix ? `<br>Đã điền sẵn số Giám đốc sửa: <b>${esc(PAY[t.pay.gdFix.status] || "")} ${money(t.pay.gdFix.amount)}</b> – bấm Lưu là <b>hoàn tất</b> (Giám đốc không phải duyệt lại; nếu đổi sang số khác thì sẽ gửi Giám đốc duyệt)` : ""}</div>` : ""}
       ${edit ? `<div class="reason">Đang ghi: <b>${PAY[p.status] || ""} – ${money(p.amount)}</b>${p.paidDate ? ` (ngày ${fmt(p.paidDate)})` : ""}${p.method ? " · " + esc(p.method) : ""}<br>Sửa số tiền / tình trạng bên dưới rồi bấm Lưu thay đổi. Lần sửa được ghi vào quá trình xử lý.</div>` : ""}
-      ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">Bán hàng</span><b>${esc(orderSummary(t))}</b></div>`
+      ${isOd ? `<div style="margin-bottom:4px"><span class="tag vc">${t.congtrinh ? "🏗️ Công trình" : "Bán hàng"}</span><b>${esc(orderSummary(t))}</b></div>`
         : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>`}
       <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div>
       ${t.action ? `<div class="sub">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · " + esc(t.parts) : ""}</div>` : ""}
-      ${t.ship ? `<div class="sub">🚚 ${shipText(t)} · ${isOd ? "gửi" : "trả"} ${fmt(t.ship.date)}</div>` : ""}
+      ${t.ship ? `<div class="sub">🚚 ${shipText(t)}${t.ship.date ? ` · ${isOd ? "gửi" : "trả"} ${fmt(t.ship.date)}` : ""}</div>` : ""}
       ${t.tradeIn ? `<div class="reason" style="margin-top:6px">♻️ <b>Thu cũ đổi mới:</b> ${t.tradeIn.newQty} × ${money(t.tradeIn.newPrice)} − thu cũ ${t.tradeIn.oldQty} ${esc(t.tradeIn.oldProduct)} × ${money(t.tradeIn.oldPrice)} = khách bù <b>${money(t.tradeIn.diff)}</b>${t.tradeIn.received ? " · ✅ đã nhận hàng cũ" : " · ⏳ chưa nhận hàng cũ"}</div>` : ""}
       <label>Tình trạng thanh toán *</label>
       <div class="choice">
