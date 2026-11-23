@@ -476,7 +476,9 @@
         <div class="seg" id="gwSeg" style="flex-wrap:wrap"><button data-k="debt">📒 Công nợ</button><button data-k="sale">🛒 Bán hàng</button><button data-k="top">🏆 Hàng xuất nhiều</button><button data-k="cus">👥 Khách mua nhiều</button><button data-k="old">⏰ Khách nợ lâu</button><button data-k="exp">🧾 Chi phí</button></div>
         <div id="gwBody"></div>
         <div class="btns"><button class="btn pri" id="gwFile" type="button">📊 Excel báo cáo (đủ các mục)</button></div></div>
-      <div class="panel" id="gdDayBox"><div class="row" style="align-items:center"><h3 style="margin:0">📑 Báo cáo cuối ngày</h3><input type="date" id="gdDay" style="width:auto;padding:7px 9px"></div>
+      <div class="panel" id="gdDayBox"><div class="row" style="align-items:center"><h3 style="margin:0">📑 Báo cáo cuối ngày</h3></div>
+        <div class="two" style="margin-top:6px"><div><label style="margin-top:0">Từ ngày</label><input type="date" id="gdDay"></div><div><label style="margin-top:0">Đến ngày</label><input type="date" id="gdDay2"></div></div>
+        <div class="chips" id="gdDayQ" style="flex-wrap:wrap;margin-top:6px"><button type="button" class="chip" data-q="0">Hôm nay</button><button type="button" class="chip" data-q="1">Hôm qua</button><button type="button" class="chip" data-q="7">7 ngày</button><button type="button" class="chip" data-q="m">Tháng này</button></div>
         <div id="gdDayBody" style="margin-top:10px"></div>
         <div class="btns"><button class="btn" id="gdStockXls" type="button">📦 Tải Excel báo cáo tồn kho</button><button class="btn pri" id="gdRevXls" type="button">💰 Tải Excel doanh thu ngày</button></div></div>
       <div class="panel hide" id="gdLkBox"><h3>🔩 Kỹ thuật chờ linh kiện <span class="sub" id="gdLkCnt"></span></h3><div class="list" id="gdLkList"></div></div>
@@ -785,7 +787,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.15";
+window.APP_BUILD = "2026-11-23.16";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -6446,25 +6448,27 @@ window.APP_BUILD = "2026-11-23.15";
   /* ================= 📑 BÁO CÁO CUỐI NGÀY (Giám đốc): tồn kho + doanh thu, tải Excel ================= */
   const NOCOST = ["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq", "upreq"];
   const gdDayVal = () => $("#gdDay")?.value || iso(new Date());
-  function stockReport(day){
-    const end = day + "T23:59:59.999", m = new Map();
+  const gdDayTo = () => { const a = gdDayVal(), b = $("#gdDay2")?.value || a; return b < a ? a : b; };
+  const gdLbl = () => { const a = gdDayVal(), b = gdDayTo(); return a === b ? `Ngày ${fmt(a)}` : `Từ ${fmt(a)} đến ${fmt(b)}`; };
+  function stockReport(day, to){
+    to = to || day; const inR = d => !!d && d >= day && d <= to, m = new Map();
     const row = n => { const k = norm(n); if (!m.has(k)) m.set(k, {name: n, code: findProduct(n)?.code || "", nhap: 0, xuat: 0, cost: 0}); return m.get(k); };
     productNames().forEach(n => row(n));
     moves.filter(x => !x.ext).forEach(x => { const r = row(x.product), q = Number(x.qty) || 0; if (x.cost && q > 0) r.cost = Number(x.cost);
-      if (dayOf(x.at) === day && x.kind !== "kiemke" && x.kind !== "gan_seri") { if (q > 0) r.nhap += q; else r.xuat += -q; } });
-    stock.forEach(x => { const r = row(x.product); if (x.status === "out" && x.outAt && dayOf(x.outAt) === day) r.xuat++; });
+      if (inR(dayOf(x.at)) && x.kind !== "kiemke" && x.kind !== "gan_seri") { if (q > 0) r.nhap += q; else r.xuat += -q; } });
+    stock.forEach(x => { const r = row(x.product); if (x.status === "out" && x.outAt && inR(dayOf(x.outAt))) r.xuat++; });
     const L = [...m.values()].map(r => Object.assign(r, {ton: stockOf(r.name) ?? 0, sn: stock.filter(x => x.status === "in" && norm(x.product) === norm(r.name)).length})).filter(r => r.ton || r.nhap || r.xuat);
     L.forEach(r => r.val = r.cost ? r.cost * Math.max(0, r.ton) : 0);
     return L.sort((a, b) => a.name.localeCompare(b.name, "vi"));
   }
-  function revReport(day){
-    const isDay = d => d && dayOf(d) === day;
-    const sold = orders.filter(o => o.stage !== "huy" && o.saleDate === day);
-    const paidOn = x => x.pay && (x.pay.status === "da_tt" ? (x.pay.paidDate || dayOf(x.pay.at)) === day : false);
+  function revReport(day, to){
+    to = to || day; const inR = d => !!d && d >= day && d <= to, isDay = d => !!d && inR(dayOf(d));
+    const sold = orders.filter(o => o.stage !== "huy" && inR(o.saleDate || dayOf(o.createdAt)));
+    const paidOn = x => x.pay && (x.pay.status === "da_tt" ? inR(x.pay.paidDate || dayOf(x.pay.at)) : false);
     const paid = [...orders, ...tickets].filter(paidOn);
     const debtNew = [...orders, ...tickets].filter(x => x.pay?.status === "cong_no" && isDay(x.pay.debtSince || x.pay.at));
     const tkDone = tickets.filter(t => t.pay && isDay(t.pay.at));
-    const exDay = expenses.filter(x => !NOCOST.includes(x.kind) && x.date === day);
+    const exDay = expenses.filter(x => !NOCOST.includes(x.kind) && inR(x.date));
     const sum = (a, f) => a.reduce((t, x) => t + (Number(f(x)) || 0), 0);
     return {sold, paid, debtNew, tkDone, exDay, saleVal: sum(sold, odVal), noPay: sold.filter(o => !o.pay).length,
       collected: sum(paid, x => x.pay.amount), debt: sum(debtNew, x => x.pay.amount), tkVal: sum(tkDone, t => t.pay.total ?? t.pay.amount), exVal: sum(exDay, exAmt)};
@@ -6472,8 +6476,9 @@ window.APP_BUILD = "2026-11-23.15";
   function drawGdDay(){
     const box = $("#gdDayBody"); if (!box || $("#v-gd")?.classList.contains("hide")) return;
     if (!$("#gdDay").value) $("#gdDay").value = iso(new Date());
-    const d = gdDayVal(), R = revReport(d), S = stockReport(d), [y, mo, dd] = d.split("-");
-    box.innerHTML = `<div class="sub" style="margin-bottom:6px">Ngày ${dd}/${mo}/${y}</div><div class="stats" style="grid-template-columns:repeat(2,1fr)">
+    const d = gdDayVal(), R = revReport(d, gdDayTo()), S = stockReport(d, gdDayTo());
+    const empty = !R.sold.length && !R.paid.length && !R.debtNew.length && !R.tkDone.length && !R.exDay.length;
+    box.innerHTML = `<div class="sub" style="margin-bottom:6px"><b>${gdLbl()}</b></div>${empty ? `<div class="reason" style="margin-bottom:8px">ℹ️ ${gdLbl()} chưa có đơn bán, tiền thu, công nợ hay chi phí nào. Chọn ngày khác (VD <b>Hôm qua</b>, <b>7 ngày</b>, <b>Tháng này</b>).</div>` : ""}<div class="stats" style="grid-template-columns:repeat(2,1fr)">
       <div class="stat c-info"><b style="font-size:15px">${money(R.saleVal)}</b><span>🛒 Doanh thu bán hàng (${R.sold.length} đơn${R.noPay ? ` · ${R.noPay} đơn chưa ghi tiền` : ""})</span></div>
       <div class="stat c-info"><b style="font-size:15px">${money(R.tkVal)}</b><span>🔧 Doanh thu sửa chữa (${R.tkDone.length} phiếu)</span></div>
       <div class="stat c-ok"><b style="font-size:15px">${money(R.collected)}</b><span>💵 Tiền đã thu trong ngày</span></div>
@@ -6482,22 +6487,26 @@ window.APP_BUILD = "2026-11-23.15";
       <div class="stat"><b style="font-size:15px">${S.filter(r => r.ton > 0).length} mặt hàng · ${S.reduce((a, r) => a + Math.max(0, r.ton), 0).toLocaleString("vi-VN")} cái</b><span>📦 Tồn kho hiện tại (nhập ${S.reduce((a, r) => a + r.nhap, 0)} · xuất ${S.reduce((a, r) => a + r.xuat, 0)} trong ngày)</span></div></div>`;
   }
   if ($("#gdDay")) {
-    $("#gdDay").addEventListener("change", drawGdDay);
-    $("#gdStockXls").onclick = () => { const d = gdDayVal(), S = stockReport(d), [y, mo, dd] = d.split("-");
-      exportSheets(`Bao-cao-ton-kho_${d}`, "Báo cáo tồn kho", `Tồn kho tại thời điểm in · nhập / xuất trong ngày ${dd}/${mo}/${y}`, [
+    $("#gdDay").addEventListener("change", drawGdDay); $("#gdDay2").addEventListener("change", drawGdDay);
+    $("#gdDayQ").querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const t = new Date(), q = b.dataset.q;
+      const a = q === "0" ? t : q === "1" ? new Date(t.getTime() - 864e5) : q === "7" ? new Date(t.getTime() - 6 * 864e5) : new Date(t.getFullYear(), t.getMonth(), 1);
+      $("#gdDay").value = iso(a); $("#gdDay2").value = q === "1" ? iso(a) : iso(t); drawGdDay(); });
+    $("#gdStockXls").onclick = () => { const d = gdDayVal(), d2 = gdDayTo(), S = stockReport(d, d2);
+      exportSheets(`Bao-cao-ton-kho_${d}${d2 !== d ? "_den_" + d2 : ""}`, "Báo cáo tồn kho", `Tồn kho tại thời điểm in · nhập / xuất: ${gdLbl().toLowerCase()}`, [
         {name: "Tồn kho", pre: [["Số mặt hàng còn tồn", S.filter(r => r.ton > 0).length], ["Tổng số lượng tồn", S.reduce((a, r) => a + Math.max(0, r.ton), 0)], ["Giá trị tồn (theo giá nhập gần nhất, đ)", S.reduce((a, r) => a + r.val, 0)]],
-          head: ["STT", "Sản phẩm", "Mã", "Nhập trong ngày", "Xuất trong ngày", "Tồn hiện tại", "Trong đó có seri", "Giá nhập gần nhất (đ)", "Giá trị tồn (đ)"],
+          head: ["STT", "Sản phẩm", "Mã", "Nhập trong kỳ", "Xuất trong kỳ", "Tồn hiện tại", "Trong đó có seri", "Giá nhập gần nhất (đ)", "Giá trị tồn (đ)"],
           rows: S.map((r, i) => [i + 1, r.name, r.code, r.nhap || "", r.xuat || "", r.ton, r.sn || "", r.cost || "", r.val || ""])},
-        {name: "Nhập xuất trong ngày", head: ["STT", "Giờ", "Sản phẩm", "Loại", "Số lượng", "Mã đơn / phiếu", "Ghi chú"],
-          rows: moves.filter(x => !x.ext && dayOf(x.at) === d).sort((a, b) => (a.at || "").localeCompare(b.at || "")).map((x, i) => [i + 1, fmtTime(x.at).slice(0, 5), x.product, MV_KIND[x.kind] || x.kind || "", Number(x.qty) || 0, x.ref || "", x.note || ""])}]); };
-    $("#gdRevXls").onclick = () => { const d = gdDayVal(), R = revReport(d), [y, mo, dd] = d.split("-");
-      exportSheets(`Bao-cao-doanh-thu_${d}`, "Báo cáo doanh thu ngày", `Ngày ${dd}/${mo}/${y}`, [
+        {name: "Nhập xuất trong kỳ", head: ["STT", "Ngày giờ", "Sản phẩm", "Loại", "Số lượng", "Mã đơn / phiếu", "Ghi chú"],
+          rows: moves.filter(x => !x.ext && dayOf(x.at) >= d && dayOf(x.at) <= d2 && x.kind !== "gan_seri").sort((a, b) => (a.at || "").localeCompare(b.at || "")).map((x, i) => [i + 1, fmtTime(x.at), x.product, MV_KIND[x.kind] || x.kind || "", Number(x.qty) || 0, x.ref || "", x.note || ""])}]); };
+    $("#gdRevXls").onclick = () => { const d = gdDayVal(), d2 = gdDayTo(), R = revReport(d, d2);
+      if (!R.sold.length && !R.paid.length && !R.debtNew.length && !R.tkDone.length && !R.exDay.length && !confirm(`${gdLbl()} chưa có số liệu nào – vẫn tải file?`)) return;
+      exportSheets(`Bao-cao-doanh-thu_${d}${d2 !== d ? "_den_" + d2 : ""}`, "Báo cáo doanh thu", gdLbl(), [
         {name: "Tổng hợp", head: ["Mục", "Số tiền (đ)", "Ghi chú"], rows: [
           ["Doanh thu bán hàng", R.saleVal, `${R.sold.length} đơn${R.noPay ? ` · ${R.noPay} đơn chưa ghi tiền` : ""}`], ["Doanh thu sửa chữa / bảo hành", R.tkVal, `${R.tkDone.length} phiếu`],
           ["Tổng doanh thu", R.saleVal + R.tkVal, ""], ["Tiền đã thu trong ngày", R.collected, `${R.paid.length} đơn / phiếu`], ["Công nợ mới", R.debt, `${R.debtNew.length} đơn / phiếu`],
           ["Chi phí trong ngày", R.exVal, `${R.exDay.length} khoản`], ["Doanh thu – chi phí", R.saleVal + R.tkVal - R.exVal, "tạm tính"]]},
         {name: "Đơn bán", head: ["STT", "Mã đơn", "Khách hàng", "SĐT", "Hàng bán", "Số lượng", "Tình trạng", "Giá trị (đ)", "Còn nợ (đ)"],
-          rows: R.sold.map((o, i) => [i + 1, o.code, o.customer, o.phone || "", orderSummary(o), (o.lines || []).filter(l => !l.gift).reduce((a, l) => a + (Number(l.qty) || 0), 0), o.pay ? PAY[o.pay.status] : "Chưa ghi tiền", odVal(o), o.pay?.status === "cong_no" ? Number(o.pay.amount) || 0 : 0])},
+          rows: R.sold.map((o, i) => [i + 1, o.code + " (" + fmt(o.saleDate || dayOf(o.createdAt)) + ")", o.customer, o.phone || "", orderSummary(o), (o.lines || []).filter(l => !l.gift).reduce((a, l) => a + (Number(l.qty) || 0), 0), o.pay ? PAY[o.pay.status] : "Chưa ghi tiền", odVal(o), o.pay?.status === "cong_no" ? Number(o.pay.amount) || 0 : 0])},
         {name: "Sửa chữa - bảo hành", head: ["STT", "Mã phiếu", "Loại", "Khách hàng", "Sản phẩm", "Seri", "Tình trạng", "Số tiền (đ)"],
           rows: R.tkDone.map((t, i) => [i + 1, t.code, TYPE[t.type] || "", t.customer, t.product, t.serial || "", PAY[t.pay.status] || "", Number(t.pay.total ?? t.pay.amount) || 0])},
         {name: "Tiền thu", head: ["STT", "Mã", "Khách hàng", "Hình thức", "Số tiền (đ)"], rows: R.paid.map((x, i) => [i + 1, x.code, x.customer, x.pay.method || "", Number(x.pay.amount) || 0])},
