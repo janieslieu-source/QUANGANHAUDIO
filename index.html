@@ -569,6 +569,7 @@
       <div class="panel" data-w="xuat"><h3>📦 Chờ xuất kho <span class="sub" id="whCnt"></span></h3><div class="list" id="whList"></div></div>
       <div class="panel" data-w="xuat"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
         <div class="sub" style="margin:-4px 0 6px">Xuất hàng / linh kiện trong kho để làm mới, lắp thành sản phẩm cho khách. Bấm xuất → trừ kho ngay, tính vào loại “🆕 Xuất làm mới sản phẩm”.</div>
+        <div class="list hide" id="lmReqList" style="margin-bottom:10px"></div>
         <div id="lmRows"></div><button type="button" class="btn sm" id="lmAdd" style="margin-top:6px">+ Thêm hàng xuất</button>
         <div class="two"><div><label>Khách nhận *</label><input id="lmCus" placeholder="Tên khách" autocomplete="off"></div><div><label>Số điện thoại</label><input id="lmPhone" type="tel" inputmode="tel"></div></div>
         <label>Làm thành sản phẩm gì *</label><input id="lmProd" placeholder="VD: Màn hình 22 inch Tomko (làm mới)" autocomplete="off">
@@ -711,6 +712,14 @@
     <!-- ===== KỸ THUẬT ===== -->
     <section id="v-kt" class="hide">
       <div class="panel" id="ktLkm"></div>
+      <div class="panel" id="ktLmBox"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
+        <div class="sub" style="margin:-4px 0 6px">Chọn hàng / linh kiện trong kho để làm mới, lắp thành sản phẩm cho khách → gửi <b>Kho duyệt xuất</b> (Kho duyệt mới trừ kho).</div>
+        <div id="ktlmRows"></div><button type="button" class="btn sm" id="ktlmAdd" style="margin-top:6px">+ Thêm hàng xuất</button>
+        <div class="two"><div><label>Khách nhận *</label><input id="ktlmCus" placeholder="Tên khách" autocomplete="off"></div><div><label>Số điện thoại</label><input id="ktlmPhone" type="tel" inputmode="tel"></div></div>
+        <label>Làm thành sản phẩm gì *</label><input id="ktlmProd" placeholder="VD: Màn hình 22 inch Tomko (làm mới)" autocomplete="off">
+        <label>Ghi chú</label><input id="ktlmNote" placeholder="Tùy chọn" autocomplete="off">
+        <div class="btns"><button type="button" class="btn pri" id="ktlmGo">📨 Gửi Kho duyệt xuất</button></div>
+        <div id="ktlmMine" style="margin-top:8px"></div></div>
       <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
@@ -748,7 +757,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.2";
+window.APP_BUILD = "2026-11-23.3";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1424,7 +1433,7 @@ window.APP_BUILD = "2026-11-23.2";
   function renderAll(){
     dropIdx();
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); dirCostReminder(); drawKtLkm(); } catch(e){}
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); dirCostReminder(); drawKtLkm(); drawLmReq(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length + expenses.filter(x => x.kind === "kkreq" && x.status === "cho").length,
@@ -1555,7 +1564,7 @@ window.APP_BUILD = "2026-11-23.2";
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -3142,13 +3151,59 @@ window.APP_BUILD = "2026-11-23.2";
   }, true);
 
   /* ================= 🆕 XUẤT LÀM MỚI SẢN PHẨM (không theo đơn bán) ================= */
-  function lmAddRow(){
-    $("#lmRows").insertAdjacentHTML("beforeend", `<div class="lmrow" style="margin-top:6px"><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="lmn" placeholder="Gõ model, hãng hoặc tên hàng trong kho" autocomplete="off"><div class="sugg hide"></div></div><input class="lmq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"><button type="button" class="btn sm lmrm" style="flex:0 0 auto;width:auto">✕</button></div><div class="sub lmh"></div></div>`);
-    const el = $("#lmRows").lastElementChild, inp = el.querySelector(".lmn"), q = el.querySelector(".lmq");
+  function lmAddRow(px = "lm"){
+    $("#" + px + "Rows").insertAdjacentHTML("beforeend", `<div class="lmrow" style="margin-top:6px"><div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input class="lmn" placeholder="Gõ model, hãng hoặc tên hàng trong kho" autocomplete="off"><div class="sugg hide"></div></div><input class="lmq" type="number" min="1" inputmode="numeric" value="1" style="width:70px"><button type="button" class="btn sm lmrm" style="flex:0 0 auto;width:auto">✕</button></div><div class="sub lmh"></div></div>`);
+    const el = $("#" + px + "Rows").lastElementChild, inp = el.querySelector(".lmn"), q = el.querySelector(".lmq");
     const upd = () => { const n = inp.value.trim(), k = n ? stockOf(n) : null, need = parseInt(q.value) || 1;
       el.querySelector(".lmh").innerHTML = !n ? "" : k == null ? `<b style="color:var(--bad)">Không có trong kho</b>` : k >= need ? `<b style="color:var(--ok)">Tồn ${k} → còn ${k - need}</b>` : `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>`; };
     attachPicker(inp, el.querySelector(".sugg"), upd, true); q.addEventListener("input", upd);
-    el.querySelector(".lmrm").onclick = () => { el.remove(); if (!$("#lmRows").children.length) lmAddRow(); };
+    el.querySelector(".lmrm").onclick = () => { el.remove(); if (!$("#" + px + "Rows").children.length) lmAddRow(px); };
+  }
+  // đọc + kiểm tra form xuất làm mới (dùng chung Kho / Kỹ thuật)
+  function lmRead(px){
+    const rows = [...document.querySelectorAll("#" + px + "Rows .lmrow")].map(el => ({name: el.querySelector(".lmn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)})).filter(r => r.name);
+    const f = {cus: $("#" + px + "Cus").value.trim(), prod: $("#" + px + "Prod").value.trim(), note: $("#" + px + "Note").value.trim(), phone: $("#" + px + "Phone").value.trim(), rows};
+    if (!rows.length) { toast("Chọn hàng cần xuất"); return null; }
+    if (!f.cus) { toast("Nhập tên khách nhận"); $("#" + px + "Cus").focus(); return null; }
+    if (!f.prod) { toast("Ghi làm thành sản phẩm gì"); $("#" + px + "Prod").focus(); return null; }
+    if (!lmStockOk(rows)) return null;
+    return f;
+  }
+  function lmStockOk(rows){
+    const need = {}; for (const r of rows) { const ex = productNames().find(p => norm(p) === norm(r.name)); if (!ex || stockOf(ex) == null) { toast(`“${r.name}” không có trong kho`); return false; } r.name = ex; need[norm(ex)] = (need[norm(ex)] || 0) + r.qty; }
+    for (const r of rows) { const k = stockOf(r.name) || 0; if (k < need[norm(r.name)]) { toast(`${r.name}: kho chỉ còn ${k}`); return false; } }
+    return true;
+  }
+  const lmCode = () => "LM" + iso(new Date()).slice(2).replace(/-/g, "") + "-" + uid().slice(-3).toUpperCase();
+  const lmReqs = () => expenses.filter(x => x.kind === "lmreq");
+  function drawLmReq(){
+    const box = $("#lmReqList"); if (box) { const L = lmReqs().filter(x => x.status === "cho").sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+      box.classList.toggle("hide", !L.length);
+      box.innerHTML = L.length ? `<h4 style="margin:0 0 6px;font-size:15px;color:var(--brand)">🔧 Kỹ thuật đề nghị xuất làm mới – chờ Kho duyệt (${L.length})</h4>` + L.map(x => `<div class="item" style="cursor:default;border:2px solid var(--brand)">
+        <div class="pname">🆕 ${esc(x.prod)} <span class="sub">· ${esc(x.code)}</span></div><div class="sub">👤 ${esc(x.customer)}${x.phone ? " · " + esc(x.phone) : ""} · 👨‍🔧 ${esc(x.by || "Kỹ thuật")} · ${fmtTime(x.at)}${x.note ? " · 📝 " + esc(x.note) : ""}</div>
+        <div style="margin-top:4px;font-size:14px">${x.rows.map(r => `• <b>${esc(r.name)}</b> ×${r.qty} <span class="sub">(tồn ${stockOf(r.name) ?? 0})</span>`).join("<br>")}</div>
+        ${(boss || role === "wh") ? `<div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn okb sm" data-lmok="${esc(x.id)}">✅ Duyệt xuất kho</button><button type="button" class="btn sm" data-lmno="${esc(x.id)}">✖ Từ chối</button></div>` : ""}</div>`).join("") : "";
+      if ((boss || role === "wh") && L.length > (drawLmReq._n || 0) && !$("#app").classList.contains("hide")) { bannerQ.push({id: "lmreq", title: `🆕 ${L.length} đề nghị xuất làm mới sản phẩm – chờ Kho duyệt`, text: L.map(x => `${x.prod} (${x.customer})`).join("; "), to: "wh"}); nextBanner(); }
+      if (!$("#app").classList.contains("hide")) drawLmReq._n = L.length; }
+    const mine = $("#ktlmMine"); if (mine) { const L = lmReqs().filter(x => x.status === "cho" || iso(new Date(x.doneAt || x.at)) === iso(new Date())).sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 8);
+      mine.innerHTML = L.length ? `<div class="sub" style="font-weight:600;margin-bottom:4px">Đề nghị đã gửi</div>` + L.map(x => `<div style="font-size:14px;padding:6px 0;border-top:1px dashed var(--line)">🆕 <b>${esc(x.prod)}</b> – ${esc(x.customer)} <span class="sub">(${x.rows.map(r => esc(r.name) + " ×" + r.qty).join(", ")})</span><br>${x.status === "cho" ? `<b style="color:#b45309">⏳ chờ Kho duyệt</b>` : x.status === "ok" ? `<b style="color:var(--ok)">✅ Kho đã xuất</b>` : `<b style="color:var(--bad)">✖ Kho từ chối${x.reply ? ": " + esc(x.reply) : ""}</b>`}</div>`).join("") : ""; }
+  }
+  document.addEventListener("click", async e => {
+    const ok = e.target.closest("[data-lmok]"), no = e.target.closest("[data-lmno]"); if (!ok && !no) return; e.stopPropagation();
+    const x = lmReqs().find(r => r.id === (ok || no).dataset[ok ? "lmok" : "lmno"]); if (!x || x.status !== "cho") return;
+    const now = new Date().toISOString();
+    if (ok) { const rows = x.rows.map(r => Object.assign({}, r)); if (!lmStockOk(rows)) return; if (!confirm(`Duyệt xuất kho làm mới "${x.prod}" cho ${x.customer}?`)) return; ok.disabled = true;
+      try { await putMany("mv", rows.map(r => ({id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "lammoi", ref: x.code, customer: x.customer, phone: x.phone || "", note: `Làm mới → ${x.prod}${x.note ? " · " + x.note : ""} (Kỹ thuật ${x.by || ""} đề nghị)`, by: actor()})));
+        await put("ex", Object.assign({}, x, {status: "ok", doneAt: now, doneBy: actor()})); pushTo("kt", "✅ Kho đã xuất làm mới", `${x.prod} – ${x.customer}`); toast(`Đã xuất kho làm mới ${x.prod} (${x.code})`); } catch(err){ ok.disabled = false; } }
+    if (no) { const why = prompt(`Từ chối xuất làm mới "${x.prod}" – lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do từ chối"); return; }
+      try { await put("ex", Object.assign({}, x, {status: "no", reply: why.trim(), doneAt: now, doneBy: actor()})); pushTo("kt", "✖ Kho từ chối xuất làm mới", `${x.prod} – ${why.trim()}`); toast("Đã từ chối – báo Kỹ thuật"); } catch(err){} }
+  }, true);
+  if ($("#ktlmGo")) {
+    lmAddRow("ktlm"); $("#ktlmAdd").onclick = () => { lmAddRow("ktlm"); $("#ktlmRows").lastElementChild.querySelector(".lmn").focus(); };
+    $("#ktlmGo").onclick = async () => { const f = lmRead("ktlm"); if (!f) return; const b = $("#ktlmGo"), now = new Date().toISOString(); b.disabled = true;
+      try { await put("ex", {id: "lr_" + uid(), kind: "lmreq", code: lmCode(), rows: f.rows, customer: f.cus, phone: f.phone, prod: f.prod, note: f.note, status: "cho", by: actor(), at: now, date: iso(new Date()), amount: 0});
+        pushTo("wh", "🆕 Kỹ thuật đề nghị xuất làm mới", `${f.prod} – ${f.cus}`); toast(`Đã gửi Kho duyệt xuất: ${f.prod}`);
+        $("#ktlmRows").innerHTML = ""; lmAddRow("ktlm"); ["#ktlmCus", "#ktlmPhone", "#ktlmProd", "#ktlmNote"].forEach(s => $(s).value = ""); drawLmReq(); } catch(e){} finally { b.disabled = false; } };
   }
   if ($("#lmGo")) {
     lmAddRow(); $("#lmAdd").onclick = () => { lmAddRow(); $("#lmRows").lastElementChild.querySelector(".lmn").focus(); };
@@ -5281,7 +5336,7 @@ window.APP_BUILD = "2026-11-23.2";
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -6125,7 +6180,7 @@ window.APP_BUILD = "2026-11-23.2";
   const miniTable = (head, rows, numFrom = 1) => rows.length ? `<table class="ptable"><tr>${head.map((h, j) => `<th style="${j ? "" : "text-align:left;width:auto"}">${esc(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map((v, j) => `<td>${j === 0 ? v : `<b>${typeof v === "number" ? v.toLocaleString("vi-VN") : esc(v)}</b>`}</td>`).join("")}</tr>`).join("")}</table>` : `<div class="empty">Không có dữ liệu trong kỳ.</div>`;
 
   /* ================= 📑 BÁO CÁO CUỐI NGÀY (Giám đốc): tồn kho + doanh thu, tải Excel ================= */
-  const NOCOST = ["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon"];
+  const NOCOST = ["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"];
   const gdDayVal = () => $("#gdDay")?.value || iso(new Date());
   function stockReport(day){
     const end = day + "T23:59:59.999", m = new Map();
