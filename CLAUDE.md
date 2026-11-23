@@ -24,7 +24,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 ## Dữ liệu Firestore (collection)
 `tk` phiếu bảo hành/sửa chữa · `od` đơn hàng · `st` hàng có seri trong kho · `mv` biến động tồn kho (nhập/xuất) · `ex` chi phí + nhiều loại bản ghi khác (theo `kind`) · `reg` sổ bảo hành theo seri · `ri` nhập sổ bảo hành từ file · `ph` ảnh.
 - `mv.kind`: nhap, xuat, kiemke, linhkien (KT thay cho khách), lk_test (KT mượn test), lk_test_tra (trả lại), doimoi, lammoi, muon…
-- `ex.kind`: nhap (nhập hàng NCC – cũng là nợ NCC), tranoncc (trả nợ NCC), ship, dodung, luong, khac, và các loại KHÔNG tính chi phí: nhanvien, bangluong, chamcong, cclog, cc_cfg, muon, fw, fw_cfg, swsale, kkreq, lkmuon, lmreq, upreq.
+- `ex.kind`: nhap (nhập hàng NCC – cũng là nợ NCC), tranoncc (trả nợ NCC), ship, dodung, luong, khac, và các loại KHÔNG tính chi phí: nhanvien, bangluong, chamcong, cclog, cc_cfg, muon, fw, fw_cfg, swsale, kkreq, lkmuon, lmreq, upreq, ctreq.
 
 ## Quy trình chính
 - **Phiếu sửa chữa / bảo hành:** Bảo hành nhận → Giám đốc duyệt (nếu "liên hệ khách sau" thì GĐ điền lỗi) → Kho nhận hàng → Kỹ thuật kiểm tra lỗi, xử lý → Vận chuyển gửi trả → Kế toán thu tiền / công nợ.
@@ -38,6 +38,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Kỹ thuật – Đổi đầu thu / đầu phát** (bộ HDMI không dây…): phương án xử lý `doidau` → chọn bộ phận, seri cũ (trong bộ của khách), seri mới (bắt buộc) → sổ bảo hành (`reg`) thay seri cũ bằng seri mới, giữ hạn BH, ghi `swaps`; seri mới có trong kho thì xuất (`outKind: doidau`). Phiếu lưu `partSwap`.
 - **Kho:** xuất kho theo loại (Xuất làm mới sản phẩm, KT thay cho khách, Đổi cho khách, KT mượn test, Xuất bán theo đơn), tổng hợp + Excel; trả tiền NCC → Kho duyệt nhập hàng; sửa số tồn cần GĐ duyệt; kiểm kê theo file.
 - **Kỹ thuật – Xuất làm mới sản phẩm:** chọn hàng trong kho → gửi Kho duyệt xuất (ex kind `lmreq`) → Kho duyệt mới trừ kho (mv `lammoi`).
+- **Kỹ thuật – Tạm xuất đi công trình:** chọn hàng trong kho + số lượng, tên công trình, khách, SĐT, địa chỉ → Kho duyệt xuất (ex kind `ctreq`, mv `congtrinh`) → sau đó Trả về kho (mv `congtrinh_tra`) / Chốt đã lắp theo từng món; hết hàng ở công trình thì tự chốt.
 - **Kỹ thuật – Nâng cấp sản phẩm:** sản phẩm cũ + linh kiện → trừ kho ngay (mv `nangcap`) → Kho duyệt nhập sản phẩm mới (mv `nangcap_nhap`, tạo sản phẩm nếu chưa có); từ chối thì hoàn kho (`nangcap_huy`). Bản ghi ex kind `upreq`.
 - **Kho – Bổ sung seri (mục Tồn kho):** hàng tồn theo số lượng → ghi seri (gõ / quét / ảnh) → tạo bản ghi `st` + mv `gan_seri` âm cùng số lượng, tổng tồn không đổi.
 - **Kế toán – Nhập hàng NCC:** nhiều dòng (tối đa 10) có số lượng, đơn giá, VAT; mỗi dòng 1 bản ghi `nhap` chờ Kho duyệt nhập.
