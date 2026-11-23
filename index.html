@@ -97,7 +97,7 @@
   .oline > div:not(.full) > .sugg{right:-72px}
   .prow > div:not(.full) > .sugg{right:-78px}
   .oline.nhrow{grid-template-columns:1fr 88px} .nhrow > div:not(.full) > .sugg{right:-96px}
-  .lmrow .sugg{right:-132px}
+  .lmrow .sugg{right:-132px} #ktUpBox #upOld + .sugg, #ktUpBox #upNew + .sugg{right:-76px}
   .sugg::-webkit-scrollbar{width:14px}
   .sugg::-webkit-scrollbar-track{background:var(--bg);border-radius:12px}
   .sugg::-webkit-scrollbar-thumb{background:var(--brand);border-radius:12px;border:3px solid var(--bg);min-height:48px}
@@ -570,6 +570,7 @@
       <div class="panel" data-w="xuat"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
         <div class="sub" style="margin:-4px 0 6px">Xuất hàng / linh kiện trong kho để làm mới, lắp thành sản phẩm cho khách. Bấm xuất → trừ kho ngay, tính vào loại “🆕 Xuất làm mới sản phẩm”.</div>
         <div class="list hide" id="lmReqList" style="margin-bottom:10px"></div>
+        <div class="list hide" id="upReqList" style="margin-bottom:10px"></div>
         <div id="lmRows"></div><button type="button" class="btn sm" id="lmAdd" style="margin-top:6px">+ Thêm hàng xuất</button>
         <div class="two"><div><label>Khách nhận *</label><input id="lmCus" placeholder="Tên khách" autocomplete="off"></div><div><label>Số điện thoại</label><input id="lmPhone" type="tel" inputmode="tel"></div></div>
         <label>Làm thành sản phẩm gì *</label><input id="lmProd" placeholder="VD: Màn hình 22 inch Tomko (làm mới)" autocomplete="off">
@@ -720,6 +721,19 @@
         <label>Ghi chú</label><input id="ktlmNote" placeholder="Tùy chọn" autocomplete="off">
         <div class="btns"><button type="button" class="btn pri" id="ktlmGo">📨 Gửi Kho duyệt xuất</button></div>
         <div id="ktlmMine" style="margin-top:8px"></div></div>
+      <div class="panel" id="ktUpBox"><h3>⬆️ Xuất linh kiện nâng cấp sản phẩm</h3>
+        <div class="sub" style="margin:-4px 0 6px">Sản phẩm cũ trong kho + linh kiện nâng cấp → làm thành sản phẩm mới. Bấm xuất: <b>tự trừ kho</b> sản phẩm cũ và linh kiện, gửi <b>Kho duyệt nhập sản phẩm mới</b>.</div>
+        <label>Sản phẩm cũ (trong kho) *</label>
+        <div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input id="upOld" placeholder="Gõ model, hãng hoặc tên sản phẩm cũ" autocomplete="off"><div class="sugg hide"></div></div><input id="upOldQ" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div>
+        <div class="sub" id="upOldH" style="margin-top:2px"></div>
+        <label>Linh kiện nâng cấp (xuất kho)</label>
+        <div id="uppRows"></div><button type="button" class="btn sm" id="uppAdd" style="margin-top:6px">+ Thêm linh kiện</button>
+        <label>Sản phẩm mới *</label>
+        <div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input id="upNew" placeholder="Tên sản phẩm mới sau nâng cấp" autocomplete="off"><div class="sugg hide"></div></div><input id="upNewQ" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div>
+        <div class="sub" id="upNewH" style="margin-top:2px"></div>
+        <label>Ghi chú</label><input id="upNote" placeholder="Tùy chọn" autocomplete="off">
+        <div class="btns"><button type="button" class="btn pri" id="upGo">⬆️ Xuất kho nâng cấp & gửi Kho duyệt nhập</button></div>
+        <div id="upMine" style="margin-top:8px"></div></div>
       <div class="panel wlook" id="wlKt"></div>
       <div class="chips" id="ktChips"></div>
       <div class="list" id="ktList"></div>
@@ -757,7 +771,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.3";
+window.APP_BUILD = "2026-11-23.4";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1433,7 +1447,7 @@ window.APP_BUILD = "2026-11-23.3";
   function renderAll(){
     dropIdx();
     if (bulk) return;
-    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); dirCostReminder(); drawKtLkm(); drawLmReq(); } catch(e){}
+    updateBell(); updateUrgent(); debtReminder(); loanReminder(); try { tradeInReminder(); drawTradeIns(); pmReminder(); lkTestReminder(); dirCostReminder(); drawKtLkm(); drawLmReq(); drawUpReq(); } catch(e){}
     clearTimeout(renderAll._m); renderAll._m = setTimeout(autoMerge, 1200);
     const n = {bh: 0,
                gd: tickets.filter(t => t.stage==="cho_gd").length + gdPayWait().length + expenses.filter(x => x.kind === "kkreq" && x.status === "cho").length,
@@ -1564,7 +1578,7 @@ window.APP_BUILD = "2026-11-23.3";
     }
     const phIds = new Set([...(x.photos || []), ...(x.lines || []).flatMap(l => l.photos || []), ...(x.pay?.photos || []), ...(x.ship?.photos || [])].filter(Boolean));
     P.ph = [...phIds];
-    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"].includes(e.kind));
+    P.ex = expenses.filter(e => (e.ref === code || e.orderCode === code || e.ticketCode === code) && !["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "nhap", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq", "upreq"].includes(e.kind));
     return P;
   }
   function openPurge(kind, id){
@@ -3223,6 +3237,63 @@ window.APP_BUILD = "2026-11-23.3";
       } catch(e){} finally { b.disabled = false; }
     };
   }
+
+  /* ================= ⬆️ NÂNG CẤP SẢN PHẨM: sp cũ + linh kiện → sp mới (trừ kho ngay, Kho duyệt nhập sp mới) ================= */
+  const upReqs = () => expenses.filter(x => x.kind === "upreq");
+  function drawUpReq(){
+    const box = $("#upReqList"); if (box) { const L = upReqs().filter(x => x.status === "cho").sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+      box.classList.toggle("hide", !L.length);
+      box.innerHTML = L.length ? `<h4 style="margin:0 0 6px;font-size:15px;color:#7c3aed">⬆️ Nhập sản phẩm nâng cấp – chờ Kho duyệt (${L.length})</h4>` + L.map(x => `<div class="item" style="cursor:default;border:2px solid #7c3aed">
+        <div class="pname">⬆️ ${esc(x.newName)} × ${x.newQty} <span class="sub">· ${esc(x.code)}</span></div>
+        <div class="sub">Từ: <b>${esc(x.old.name)}</b> × ${x.old.qty}${x.parts.length ? ` + ${x.parts.map(r => esc(r.name) + " ×" + r.qty).join(", ")}` : ""} <span style="color:var(--ok)">(đã trừ kho)</span></div>
+        <div class="sub">👨‍🔧 ${esc(x.by || "Kỹ thuật")} · ${fmtTime(x.at)}${x.note ? " · 📝 " + esc(x.note) : ""}${findProduct(x.newName) ? ` · tồn hiện tại ${stockOf(x.newName) ?? 0}` : " · 🆕 sản phẩm mới chưa có trong kho"}</div>
+        ${(boss || role === "wh") ? `<div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn okb sm" data-upok="${esc(x.id)}">✅ Duyệt nhập kho</button><button type="button" class="btn sm" data-upno="${esc(x.id)}">✖ Từ chối (hoàn kho)</button></div>` : ""}</div>`).join("") : "";
+      if ((boss || role === "wh") && L.length > (drawUpReq._n || 0) && !$("#app").classList.contains("hide")) { bannerQ.push({id: "upreq", title: `⬆️ ${L.length} sản phẩm nâng cấp – chờ Kho duyệt nhập`, text: L.map(x => `${x.old.name} → ${x.newName}`).join("; "), to: "wh"}); nextBanner(); }
+      if (!$("#app").classList.contains("hide")) drawUpReq._n = L.length; }
+    const mine = $("#upMine"); if (mine) { const L = upReqs().filter(x => x.status === "cho" || iso(new Date(x.doneAt || x.at)) === iso(new Date())).sort((a, b) => (b.at || "").localeCompare(a.at || "")).slice(0, 8);
+      mine.innerHTML = L.length ? `<div class="sub" style="font-weight:600;margin-bottom:4px">Đã gửi</div>` + L.map(x => `<div style="font-size:14px;padding:6px 0;border-top:1px dashed var(--line)">⬆️ <b>${esc(x.old.name)}</b> → <b>${esc(x.newName)}</b> × ${x.newQty}<br>${x.status === "cho" ? `<b style="color:#b45309">⏳ đã trừ kho – chờ Kho duyệt nhập</b>` : x.status === "ok" ? `<b style="color:var(--ok)">✅ Kho đã nhập sản phẩm mới</b>` : `<b style="color:var(--bad)">✖ Kho từ chối – đã hoàn kho${x.reply ? ": " + esc(x.reply) : ""}</b>`}</div>`).join("") : ""; }
+  }
+  if ($("#upGo")) {
+    const oldI = $("#upOld"), newI = $("#upNew");
+    const oldH = () => { const n = oldI.value.trim(), k = n ? stockOf(n) : null, q = parseInt($("#upOldQ").value) || 1;
+      $("#upOldH").innerHTML = !n ? "" : k == null ? `<b style="color:var(--bad)">Không có trong kho – chọn trong danh sách</b>` : k >= q ? `<b style="color:var(--ok)">Tồn ${k} → còn ${k - q}</b>` : `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>`;
+      if (!$("#upNewQ")._t) $("#upNewQ").value = q; newH(); };
+    const newH = () => { const n = newI.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n));
+      $("#upNewH").innerHTML = !n ? "" : ex ? `♻️ Đã có trong kho – tồn ${stockOf(ex) ?? 0} → sau khi Kho duyệt: ${(stockOf(ex) ?? 0) + (parseInt($("#upNewQ").value) || 1)}` : `🆕 Sản phẩm mới – Kho duyệt sẽ tạo mới trong kho`; };
+    attachPicker(oldI, oldI.nextElementSibling, oldH, false, true); oldI.addEventListener("input", oldH); $("#upOldQ").addEventListener("input", oldH);
+    attachPicker(newI, newI.nextElementSibling, newH, false); newI.addEventListener("input", newH); $("#upNewQ").addEventListener("input", () => { $("#upNewQ")._t = true; newH(); });
+    lmAddRow("upp"); $("#uppAdd").onclick = () => { lmAddRow("upp"); $("#uppRows").lastElementChild.querySelector(".lmn").focus(); };
+    $("#upGo").onclick = async () => {
+      const oq = Math.max(1, parseInt($("#upOldQ").value) || 1), nq = Math.max(1, parseInt($("#upNewQ").value) || 1), newName = newI.value.trim(), note = $("#upNote").value.trim();
+      const old = {name: oldI.value.trim(), qty: oq}, parts = [...document.querySelectorAll("#uppRows .lmrow")].map(el => ({name: el.querySelector(".lmn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)})).filter(r => r.name);
+      if (!old.name) { toast("Chọn sản phẩm cũ trong kho"); oldI.focus(); return; }
+      if (!newName) { toast("Nhập tên sản phẩm mới"); newI.focus(); return; }
+      const all = [old, ...parts]; if (!lmStockOk(all)) return;
+      if (norm(newName) === norm(old.name)) { toast("Sản phẩm mới phải khác sản phẩm cũ"); newI.focus(); return; }
+      const exNew = productNames().find(p => norm(p) === norm(newName)) || newName;
+      if (!confirm(`Xuất kho: ${old.name} ×${oq}${parts.length ? " + " + parts.map(r => r.name + " ×" + r.qty).join(", ") : ""}\n→ nâng cấp thành ${exNew} ×${nq}\nKho duyệt mới nhập sản phẩm mới. Tiếp tục?`)) return;
+      const now = new Date().toISOString(), code = "NC" + iso(new Date()).slice(2).replace(/-/g, "") + "-" + uid().slice(-3).toUpperCase(), b = $("#upGo"); b.disabled = true;
+      try {
+        await putMany("mv", all.map(r => ({id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "nangcap", ref: code, note: `Nâng cấp ${old.name} → ${exNew}${note ? " · " + note : ""}`, by: actor()})));
+        await put("ex", {id: "up_" + uid(), kind: "upreq", code, old: {name: old.name, qty: oq}, parts, newName: exNew, newQty: nq, note, status: "cho", by: actor(), at: now, date: iso(new Date()), amount: 0});
+        pushTo("wh", "⬆️ Sản phẩm nâng cấp chờ nhập kho", `${old.name} → ${exNew} ×${nq}`); toast(`Đã trừ kho – gửi Kho duyệt nhập ${exNew} ×${nq}`);
+        oldI.value = ""; newI.value = ""; $("#upNote").value = ""; $("#upOldQ").value = 1; $("#upNewQ").value = 1; $("#upNewQ")._t = false; $("#upOldH").innerHTML = ""; $("#upNewH").innerHTML = ""; $("#uppRows").innerHTML = ""; lmAddRow("upp"); drawUpReq();
+      } catch(e){} finally { b.disabled = false; }
+    };
+  }
+  document.addEventListener("click", async e => {
+    const ok = e.target.closest("[data-upok]"), no = e.target.closest("[data-upno]"); if (!ok && !no) return; e.stopPropagation();
+    const x = upReqs().find(r => r.id === (ok || no).dataset[ok ? "upok" : "upno"]); if (!x || x.status !== "cho") return;
+    const now = new Date().toISOString();
+    if (ok) { if (!confirm(`Duyệt nhập kho ${x.newName} ×${x.newQty}?`)) return; ok.disabled = true;
+      try { if (!findProduct(x.newName)) { const used = new Set(products.map(p => p.id)); let pid = prId(x.newName), k = 2; while (used.has(pid)) pid = prId(x.newName) + "-" + (k++);
+          await put("pr", {id: pid, name: x.newName, months: findProduct(x.old.name)?.months ?? 12, noSerial: true, createdAt: now, updatedAt: now}); }
+        await put("mv", {id: "mv_" + uid(), product: x.newName, qty: x.newQty, at: now, kind: "nangcap_nhap", ref: x.code, note: `Nâng cấp từ ${x.old.name}`, by: actor()});
+        await put("ex", Object.assign({}, x, {status: "ok", doneAt: now, doneBy: actor()})); pushTo("kt", "✅ Kho đã nhập sản phẩm nâng cấp", `${x.newName} ×${x.newQty}`); toast(`Đã nhập kho ${x.newName} ×${x.newQty}`); } catch(err){ ok.disabled = false; } }
+    if (no) { const why = prompt(`Từ chối nhập "${x.newName}" – hàng đã trừ sẽ được hoàn lại kho. Lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do từ chối"); return; }
+      try { await putMany("mv", [x.old, ...x.parts].map(r => ({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nangcap_huy", ref: x.code, note: `Hủy nâng cấp – ${why.trim()}`, by: actor()})));
+        await put("ex", Object.assign({}, x, {status: "no", reply: why.trim(), doneAt: now, doneBy: actor()})); pushTo("kt", "✖ Kho từ chối nhập sản phẩm nâng cấp", `${x.newName} – ${why.trim()}`); toast("Đã từ chối – hoàn lại kho, báo Kỹ thuật"); } catch(err){} }
+  }, true);
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -3827,7 +3898,7 @@ window.APP_BUILD = "2026-11-23.3";
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
-  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lammoi: "Xuất làm mới sản phẩm", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
+  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lammoi: "Xuất làm mới sản phẩm", nangcap: "Xuất nâng cấp sản phẩm", nangcap_nhap: "Nhập sản phẩm nâng cấp", nangcap_huy: "Hoàn kho (hủy nâng cấp)", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
     doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
   const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
   function buildLedgers(){
@@ -4150,14 +4221,14 @@ window.APP_BUILD = "2026-11-23.3";
   }
   /* ================= KHO ================= */
   let whDay = null;
-  const WH_TYPES = [["lammoi", "🆕", "Xuất làm mới sản phẩm"], ["thay", "🔧", "KT thay cho khách"], ["doi", "🔄", "Đổi cho khách hàng"], ["test", "🧪", "KT mượn test tạm"], ["ban", "🛒", "Xuất bán theo đơn"]];
+  const WH_TYPES = [["lammoi", "🆕", "Xuất làm mới sản phẩm"], ["nangcap", "⬆️", "Xuất nâng cấp sản phẩm"], ["thay", "🔧", "KT thay cho khách"], ["doi", "🔄", "Đổi cho khách hàng"], ["test", "🧪", "KT mượn test tạm"], ["ban", "🛒", "Xuất bán theo đơn"]];
   const whTypes = new Set(WH_TYPES.map(t => t[0]));
   function whOutEntries(day){
     const E = [], tkBy = new Map(tickets.map(t => [t.code, t]));
     orders.filter(o => o.exportedAt && dayOf(o.exportedAt) === day && !o.cancel?.returned).forEach(o => (o.lines || []).forEach((l, i) => !l.direct &&
       E.push({type: "ban", product: l.product + (l.gift ? " 🎁 (tặng)" : ""), qty: Number(l.qty) || 0, ref: o.code, customer: o.customer, phone: o.phone || "", at: o.exportedAt, sns: snOf(o, i), order: o, line: l})));
     moves.forEach(m => { if (m.ext || !(Number(m.qty) < 0) || dayOf(m.at) !== day) return;
-      const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : m.kind === "lammoi" ? "lammoi" : null; if (!t) return;
+      const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : m.kind === "lammoi" ? "lammoi" : m.kind === "nangcap" ? "nangcap" : null; if (!t) return;
       const tk = tkBy.get(m.ref); E.push({type: t, product: m.product, qty: -Number(m.qty), ref: m.ref || "", customer: tk?.customer || m.customer || "", phone: tk?.phone || m.phone || "", at: m.at, sns: m.serials || [], note: m.note || ""}); });
     stock.forEach(x => { if (x.status !== "out" || !x.outAt || dayOf(x.outAt) !== day) return; const tk = tkBy.get(x.orderCode); if (!tk) return;
       E.push({type: tk.exchange && keySN(tk.exchange.newSerial) === keySN(x.serial) ? "doi" : "thay", product: x.product, qty: 1, ref: tk.code, customer: tk.customer, phone: tk.phone || "", at: x.outAt, sns: [x.serial]}); });
@@ -5336,7 +5407,7 @@ window.APP_BUILD = "2026-11-23.3";
     if (mode === "week") { const s = new Date(d); s.setDate(d.getDate() - (d.getDay() + 6) % 7); const e = new Date(s); e.setDate(s.getDate() + 7); const l = new Date(e); l.setDate(e.getDate() - 1); return {s, e, label: `Tuần ${fmt(iso(s))} – ${fmt(iso(l))}`}; }
     const s = new Date(d.getFullYear(), d.getMonth(), 1), e = new Date(d.getFullYear(), d.getMonth() + 1, 1); return {s, e, label: `Tháng ${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`};
   }
-  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
+  const exIn = (s, e) => expenses.filter(x => { if (["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq", "upreq"].includes(x.kind)) return false; const t = new Date((x.date || "") + "T12:00:00"); return t >= s && t < e; });
   function exSum(L){
     const cat = {}; let cty = 0, nCty = 0, kh = 0, nKh = 0, goods = 0, goodsDebt = 0, shipCharge = 0;
     L.forEach(x => { const c = exCash(x), k = exKind(x);
@@ -6180,7 +6251,7 @@ window.APP_BUILD = "2026-11-23.3";
   const miniTable = (head, rows, numFrom = 1) => rows.length ? `<table class="ptable"><tr>${head.map((h, j) => `<th style="${j ? "" : "text-align:left;width:auto"}">${esc(h)}</th>`).join("")}</tr>${rows.map(r => `<tr>${r.map((v, j) => `<td>${j === 0 ? v : `<b>${typeof v === "number" ? v.toLocaleString("vi-VN") : esc(v)}</b>`}</td>`).join("")}</tr>`).join("")}</table>` : `<div class="empty">Không có dữ liệu trong kỳ.</div>`;
 
   /* ================= 📑 BÁO CÁO CUỐI NGÀY (Giám đốc): tồn kho + doanh thu, tải Excel ================= */
-  const NOCOST = ["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq"];
+  const NOCOST = ["nhanvien", "bangluong", "chamcong", "cclog", "cc_cfg", "muon", "fw", "fw_cfg", "swsale", "kkreq", "lkmuon", "lmreq", "upreq"];
   const gdDayVal = () => $("#gdDay")?.value || iso(new Date());
   function stockReport(day){
     const end = day + "T23:59:59.999", m = new Map();
