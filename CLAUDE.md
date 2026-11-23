@@ -28,6 +28,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 
 ## Quy trình chính
 - **Phiếu sửa chữa / bảo hành:** Bảo hành nhận → Giám đốc duyệt (nếu "liên hệ khách sau" thì GĐ điền lỗi) → Kho nhận hàng → Kỹ thuật kiểm tra lỗi, xử lý → Vận chuyển gửi trả → Kế toán thu tiền / công nợ.
+- **Phụ kiện kèm theo máy:** lúc nhận phiếu tick "Có phụ kiện" + ghi tên (tk.accessories) → hiện trên thẻ / chi tiết phiếu, bảng Kỹ thuật; Vận chuyển gửi trả bắt buộc tick "Đã gửi kèm phụ kiện".
 - **Đổi hàng bảo hành:** Giám đốc duyệt → Kho xuất → Vận chuyển.
 - **Đơn hàng (Bán hàng):** Bán hàng tạo đơn → Kho xuất (seri) → Vận chuyển gửi → Kế toán.
   - Có thu cũ đổi mới (nhắc sau 5 ngày nếu khách chưa gửi hàng cũ), phần mềm, hàng tặng.
