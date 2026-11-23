@@ -41,6 +41,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Kho – Bổ sung seri (mục Tồn kho):** hàng tồn theo số lượng → ghi seri (gõ / quét / ảnh) → tạo bản ghi `st` + mv `gan_seri` âm cùng số lượng, tổng tồn không đổi.
 - **Kế toán – Nhập hàng NCC:** nhiều dòng (tối đa 10) có số lượng, đơn giá, VAT; mỗi dòng 1 bản ghi `nhap` chờ Kho duyệt nhập.
 - **Giám đốc – Báo cáo cuối ngày:** tồn kho + doanh thu ngày, tải Excel.
+- **Số seri chỉ ở Kho / Bán hàng / Bảo hành** (nhập kho, xuất kho, bán, bảo hành) – KHÔNG hiện trong Chi phí / Nhập hàng NCC của Kế toán. Tồn kho: mỗi dòng tick Có seri / Không seri, sản phẩm có seri hiện "Seri x/tồn" và nút Bổ sung seri khi thiếu.
 - **Thông báo:** tất cả gom vào nút chuông đỏ góc dưới phải, bấm mới hiện; ẩn khi đang gõ.
 - **Tự cập nhật:** app kiểm tra `APP_BUILD` trên máy chủ mỗi phút / khi mở lại → có bản mới thì tự tải lại.
 
