@@ -604,6 +604,15 @@
           <div class="two"><div><label style="margin-top:0">Tên sai (bỏ đi)</label><input id="mgFrom" list="prodList" autocomplete="off"></div>
           <div><label style="margin-top:0">Tên đúng (giữ lại)</label><input id="mgTo" list="prodList" autocomplete="off"></div></div>
           <div class="btns"><button type="button" class="btn pri" id="mgGo">🔀 Gộp</button></div></details></div>
+      <div class="panel" data-w="ton" id="snAddBox"><h3>🔢 Bổ sung seri cho hàng tồn</h3>
+        <div class="sub" style="margin:-4px 0 6px">Hàng đã nhập <b>theo số lượng</b> (chưa có seri) → ghi seri vào kho để quản lý từng máy. <b>Tổng tồn kho không đổi.</b></div>
+        <label>Sản phẩm *</label><div style="position:relative"><input id="saP" placeholder="Gõ model, hãng hoặc tên sản phẩm" autocomplete="off"><div class="sugg hide"></div></div>
+        <div class="sub" id="saInfo" style="margin-top:4px"></div>
+        <label>Số seri <span class="sub">(mỗi dòng 1 seri)</span></label><textarea id="saSn" rows="4" placeholder="525xxxxx"></textarea>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn sm pri" id="saScan" style="width:auto">📷 Quét seri bằng camera</button></div>
+        <div id="saPh" style="margin-top:6px"></div>
+        <div class="sub" id="saCnt" style="margin-top:4px"></div>
+        <div class="btns"><button type="button" class="btn pri" id="saGo">💾 Lưu seri vào kho</button></div></div>
       <div class="panel" data-w="ton"><h3>📈 Báo cáo Nhập – Xuất – Tồn</h3>
         <div class="seg" id="rpSeg"><button data-m="day">Ngày</button><button data-m="week">Tuần</button><button data-m="month">Tháng</button><button data-m="range">Khoảng</button></div>
         <div class="two" id="rpOne"><div><label style="margin-top:0">Chọn ngày</label><input type="date" id="rpDate"></div><div><label style="margin-top:0">Tìm sản phẩm</label><input id="rpQ" type="search" placeholder="Tên / mã hàng…"></div></div>
@@ -776,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.6";
+window.APP_BUILD = "2026-11-23.7";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3331,6 +3340,34 @@ window.APP_BUILD = "2026-11-23.6";
         if (back.length) await putMany("mv", back.map(r => ({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nangcap_huy", ref: x.code, note: `Hủy nâng cấp – ${why.trim()}`, by: actor()})));
         await put("ex", Object.assign({}, x, {status: "no", reply: why.trim(), doneAt: now, doneBy: actor()})); pushTo("kt", "✖ Kho từ chối nhập sản phẩm nâng cấp", `${x.newName} – ${why.trim()}`); toast("Đã từ chối – hoàn lại kho, báo Kỹ thuật"); } catch(err){} }
   }, true);
+
+  /* ================= 🔢 BỔ SUNG SERI cho hàng tồn theo số lượng ================= */
+  if ($("#saGo")) {
+    const P = $("#saP"), T = $("#saSn");
+    const prodOf = () => productNames().find(p => norm(p) === norm(P.value.trim()));
+    const L = () => T.value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+    const upd = () => { const ex = prodOf(), q = ex ? (qtyStock(ex) || 0) : 0, sn = ex ? inStock(ex).length : 0, list = L();
+      $("#saInfo").innerHTML = !P.value.trim() ? "" : !ex ? `<b style="color:var(--bad)">Không có trong kho – chọn trong danh sách</b>` : `Tồn <b>${q + sn}</b>: đã có seri <b>${sn}</b> · <b style="color:${q > 0 ? "var(--brand)" : "var(--muted)"}">theo số lượng (chưa seri) ${Math.max(0, q)}</b>`;
+      const bad = list.filter(x => !snOk(x)), dup = list.filter((x, i) => list.map(keySN).indexOf(keySN(x)) !== i), has = list.filter(x => findStock(x));
+      $("#saCnt").innerHTML = !list.length ? "" : `Đã nhập <b>${list.length}</b>${ex ? `/${Math.max(0, q)}` : ""} seri` + (list.length > q && ex ? ` <b style="color:var(--bad)">– nhiều hơn số hàng chưa có seri</b>` : "") + (bad.length ? ` · <b style="color:var(--bad)">sai định dạng (${SN_HINT}): ${bad.map(esc).join(", ")}</b>` : "") + (dup.length ? ` · <b style="color:var(--bad)">trùng: ${dup.map(esc).join(", ")}</b>` : "") + (has.length ? ` · <b style="color:var(--bad)">đã có trong kho: ${has.map(esc).join(", ")}</b>` : ""); };
+    attachPicker(P, P.nextElementSibling, upd, false, true); P.addEventListener("input", upd); T.addEventListener("input", upd);
+    const addList = arr => { const cur = L(), k = new Set(cur.map(keySN)), add = arr.filter(x => !k.has(keySN(x))); T.value = cur.concat(add).join("\n"); upd(); return add.length; };
+    $("#saScan").onclick = () => { const ex = prodOf(); if (!ex) { toast("Chọn sản phẩm trước"); P.focus(); return; } const left = Math.max(1, (qtyStock(ex) || 0) - L().length);
+      openScanner(sn => { if (L().some(x => keySN(x) === keySN(sn))) return false; addList([sn]); return true; }, {multi: true, max: left, has: v => L().some(x => keySN(x) === keySN(v)) ? "Seri này đã có trong danh sách" : findStock(v) ? "Seri đã có trong kho" : false}); };
+    photoPicker($("#saPh"), 3, imgs => autoReadSn($("#saPh"), imgs, sns => addList(sns)));
+    $("#saGo").onclick = async () => { const ex = prodOf(), list = L(); if (!ex) { toast("Chọn sản phẩm trong kho"); P.focus(); return; }
+      const q = qtyStock(ex) || 0; if (!list.length) { toast("Nhập ít nhất 1 seri"); T.focus(); return; }
+      if (list.length > q) { toast(`Chỉ còn ${Math.max(0, q)} cái chưa có seri – bớt seri hoặc kiểm tra lại tồn`); return; }
+      const bad = list.find(x => !snOk(x)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
+      const k = list.map(keySN), d = k.find((x, i) => k.indexOf(x) !== i); if (d) { toast("Seri bị trùng: " + d); return; }
+      const has = list.find(x => findStock(x)); if (has) { toast(`Seri ${has} đã có trong kho (${findStock(has).product})`); return; }
+      if (!confirm(`Ghi ${list.length} seri vào kho cho ${ex}? (tổng tồn không đổi)`)) return;
+      const now = new Date().toISOString(), p = findProduct(ex), ref = "Bổ sung seri " + iso(new Date()), b = $("#saGo"); b.disabled = true;
+      try { await putMany("st", list.map(sn => ({id: stId(sn), serial: sn, product: ex, months: p?.months ?? 12, code: p?.code || "", status: "in", importedAt: now, ref, by: actor()})));
+        await put("mv", {id: "mv_" + uid(), product: ex, qty: -list.length, at: now, kind: "gan_seri", ref, note: `Chuyển ${list.length} cái sang hàng có seri: ${list.join(", ")}`, by: actor()});
+        if (p && p.noSerial) await put("pr", Object.assign({}, p, {noSerial: false, updatedAt: now}));
+        toast(`Đã ghi ${list.length} seri cho ${ex} – tổng tồn không đổi`); T.value = ""; $("#saPh")._clear?.(); upd(); } catch(e){} finally { b.disabled = false; } };
+  }
   /* ================= VẬN CHUYỂN ================= */
   function shipText(t, plain){
     const s = t.ship || {}, e = plain ? (x => x || "") : esc;
@@ -3935,7 +3972,7 @@ window.APP_BUILD = "2026-11-23.6";
 
   /* ================= LỊCH SỬ KHO (thẻ kho): lô nhập, xuất cho ai, thuộc lô nào ================= */
   // Hàng có seri: biết chính xác seri thuộc lô nhập nào. Hàng không seri: phân bổ theo "nhập trước – xuất trước" (FIFO).
-  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lammoi: "Xuất làm mới sản phẩm", nangcap: "Xuất nâng cấp sản phẩm", nangcap_nhap: "Nhập sản phẩm nâng cấp", nangcap_huy: "Hoàn kho (hủy nâng cấp)", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
+  const MV_KIND = {muon: "Khách mượn (tạm trừ kho)", muon_tra: "Khách trả hàng mượn", muon_cty: "Công ty mượn hàng (cộng kho)", muon_cty_tra: "Công ty trả hàng mượn (trừ kho)", nhap: "Nhập hàng", kiemke: "Kiểm kê", xuat: "Xuất bán", linhkien: "Linh kiện sửa chữa", linhkien_tra: "Hoàn linh kiện về kho", doimoi: "Xuất đổi bảo hành", lammoi: "Xuất làm mới sản phẩm", gan_seri: "Bổ sung seri (chuyển sang hàng có seri)", nangcap: "Xuất nâng cấp sản phẩm", nangcap_nhap: "Nhập sản phẩm nâng cấp", nangcap_huy: "Hoàn kho (hủy nâng cấp)", lk_test: "Kỹ thuật mượn linh kiện test", lk_test_tra: "Kỹ thuật trả linh kiện test",
     doimoi_tra: "Hoàn máy đổi về kho", thaomay: "Máy bị tháo linh kiện", thaomay_tra: "Trả máy tháo về kho", trahang: "Khách trả hàng (hủy đơn)"};
   const refDoc = code => { const c = String(code || "").split(" · ")[0]; return c ? (orders.find(o => o.code === c) || tickets.find(t => t.code === c)) : null; };
   function buildLedgers(){
@@ -6297,7 +6334,7 @@ window.APP_BUILD = "2026-11-23.6";
     const row = n => { const k = norm(n); if (!m.has(k)) m.set(k, {name: n, code: findProduct(n)?.code || "", nhap: 0, xuat: 0, cost: 0}); return m.get(k); };
     productNames().forEach(n => row(n));
     moves.filter(x => !x.ext).forEach(x => { const r = row(x.product), q = Number(x.qty) || 0; if (x.cost && q > 0) r.cost = Number(x.cost);
-      if (dayOf(x.at) === day && x.kind !== "kiemke") { if (q > 0) r.nhap += q; else r.xuat += -q; } });
+      if (dayOf(x.at) === day && x.kind !== "kiemke" && x.kind !== "gan_seri") { if (q > 0) r.nhap += q; else r.xuat += -q; } });
     stock.forEach(x => { const r = row(x.product); if (x.status === "out" && x.outAt && dayOf(x.outAt) === day) r.xuat++; });
     const L = [...m.values()].map(r => Object.assign(r, {ton: stockOf(r.name) ?? 0, sn: stock.filter(x => x.status === "in" && norm(x.product) === norm(r.name)).length})).filter(r => r.ton || r.nhap || r.xuat);
     L.forEach(r => r.val = r.cost ? r.cost * Math.max(0, r.ton) : 0);
