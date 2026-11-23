@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.8";
+window.APP_BUILD = "2026-11-23.10";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -4672,7 +4672,7 @@ window.APP_BUILD = "2026-11-23.8";
     const q = norm($("#stQ").value), g = new Map();
     stock.forEach(x => { const k = norm(x.product); if (!g.has(k)) g.set(k, {name: x.product, inn: 0, out: 0, months: x.months, code: x.code}); const r = g.get(k); x.status === "in" ? r.inn++ : r.out++; });
     products.forEach(p => { const k = norm(p.name); if (!g.has(k)) g.set(k, {name: p.name, inn: 0, out: 0, months: p.months, code: p.code}); });
-    moves.forEach(m => { if (m.kind === "seed" || m.ext) return; const k = norm(m.product); if (!g.has(k)) g.set(k, {name: m.product, inn: 0, out: 0}); const r = g.get(k); r.inn += Number(m.qty) || 0; if (m.qty < 0 && m.kind !== "kiemke") r.out -= m.qty; });
+    moves.forEach(m => { if (m.kind === "seed" || m.ext) return; const k = norm(m.product); if (!g.has(k)) g.set(k, {name: m.product, inn: 0, out: 0}); const r = g.get(k); r.inn += Number(m.qty) || 0; if (m.qty < 0 && m.kind !== "kiemke" && m.kind !== "gan_seri") r.out -= m.qty; });
     let rows = [...g.values()];
     if (q) { rows.forEach(r => { const ps = pickScore(r.name, r.code, $("#stQ").value), sn = stock.some(x => norm(x.product) === norm(r.name) && norm(x.serial).includes(q.trim()));
         r.sc = sn ? 1000 : ps ? ps.sc : -1; r.kinds = ps ? ps.kinds : []; });
@@ -4682,9 +4682,12 @@ window.APP_BUILD = "2026-11-23.8";
     $("#stockSum").textContent = stock.length || products.length ? `Tồn ${totalIn} · ${g.size} mặt hàng` : "";
     const more = rows.length - 100; rows = rows.slice(0, 100);
     $("#stockTable").innerHTML = rows.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Sản phẩm</th><th>Tồn</th><th>Đã xuất</th></tr>
-      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${(() => { const on = hasSnOf(r.name); return `<span class="snt" data-snt="${esc(r.name)}" style="display:inline-flex;gap:4px;margin:0 0 4px;font-size:12px"><button type="button" class="chip ${on ? "sel" : ""}" data-v="1" style="padding:2px 8px;font-size:12px">${on ? "☑" : "☐"} Có seri</button><button type="button" class="chip ${on ? "" : "sel"}" data-v="0" style="padding:2px 8px;font-size:12px">${on ? "☐" : "☑"} Không seri</button></span><br>`; })()}${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div></td><td style="white-space:nowrap"><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b>${(boss || role === "wh") ? ` <button type="button" class="cpy" data-kkedit="${esc(r.name)}" title="Sửa số lượng tồn (Giám đốc duyệt)" style="padding:2px 6px">✏️</button>` : ""}${kkPending(r.name) ? ` <span title="Đang chờ Giám đốc duyệt sửa số lượng">⏳</span>` : ""}</td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
+      ${rows.map(r => `<tr class="strow" data-p="${esc(r.name)}" style="cursor:pointer"><td>${(() => { const on = hasSnOf(r.name); return `<span class="snt" data-snt="${esc(r.name)}" style="display:inline-flex;gap:4px;margin:0 0 4px;font-size:12px"><button type="button" class="chip ${on ? "sel" : ""}" data-v="1" style="padding:2px 8px;font-size:12px">${on ? "☑" : "☐"} Có seri</button><button type="button" class="chip ${on ? "" : "sel"}" data-v="0" style="padding:2px 8px;font-size:12px">${on ? "☐" : "☑"} Không seri</button></span><br>`; })()}${esc(r.name)}${q ? kindTags(r.kinds || []) : ""} ${linkA(r.name)} ${copyBtn(r.name)}<div class="sub">${r.code ? "Mã " + esc(r.code) + " · " : ""}${r.months ? r.months + " tháng BH" : "Không BH"}</div>${(() => { if (!hasSnOf(r.name) || r.inn <= 0) return ""; const sn = inStock(r.name).length, miss = Math.max(0, r.inn - sn);
+        return `<div style="font-size:13px;margin-top:2px">${miss ? `<b style="color:var(--bad)">🔢 Seri ${sn}/${r.inn} – thiếu ${miss} seri</b>${(boss || role === "wh") ? ` <button type="button" class="chip" data-snfix="${esc(r.name)}" style="padding:2px 8px;font-size:12px">➕ Bổ sung seri</button>` : ""}` : `<b style="color:var(--ok)">🔢 Seri ${sn}/${r.inn} – đủ seri</b>`}</div>`; })()}</td><td style="white-space:nowrap"><b style="color:${r.inn ? "var(--ok)" : "var(--bad)"}">${r.inn}</b>${(boss || role === "wh") ? ` <button type="button" class="cpy" data-kkedit="${esc(r.name)}" title="Sửa số lượng tồn (Giám đốc duyệt)" style="padding:2px 6px">✏️</button>` : ""}${kkPending(r.name) ? ` <span title="Đang chờ Giám đốc duyệt sửa số lượng">⏳</span>` : ""}</td><td style="white-space:nowrap">${r.out}${r.out ? ` <button type="button" class="cpy" data-stout="${esc(r.name)}" title="Xem thống kê chi tiết xuất" style="padding:2px 6px">📋</button>` : ""}</td></tr>`).join("")}</table>${more > 0 ? `<div class="sub" style="margin-top:6px">Đang hiện 100 mặt hàng tồn nhiều nhất · còn ${more} mặt hàng khác – gõ tên vào ô tìm kiếm để xem.</div>` : ""}`
       : `<div class="empty">${q ? "Không tìm thấy." : "Chưa có hàng tồn. Bấm “Nhập hàng từ file Excel” để tải danh sách lên."}</div>`;
-    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout],[data-snt]")) return; showStockOf(tr.dataset.p); });
+    $("#stockTable").querySelectorAll(".strow").forEach(tr => tr.onclick = e => { if (e.target.closest("[data-stout],[data-snt],[data-snfix]")) return; showStockOf(tr.dataset.p); });
+    $("#stockTable").querySelectorAll("[data-snfix]").forEach(b => b.onclick = e => { e.stopPropagation(); const P = $("#saP"); if (!P) return; P.value = b.dataset.snfix; P.dispatchEvent(new Event("input")); document.querySelectorAll(".sugg").forEach(x => x.classList.add("hide"));
+      $("#snAddBox").scrollIntoView({behavior: "smooth", block: "start"}); setTimeout(() => $("#saSn").focus(), 400); });
     $("#stockTable").querySelectorAll("[data-snt] button").forEach(b => b.onclick = async e => { e.stopPropagation(); const name = b.parentElement.dataset.snt, want = b.dataset.v === "1";
       if (hasSnOf(name) === want) return; try { await setSnFlag(name, want); toast(`${name}: ${want ? "có seri" : "không có seri"}`); drawStock(); } catch(err){} });
     $("#stockTable").querySelectorAll("[data-stout]").forEach(b => b.onclick = e => { e.stopPropagation(); showOutStats(b.dataset.stout); });
@@ -4692,7 +4695,7 @@ window.APP_BUILD = "2026-11-23.8";
   $("#stQ").addEventListener("input", drawStock);
   // 📋 thống kê chi tiết hàng xuất của 1 sản phẩm: theo loại, theo tháng, từng lần xuất (ngày, SL, seri, đơn, khách)
   function outEvents(name){ const k = norm(name), L = [];
-    moves.forEach(m => { if (m.kind === "seed" || m.ext || m.kind === "kiemke" || norm(m.product) !== k || !(Number(m.qty) < 0)) return; L.push({at: m.at, q: -Number(m.qty), kind: m.kind, ref: m.ref || "", sn: ""}); });
+    moves.forEach(m => { if (m.kind === "seed" || m.ext || m.kind === "kiemke" || m.kind === "gan_seri" || norm(m.product) !== k || !(Number(m.qty) < 0)) return; L.push({at: m.at, q: -Number(m.qty), kind: m.kind, ref: m.ref || "", sn: ""}); });
     stock.forEach(x => { if (norm(x.product) !== k || x.status === "in" || !x.outAt) return; L.push({at: x.outAt, q: 1, kind: "xuat", ref: x.orderCode || "", sn: x.serial, cus: x.customer}); });
     L.forEach(e => { const d = e.ref ? (orders.find(o => o.code === String(e.ref).split(" · ")[0]) || tickets.find(t => t.code === String(e.ref).split(" · ")[0])) : null; if (!e.cus) e.cus = d?.customer || ""; });
     return L.sort((a, b) => String(b.at).localeCompare(String(a.at))); }
@@ -5610,17 +5613,13 @@ window.APP_BUILD = "2026-11-23.8";
         if (k === "nhap") {
           const vr = () => Math.max(0, Number(String($h(".exvr").value).replace(",", ".")) || 0) / 100;
           host._lines = () => [...host.querySelectorAll(".exln")].map(el => { const q = parseInt(el.querySelector(".exlq").value) || 0, u = money0(el.querySelector(".exlu")), v = el.querySelector(".exlv").checked;
-            return {el, product: el.querySelector(".exlp").value.trim(), qty: q, unit: u, vat: v, sn: !!el._sn, total: Math.round(q * u * (1 + (v ? vr() : 0)))}; });
+            return {el, product: el.querySelector(".exlp").value.trim(), qty: q, unit: u, vat: v, total: Math.round(q * u * (1 + (v ? vr() : 0)))}; });
           const addLn = () => { const box = $h(".exlines"); if (box.children.length >= 10) { toast("Tối đa 10 dòng hàng"); return; } const i = box.children.length + 1;
             box.insertAdjacentHTML("beforeend", `<div class="exln" style="margin-top:8px;padding:8px;border:1.5px solid var(--line);border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Dòng ${i}</b>${i > 1 ? `<button type="button" class="btn sm exlrm" style="width:auto;flex:0 0 auto;padding:3px 10px">✕</button>` : ""}</div>
-              <div class="seg exlsn" style="margin-top:4px"><button type="button" data-s="1">🔢 Có seri</button><button type="button" data-s="0" class="on">➖ Không có seri</button></div>
               <div style="margin-top:4px"><input class="exlp" list="prodList" autocomplete="off" placeholder="Sản phẩm nhập" style="width:100%"></div>
               <div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input class="exlq" type="number" min="1" inputmode="numeric" value="1" title="Số lượng" style="width:70px;flex:0 0 auto"><input class="exlu" inputmode="numeric" placeholder="Đơn giá / 1 SP" style="flex:1;min-width:0"><label style="display:flex;align-items:center;gap:4px;margin:0;font-size:13px;color:var(--ink);flex:0 0 auto"><input type="checkbox" class="exlv" style="width:18px;height:18px;margin:0"> VAT</label></div>
               <div class="sub exlt" style="margin-top:4px"></div></div>`);
-            const el = box.lastElementChild; fmtMoneyInput(el.querySelector(".exlu")); el._sn = false;
-            const setSn = v => { el._sn = v; el.querySelectorAll(".exlsn button").forEach(x => x.classList.toggle("on", (x.dataset.s === "1") === v)); };
-            el.querySelectorAll(".exlsn button").forEach(x => x.onclick = () => { el._snT = true; setSn(x.dataset.s === "1"); });
-            el.querySelector(".exlp").addEventListener("change", () => { const n = el.querySelector(".exlp").value.trim(); if (!el._snT && n && findProduct(n)) setSn(hasSnOf(n)); }); el.querySelector(".exlrm")?.addEventListener("click", () => { el.remove(); [...box.children].forEach((x, k) => x.querySelector("b").textContent = "Dòng " + (k + 1)); host._calc(); }); };
+            const el = box.lastElementChild; fmtMoneyInput(el.querySelector(".exlu")); el.querySelector(".exlrm")?.addEventListener("click", () => { el.remove(); [...box.children].forEach((x, k) => x.querySelector("b").textContent = "Dòng " + (k + 1)); host._calc(); }); };
           $h(".exladd").onclick = () => { addLn(); $h(".exlines").lastElementChild.querySelector(".exlp").focus(); };
           $h(".exlines").addEventListener("input", () => host._calc()); $h(".exlines").addEventListener("change", () => host._calc());
           addLn();
@@ -5667,7 +5666,7 @@ window.APP_BUILD = "2026-11-23.8";
             const paidAll = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid"))), r = Math.max(0, Number(String(v(".exvr")).replace(",", ".")) || 0), batch = "nh_" + uid();
             let left = paidAll; multi = L.map((x, i) => { const pd = i === L.length - 1 ? left : Math.round(paidAll * x.total / amount); left -= pd;
               return Object.assign({}, rec, {id: "ex_" + uid(), amount: x.total, supplier: v(".exsupn"), product: x.product, qty: x.qty, vatQty: x.vat ? x.qty : 0, vatRate: x.vat ? r : 0, unit: x.unit, unitVat: Math.round(x.unit * (1 + (x.vat ? r / 100 : 0))),
-                paid: pd, debt: x.total - pd, payMode: host._payMode, whStatus: "cho", batch, batchN: L.length, hasSn: x.sn}); }); }
+                paid: pd, debt: x.total - pd, payMode: host._payMode, whStatus: "cho", batch, batchN: L.length}); }); }
           else if (false) { const qty = 0, c = null;
             need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
             const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
