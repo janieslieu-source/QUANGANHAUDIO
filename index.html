@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.13";
+window.APP_BUILD = "2026-11-23.14";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -4626,7 +4626,7 @@ window.APP_BUILD = "2026-11-23.13";
   const findStock = sn => { const k = keySN(sn); return stock.find(x => keySN(x.serial) === k) || stock.find(x => (x.subSerials || []).some(y => keySN(y) === k)); };
   // hàng theo BỘ: 1 sản phẩm có nhiều số seri (VD bộ HDMI không dây 1-2 = 3 seri, 1-4 = 5 seri)
   const snPerOf = name => { const p = findProduct(name); if (p && Number(p.snPer) > 0) return Number(p.snPer);
-    const m = String(name || "").match(/(?:^|[^\d])1\s*[-–]\s*([1-8])(?!\d)/); return m && /hdmi|không dây|khong day|wireless|bộ|bo /i.test(name) ? 1 + Number(m[1]) : 1; };
+    const m = String(name || "").match(/(?:^|[^\d])1\s*(?:[-–]|ra)\s*([1-8])(?!\d)/i); return m && /hdmi|không dây|khong day|wireless|bộ|bo /i.test(name) ? 1 + Number(m[1]) : 1; };
   const inStock = name => stock.filter(x => x.status === "in" && norm(x.product) === norm(name)).sort((a,b) => (a.importedAt||"").localeCompare(b.importedAt||"") || String(a.serial).localeCompare(String(b.serial)));
   // bảng tra nhanh (lập lại mỗi khi dữ liệu đổi) – tránh dò cả kho cho từng sản phẩm khi gõ tìm
   let _idx = null;
