@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.22";
+window.APP_BUILD = "2026-11-23.23";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -2919,7 +2919,7 @@ window.APP_BUILD = "2026-11-23.22";
       const box = !isHead(l.product); if (box && !(l.actCodes || []).length && !snOf(o, i).some(sn => findReg(sn)?.actCode)) return;   // box Android: chỉ khi có mã kích hoạt
       const sns = snOf(o, i), base = {src: "head", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: `${box ? (isBox(l.product) ? "Box Android" : "Mã kích hoạt") : "Phần mềm karaoke"} – ${l.product}`, term: "vv", start: o.saleDate || (o.createdAt || "").slice(0, 10), until: "", price: null, renewals: [], ref: o.code, auto: true};
       if (sns.length) sns.forEach((sn, k) => { const r = findReg(sn) || {}; L.push(Object.assign({}, base, {qty: 1, key: r.actCodeNew || r.actCode || r.codes || (l.actCodes || [])[k] || "", sn, note: `${box ? "Mã kích hoạt box Android" : "Kích hoạt sẵn khi mua đầu"} · SN ${sn}`})); });
-      else if (box) (l.actCodes || []).forEach(ac => L.push(Object.assign({}, base, {qty: 1, key: ac, note: "Mã kích hoạt box Android (không seri)"})));
+      else if (box || (l.actCodes || []).length) (l.actCodes || []).forEach(ac => L.push(Object.assign({}, base, {qty: 1, key: ac, note: "Mã kích hoạt box Android (không seri)"})));
       else L.push(Object.assign({}, base, {qty: l.qty || 1, key: "", note: "Kích hoạt sẵn khi mua đầu · chờ Kho xuất (chưa có seri)"})); }));
     orders.forEach(o => (o.software || []).forEach((w, i) => L.push({src: "od", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: w.name, qty: w.qty || 1, term: w.term, key: w.key, start: w.start, until: w.until, price: null, renewals: w.renewals || [], note: "", ref: o.code})));
     return L.sort((a,b) => (a.term === "vv") - (b.term === "vv") || (a.until || "").localeCompare(b.until || "") || (b.start || "").localeCompare(a.start || ""));
@@ -4593,8 +4593,8 @@ window.APP_BUILD = "2026-11-23.22";
           <button type="button" class="btn sm pri xkscan" data-i="${i}" style="margin-top:6px">📷 Quét seri bằng camera</button>
           <div class="sub snc" data-i="${i}"></div></div>
           <div class="xkph" data-i="${i}" style="margin-top:6px"></div>
-          ${!l.gift && !l.direct && !isHead(l.product) && !isBox(l.product) ? `<label style="display:flex;gap:8px;align-items:center;color:#7c3aed;font-size:14px;margin:8px 0 0;cursor:pointer"><input type="checkbox" class="xkactOn" data-i="${i}" ${(l.actCodes || []).length ? "checked" : ""} style="width:20px;height:20px;margin:0"> 🔑 Có mã kích hoạt (box Android, phần mềm…)</label>` : ""}
-          ${!l.gift && !l.direct && !isHead(l.product) ? `<div class="xkactW ${isBox(l.product) || (l.actCodes || []).length ? "" : "hide"}" data-i="${i}" style="margin-top:8px;padding:8px;border:2px solid #7c3aed;border-radius:10px;background:rgba(124,58,237,.05)"><label style="margin-top:0;color:#7c3aed">🔑 Mã kích hoạt <span class="sub">(mỗi dòng 1 mã – theo thứ tự seri; không có thì để trống)</span></label>
+          ${!l.gift && !l.direct && !hasAct(l.product) ? `<label style="display:flex;gap:8px;align-items:center;color:#7c3aed;font-size:14px;margin:8px 0 0;cursor:pointer"><input type="checkbox" class="xkactOn" data-i="${i}" ${(l.actCodes || []).length ? "checked" : ""} style="width:20px;height:20px;margin:0"> 🔑 Có mã kích hoạt (box Android, phần mềm…)</label>` : ""}
+          ${!l.gift && !l.direct ? `<div class="xkactW ${hasAct(l.product) || (l.actCodes || []).length ? "" : "hide"}" data-i="${i}" style="margin-top:8px;padding:8px;border:2px solid #7c3aed;border-radius:10px;background:rgba(124,58,237,.05)"><label style="margin-top:0;color:#7c3aed">🔑 Mã kích hoạt <span class="sub">(mỗi dòng 1 mã – theo thứ tự seri; không có thì để trống)</span></label>
             <textarea class="xkact" data-i="${i}" rows="${Math.min(6, Math.max(1, l.qty))}" placeholder="Mã kích hoạt (mỗi dòng 1 mã)">${esc((l.actCodes || []).join("\n"))}</textarea><div class="sub">Có mã → tự ghi vào sổ bảo hành và chuyển sang mục 💿 Phần mềm</div></div>` : ""}</div>`).join("")}
       <div id="xkApproveW" class="hide" style="margin-top:10px;padding:10px;border:2px solid var(--bad);border-radius:10px">
         <label style="display:flex;gap:8px;align-items:flex-start;color:var(--bad);font-size:14px;margin:0"><input type="checkbox" id="xkApprove" style="width:auto;margin:3px 0 0"> <span><b>Kho duyệt xuất các seri bị cảnh báo</b> (đã kiểm tra, không phải máy đổi cho khách khác)</span></label>
