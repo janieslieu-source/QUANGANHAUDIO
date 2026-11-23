@@ -35,6 +35,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Vận chuyển gửi chành xe:** phí ship (bắt buộc) + phí gửi hàng (không bắt buộc), mỗi phí chọn Công ty trả / Khách trả; tổng ghi vào Chi phí – Ship hàng.
 - **Kế toán ghi thanh toán:** ô Tiền hàng + phí chành xe đã tick = Tổng công nợ, trừ tạm ứng = còn nợ.
 - **Linh kiện mượn test (tab Kỹ thuật):** chọn Test sản phẩm mới nhập về / Test cho khách (chọn phiếu) → tìm trong kho → gửi Kho đồng ý mới trừ kho → hạn trả 3 ngày, quá hạn nhắc (có Gia hạn 3 ngày) → Kho bấm Nhận lại cộng kho. Không có trong kho → ô Giải pháp chờ Kho duyệt. Khi Hoàn tất phiếu: từng linh kiện chọn Thay cho khách / Trả về kho.
+- **Kỹ thuật – Đổi đầu thu / đầu phát** (bộ HDMI không dây…): phương án xử lý `doidau` → chọn bộ phận, seri cũ (trong bộ của khách), seri mới (bắt buộc) → sổ bảo hành (`reg`) thay seri cũ bằng seri mới, giữ hạn BH, ghi `swaps`; seri mới có trong kho thì xuất (`outKind: doidau`). Phiếu lưu `partSwap`.
 - **Kho:** xuất kho theo loại (Xuất làm mới sản phẩm, KT thay cho khách, Đổi cho khách, KT mượn test, Xuất bán theo đơn), tổng hợp + Excel; trả tiền NCC → Kho duyệt nhập hàng; sửa số tồn cần GĐ duyệt; kiểm kê theo file.
 - **Kỹ thuật – Xuất làm mới sản phẩm:** chọn hàng trong kho → gửi Kho duyệt xuất (ex kind `lmreq`) → Kho duyệt mới trừ kho (mv `lammoi`).
 - **Kỹ thuật – Nâng cấp sản phẩm:** sản phẩm cũ + linh kiện → trừ kho ngay (mv `nangcap`) → Kho duyệt nhập sản phẩm mới (mv `nangcap_nhap`, tạo sản phẩm nếu chưa có); từ chối thì hoàn kho (`nangcap_huy`). Bản ghi ex kind `upreq`.

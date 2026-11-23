@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.12";
+window.APP_BUILD = "2026-11-23.13";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -847,7 +847,7 @@ window.APP_BUILD = "2026-11-23.12";
     da_tra:   {label:"Đã trả khách",                       cls:"b-ok",   to:null}
   };
   const TYPE = {bh:"Bảo hành", sc:"Sửa chữa"};
-  const ACTION = {sua:"Sửa chữa", thaymoi:"Thay mới", doimoi:"Đổi mới"};
+  const ACTION = {sua:"Sửa chữa", thaymoi:"Thay mới", doimoi:"Đổi mới", doidau:"Đổi đầu thu / phát"};
   const exText = t => t.exchange ? `SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
   const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)"};
   // Quy định seri hàng công ty: bắt đầu bằng 525, tổng cộng 8 chữ số (VD: 52526789)
@@ -2668,6 +2668,17 @@ window.APP_BUILD = "2026-11-23.12";
       <div class="choice">
         <button type="button" class="opt" data-a="sua"><span class="ic">🛠️</span>Sửa chữa</button>
         <button type="button" class="opt" data-a="thaymoi"><span class="ic">🔄</span>Thay mới</button>
+        <button type="button" class="opt" data-a="doidau" style="grid-column:1/-1"><span class="ic">🔁</span>Đổi đầu thu / đầu phát (bộ HDMI không dây…)</button>
+      </div>
+      <div id="ddWrap" class="hide">
+        <label>Đổi bộ phận nào? *</label>
+        <div class="seg" id="ddPart"><button type="button" data-p="phat">📡 Đầu phát</button><button type="button" data-p="thu">📺 Đầu thu</button></div>
+        <label>Seri bộ phận cũ (bị lỗi) *</label>
+        <div class="chips" id="ddOldChips" style="flex-wrap:wrap;margin-bottom:6px"></div>
+        <input name="ddOld" placeholder="Bấm chọn seri ở trên hoặc gõ" autocomplete="off">
+        <label>Seri bộ phận mới thay cho khách *</label>
+        <div class="snrow"><input name="ddNew" inputmode="numeric" placeholder="525xxxxx" autocomplete="off"><button type="button" class="scanbtn" id="ddScan">📷 Quét</button></div>
+        <div class="found" id="ddPreview" style="margin-top:6px"></div>
       </div>
       <div id="exWrap" class="hide">
         <div class="two">
@@ -2697,8 +2708,9 @@ window.APP_BUILD = "2026-11-23.12";
       F2.querySelectorAll(".opt[data-a]").forEach(o => o.classList.toggle("sel", o.dataset.a === jobAction));
       const isEx = jobAction === "doimoi";
       $("#exWrap").classList.toggle("hide", !isEx);
+      $("#ddWrap").classList.toggle("hide", jobAction !== "doidau"); if (jobAction === "doidau") ddSync();
       $("#partsWrap").classList.toggle("hide", !jobAction);
-      $("#partsLbl").textContent = isEx ? "Phụ kiện thay kèm (nếu có)" : jobAction === "thaymoi" ? "Linh kiện / sản phẩm thay mới *" : "Linh kiện cần thay *";
+      $("#partsLbl").textContent = isEx || jobAction === "doidau" ? "Phụ kiện thay kèm (nếu có)" : jobAction === "thaymoi" ? "Linh kiện / sản phẩm thay mới *" : "Linh kiện cần thay *";
       if (isEx) {
         $("#exMonthsW").classList.toggle("hide", F2.exMode.value !== "new");
         const until = exchangeUntil(t, F2.exMode.value, F2.exMonths.value);
@@ -2707,6 +2719,22 @@ window.APP_BUILD = "2026-11-23.12";
       $("#jobOk").disabled = !jobAction;
       $("#jobOk").textContent = t.stage === "dang_sua" ? "Lưu" : "Bắt đầu xử lý";
     };
+    // ---- đổi đầu thu / đầu phát: chọn bộ phận + seri cũ / seri mới ----
+    let ddPart = t.partSwap?.part || "";
+    const rg0 = findReg(t.serial), setSns = [...new Set([t.serial, ...(rg0?.subSerials || [])].filter(Boolean))];
+    $("#ddOldChips").innerHTML = setSns.map(sn => `<button type="button" class="chip" data-ddo="${esc(sn)}">${esc(sn)}</button>`).join("") + (setSns.length > 1 ? "" : `<span class="sub">Seri trong bộ của khách</span>`);
+    if (t.partSwap) { F2.ddOld.value = t.partSwap.oldSerial || ""; F2.ddNew.value = t.partSwap.newSerial || ""; }
+    const ddSync = () => { F2.querySelectorAll("#ddPart button").forEach(b => b.classList.toggle("on", b.dataset.p === ddPart));
+      F2.querySelectorAll("[data-ddo]").forEach(c => c.classList.toggle("sel", keySN(c.dataset.ddo) === keySN(F2.ddOld.value)));
+      const o = F2.ddOld.value.trim(), n = F2.ddNew.value.trim(), st = n && findStock(n), r = findReg(o) || rg0;
+      $("#ddPreview").innerHTML = `🔁 ${ddPart === "phat" ? "Đầu phát" : ddPart === "thu" ? "Đầu thu" : "…"}: SN <b>${esc(o || "…")}</b> → SN <b>${esc(n || "…")}</b>`
+        + (n && !snOk(n) ? `<br><b style="color:var(--bad)">Seri mới sai định dạng (${SN_HINT})</b>` : "")
+        + (st ? (st.status === "in" ? `<br>📦 Có trong kho (${esc(st.product)}) – sẽ xuất cho khách` : `<br><b style="color:var(--bad)">Seri này đã xuất (${esc(st.orderCode || "")})</b>`) : n ? `<br><span class="sub">Seri không có trong kho – vẫn ghi được</span>` : "")
+        + `<br>🛡️ Sổ bảo hành của khách cập nhật seri mới, giữ hạn bảo hành cũ${r?.purchaseDate ? ` (mua ${fmt(r.purchaseDate)}, ${r.months || "?"} tháng)` : ""}`; };
+    F2.querySelectorAll("#ddPart button").forEach(b => b.onclick = () => { ddPart = b.dataset.p; ddSync(); });
+    F2.querySelectorAll("[data-ddo]").forEach(c => c.onclick = () => { F2.ddOld.value = c.dataset.ddo; ddSync(); F2.ddNew.focus(); });
+    ["ddOld", "ddNew"].forEach(nm => F2[nm].addEventListener("input", ddSync));
+    $("#ddScan").onclick = () => openScanner(sn => { F2.ddNew.value = sn; ddSync(); return true; });
     // ---- chọn kỹ thuật viên ----
     F2.querySelectorAll("[data-ktv]").forEach(b => b.onclick = () => { F2.tech.value = b.dataset.ktv; F2.querySelectorAll("[data-ktv]").forEach(x => x.classList.toggle("sel", x === b)); });
     // ---- dòng linh kiện ----
@@ -2773,7 +2801,7 @@ window.APP_BUILD = "2026-11-23.12";
       const used = [...$("#prows").children].map(el => ({name: el.querySelector(".pn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".pq").value) || 1), src: el.dataset.src || "kho",
         donor: el.querySelector(".pdn").value.trim(), donorSerial: el.querySelector(".pds").value.trim()})).filter(x => x.name);
       if (jobAction !== "doimoi") {
-        if (!used.length) { toast("Hãy chọn linh kiện cần thay"); $("#prows .pn")?.focus(); throw new Error("x"); }
+        if (!used.length && jobAction !== "doidau") { toast("Hãy chọn linh kiện cần thay"); $("#prows .pn")?.focus(); throw new Error("x"); }
         const need = {};
         used.filter(u => u.src === "kho").forEach(u => { const k = norm(u.name); need[k] = (need[k] || {name: u.name, q: 0}); need[k].q += u.qty; });
         const prevKho = (t.stockApplied && t.stockApplied.kho) || {};
@@ -2803,6 +2831,23 @@ window.APP_BUILD = "2026-11-23.12";
           mode === "new" ? {purchaseDate: iso(today()), months} : (t.purchaseDate ? {purchaseDate: t.purchaseDate, months: Number(t.months)} : {purchaseDate: iso(today()), months}));
         await put("reg", newRec);
         if (oldR) await put("reg", Object.assign({}, oldR, {replacedBy: newSerial, updatedAt: now}));
+      } else if (jobAction === "doidau") {
+        const o = F2.ddOld.value.trim(), n = F2.ddNew.value.trim();
+        if (!ddPart) { toast("Chọn đổi Đầu phát hay Đầu thu"); throw new Error("x"); }
+        if (!o) { toast("Chọn / nhập seri bộ phận cũ"); F2.ddOld.focus(); throw new Error("x"); }
+        if (!n) { toast("Nhập seri bộ phận mới thay cho khách"); F2.ddNew.focus(); throw new Error("x"); }
+        if (!snOk(n)) { toast(`Seri mới sai định dạng – phải ${SN_HINT}`); F2.ddNew.focus(); throw new Error("x"); }
+        if (keySN(o) === keySN(n)) { toast("Seri mới phải khác seri cũ"); throw new Error("x"); }
+        const stN = findStock(n); if (stN && stN.status !== "in" && stN.orderCode !== t.code) { toast(`Seri ${n} đã xuất ở ${stN.orderCode || "đơn khác"}`); throw new Error("x"); }
+        const now = new Date().toISOString(), lb = ddPart === "phat" ? "Đầu phát" : "Đầu thu";
+        extra.exchange = null; extra.partSwap = {part: ddPart, label: lb, oldSerial: o, newSerial: n, at: now};
+        note = `🔁 Đổi ${lb.toLowerCase()}: SN ${o} → SN ${n}${parts ? " · " + parts : ""}`;
+        // sổ bảo hành: thay seri cũ bằng seri mới trong bộ của khách (giữ hạn bảo hành)
+        const r = findReg(o) || rg0, base = r && reg.some(x => x.id === r.id) ? r : Object.assign({id: uid(), createdAt: now}, r || {customer: t.customer, phone: t.phone, product: t.product, purchaseDate: t.purchaseDate || "", months: Number(t.months) || 12});
+        const rec = Object.assign({}, base, {updatedAt: now, swaps: (base.swaps || []).concat([{part: lb, old: o, new: n, at: now, ticket: t.code}])});
+        if (keySN(rec.serial || "") === keySN(o) || !rec.serial) rec.serial = n; else rec.subSerials = (rec.subSerials || []).map(x => keySN(x) === keySN(o) ? n : x).concat((rec.subSerials || []).some(x => keySN(x) === keySN(o)) ? [] : [n]);
+        await put("reg", rec);
+        if (stN && stN.status === "in") await put("st", Object.assign({}, stN, {status: "out", orderCode: t.code, customer: t.customer, outAt: now, outKind: "doidau"}));
       } else {
         extra.exchange = null;
         note = `${ACTION[jobAction]} – ${parts}`;
