@@ -726,6 +726,9 @@
 
     <!-- ===== KỸ THUẬT ===== -->
     <section id="v-kt" class="hide">
+      <div class="chips" id="ktChips"></div>
+      <div class="list" id="ktList" style="margin-bottom:14px"></div>
+      <div class="panel wlook" id="wlKt"></div>
       <div class="panel" id="ktLkm"></div>
       <div class="panel" id="ktLmBox"><h3>🆕 Xuất làm mới sản phẩm <span class="sub">(không theo đơn bán)</span></h3>
         <div class="sub" style="margin:-4px 0 6px">Chọn hàng / linh kiện trong kho để làm mới, lắp thành sản phẩm cho khách → gửi <b>Kho duyệt xuất</b> (Kho duyệt mới trừ kho).</div>
@@ -762,9 +765,6 @@
         <label>Ghi chú</label><input id="upNote" placeholder="Tùy chọn" autocomplete="off">
         <div class="btns"><button type="button" class="btn pri" id="upGo">⬆️ Xuất kho nâng cấp & gửi Kho duyệt nhập</button></div>
         <div id="upMine" style="margin-top:8px"></div></div>
-      <div class="panel wlook" id="wlKt"></div>
-      <div class="chips" id="ktChips"></div>
-      <div class="list" id="ktList"></div>
     </section>
   </main>
 </div>
@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.18";
+window.APP_BUILD = "2026-11-23.19";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
