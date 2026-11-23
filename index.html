@@ -726,12 +726,16 @@
         <label>Sản phẩm cũ (trong kho) *</label>
         <div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input id="upOld" placeholder="Gõ model, hãng hoặc tên sản phẩm cũ" autocomplete="off"><div class="sugg hide"></div></div><input id="upOldQ" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div>
         <div class="sub" id="upOldH" style="margin-top:2px"></div>
+        <div id="upOldSnW" class="hide"><div class="sub" style="margin-top:4px">Seri máy cũ trong kho – bấm để chọn:</div><div class="chips" id="upOldSn" style="flex-wrap:wrap;max-height:140px;overflow:auto;margin-top:4px"></div></div>
         <label>Linh kiện nâng cấp (xuất kho)</label>
         <div id="uppRows"></div><button type="button" class="btn sm" id="uppAdd" style="margin-top:6px">+ Thêm linh kiện</button>
         <label>Sản phẩm mới *</label>
         <div class="chips" id="upQuick" style="flex-wrap:wrap;margin-bottom:6px"><button type="button" class="chip" data-uq="kd">📶 Màn hình có dây → không dây</button><button type="button" class="chip" data-uq="3in1">🖥️ Màn hình có dây → đầu liền màn 3 in 1</button></div>
         <div style="display:flex;gap:6px"><div style="position:relative;flex:1;min-width:0"><input id="upNew" placeholder="Tên sản phẩm mới sau nâng cấp" autocomplete="off"><div class="sugg hide"></div></div><input id="upNewQ" type="number" min="1" inputmode="numeric" value="1" style="width:70px"></div>
         <div class="sub" id="upNewH" style="margin-top:2px"></div>
+        <label>Số seri sản phẩm mới <span class="sub">(mỗi dòng 1 seri – không bắt buộc)</span></label>
+        <div style="display:flex;gap:6px;align-items:flex-start"><textarea id="upNewSn" rows="2" placeholder="525xxxxx" style="flex:1;min-width:0"></textarea><button type="button" class="btn sm" id="upSnCopy" style="width:auto;flex:0 0 auto" title="Dùng lại seri máy cũ">↩️ Giữ seri cũ</button></div>
+        <div class="sub" id="upSnH" style="margin-top:2px"></div>
         <label>Ghi chú</label><input id="upNote" placeholder="Tùy chọn" autocomplete="off">
         <div class="btns"><button type="button" class="btn pri" id="upGo">⬆️ Xuất kho nâng cấp & gửi Kho duyệt nhập</button></div>
         <div id="upMine" style="margin-top:8px"></div></div>
@@ -772,7 +776,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.5";
+window.APP_BUILD = "2026-11-23.6";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3246,7 +3250,8 @@ window.APP_BUILD = "2026-11-23.5";
       box.classList.toggle("hide", !L.length);
       box.innerHTML = L.length ? `<h4 style="margin:0 0 6px;font-size:15px;color:#7c3aed">⬆️ Nhập sản phẩm nâng cấp – chờ Kho duyệt (${L.length})</h4>` + L.map(x => `<div class="item" style="cursor:default;border:2px solid #7c3aed">
         <div class="pname">⬆️ ${esc(x.newName)} × ${x.newQty} <span class="sub">· ${esc(x.code)}</span></div>
-        <div class="sub">Từ: <b>${esc(x.old.name)}</b> × ${x.old.qty}${x.parts.length ? ` + ${x.parts.map(r => esc(r.name) + " ×" + r.qty).join(", ")}` : ""} <span style="color:var(--ok)">(đã trừ kho)</span></div>
+        <div class="sub">Từ: <b>${esc(x.old.name)}</b> × ${x.old.qty}${(x.old.serials || []).length ? ` (SN ${x.old.serials.map(esc).join(", ")})` : ""}${x.parts.length ? ` + ${x.parts.map(r => esc(r.name) + " ×" + r.qty).join(", ")}` : ""} <span style="color:var(--ok)">(đã trừ kho)</span></div>
+        ${(x.newSerials || []).length ? `<div class="sub">🔢 Seri sản phẩm mới: <b>${x.newSerials.map(esc).join(", ")}</b></div>` : ""}
         <div class="sub">👨‍🔧 ${esc(x.by || "Kỹ thuật")} · ${fmtTime(x.at)}${x.note ? " · 📝 " + esc(x.note) : ""}${findProduct(x.newName) ? ` · tồn hiện tại ${stockOf(x.newName) ?? 0}` : " · 🆕 sản phẩm mới chưa có trong kho"}</div>
         ${(boss || role === "wh") ? `<div style="display:flex;gap:6px;margin-top:8px"><button type="button" class="btn okb sm" data-upok="${esc(x.id)}">✅ Duyệt nhập kho</button><button type="button" class="btn sm" data-upno="${esc(x.id)}">✖ Từ chối (hoàn kho)</button></div>` : ""}</div>`).join("") : "";
       if ((boss || role === "wh") && L.length > (drawUpReq._n || 0) && !$("#app").classList.contains("hide")) { bannerQ.push({id: "upreq", title: `⬆️ ${L.length} sản phẩm nâng cấp – chờ Kho duyệt nhập`, text: L.map(x => `${x.old.name} → ${x.newName}`).join("; "), to: "wh"}); nextBanner(); }
@@ -3256,13 +3261,25 @@ window.APP_BUILD = "2026-11-23.5";
   }
   if ($("#upGo")) {
     const oldI = $("#upOld"), newI = $("#upNew");
-    const oldH = () => { const n = oldI.value.trim(), k = n ? stockOf(n) : null, q = parseInt($("#upOldQ").value) || 1;
+    let oldSn = [];
+    const snList = () => $("#upNewSn").value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+    const snH = () => { const L = snList(), q = parseInt($("#upNewQ").value) || 1, dup = L.find(x => findStock(x) && findStock(x).status === "in" && !oldSn.some(o => keySN(o) === keySN(x)));
+      $("#upSnH").innerHTML = !L.length ? "" : `${L.length}/${q} seri${L.length > q ? ` <b style="color:var(--bad)">– nhiều hơn số lượng</b>` : ""}${dup ? ` <b style="color:var(--bad)">– seri ${esc(dup)} đang có trong kho</b>` : ""}`; };
+    const drawOldSn = () => { const n = oldI.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n)), av = ex ? inStock(ex) : [];
+      oldSn = oldSn.filter(sn => av.some(x => keySN(x.serial) === keySN(sn)));
+      $("#upOldSnW").classList.toggle("hide", !av.length);
+      $("#upOldSn").innerHTML = av.slice(0, 200).map(x => `<button type="button" class="chip ${oldSn.some(o => keySN(o) === keySN(x.serial)) ? "sel" : ""}" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("");
+      $("#upOldSn").querySelectorAll("[data-sn]").forEach(c => c.onclick = () => { const k = oldSn.findIndex(o => keySN(o) === keySN(c.dataset.sn)); if (k >= 0) oldSn.splice(k, 1); else oldSn.push(c.dataset.sn);
+        if (oldSn.length > (parseInt($("#upOldQ").value) || 1)) { $("#upOldQ").value = oldSn.length; } drawOldSn(); oldH(true); }); };
+    $("#upSnCopy").onclick = () => { if (!oldSn.length) { toast("Chọn seri máy cũ trước (bấm vào seri bên trên)"); return; } $("#upNewSn").value = oldSn.join("\n"); snH(); };
+    $("#upNewSn").addEventListener("input", snH);
+    const oldH = skip => { if (skip !== true) drawOldSn(); const n = oldI.value.trim(), k = n ? stockOf(n) : null, q = parseInt($("#upOldQ").value) || 1;
       $("#upOldH").innerHTML = !n ? "" : k == null ? `<b style="color:var(--bad)">Không có trong kho – chọn trong danh sách</b>` : k >= q ? `<b style="color:var(--ok)">Tồn ${k} → còn ${k - q}</b>` : `<b style="color:var(--bad)">Kho chỉ còn ${k}</b>`;
-      if (!$("#upNewQ")._t) $("#upNewQ").value = q; newH(); };
+      if (!$("#upNewQ")._t) $("#upNewQ").value = q; newH(); snH(); };
     const newH = () => { const n = newI.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n));
       $("#upNewH").innerHTML = !n ? "" : ex ? `♻️ Đã có trong kho – tồn ${stockOf(ex) ?? 0} → sau khi Kho duyệt: ${(stockOf(ex) ?? 0) + (parseInt($("#upNewQ").value) || 1)}` : `🆕 Sản phẩm mới – Kho duyệt sẽ tạo mới trong kho`; };
     attachPicker(oldI, oldI.nextElementSibling, oldH, false, true); oldI.addEventListener("input", oldH); $("#upOldQ").addEventListener("input", oldH);
-    attachPicker(newI, newI.nextElementSibling, newH, false); newI.addEventListener("input", newH); $("#upNewQ").addEventListener("input", () => { $("#upNewQ")._t = true; newH(); });
+    attachPicker(newI, newI.nextElementSibling, newH, false); newI.addEventListener("input", newH); $("#upNewQ").addEventListener("input", () => { $("#upNewQ")._t = true; newH(); snH(); });
     // chọn nhanh: tự đặt tên sản phẩm mới từ tên màn hình cũ
     $("#upQuick").querySelectorAll("[data-uq]").forEach(b => b.onclick = () => { const o = oldI.value.trim(); if (!o) { toast("Chọn sản phẩm cũ (màn hình có dây) trước"); oldI.focus(); return; }
       const size = (o.match(/(\d{2})\s*(inch|in|\x22)/i) || [])[1];
@@ -3277,14 +3294,22 @@ window.APP_BUILD = "2026-11-23.5";
       if (!newName) { toast("Nhập tên sản phẩm mới"); newI.focus(); return; }
       const all = [old, ...parts]; if (!lmStockOk(all)) return;
       if (norm(newName) === norm(old.name)) { toast("Sản phẩm mới phải khác sản phẩm cũ"); newI.focus(); return; }
+      const nsn = snList(), osn = oldSn.slice(0, oq);
+      if (nsn.length > nq) { toast(`Seri sản phẩm mới nhiều hơn số lượng (${nsn.length}/${nq})`); $("#upNewSn").focus(); return; }
+      { const k = nsn.map(keySN), d = k.find((x, i) => k.indexOf(x) !== i); if (d) { toast("Seri bị trùng: " + d); return; } }
+      { const bad = nsn.find(x => { const st = findStock(x); return st && st.status === "in" && !osn.some(o => keySN(o) === keySN(x)); }); if (bad) { toast(`Seri ${bad} đang có trong kho – kiểm tra lại`); return; } }
       const exNew = productNames().find(p => norm(p) === norm(newName)) || newName;
       if (!confirm(`Xuất kho: ${old.name} ×${oq}${parts.length ? " + " + parts.map(r => r.name + " ×" + r.qty).join(", ") : ""}\n→ nâng cấp thành ${exNew} ×${nq}\nKho duyệt mới nhập sản phẩm mới. Tiếp tục?`)) return;
       const now = new Date().toISOString(), code = "NC" + iso(new Date()).slice(2).replace(/-/g, "") + "-" + uid().slice(-3).toUpperCase(), b = $("#upGo"); b.disabled = true;
       try {
-        await putMany("mv", all.map(r => ({id: "mv_" + uid(), product: r.name, qty: -r.qty, at: now, kind: "nangcap", ref: code, note: `Nâng cấp ${old.name} → ${exNew}${note ? " · " + note : ""}`, by: actor()})));
-        await put("ex", {id: "up_" + uid(), kind: "upreq", code, old: {name: old.name, qty: oq}, parts, newName: exNew, newQty: nq, note, status: "cho", by: actor(), at: now, date: iso(new Date()), amount: 0});
+        // seri máy cũ chọn trong kho → đánh dấu đã xuất (không trừ thêm theo số lượng)
+        const outs = osn.map(findStock).filter(x => x && x.status === "in").map(x => Object.assign({}, x, {status: "out", orderCode: code, outAt: now, outKind: "nangcap"}));
+        if (outs.length) await putMany("st", outs);
+        const mvs = all.map((r, i) => ({id: "mv_" + uid(), product: r.name, qty: -(i === 0 ? r.qty - outs.length : r.qty), at: now, kind: "nangcap", ref: code, note: `Nâng cấp ${old.name}${osn.length ? " (SN " + osn.join(", ") + ")" : ""} → ${exNew}${note ? " · " + note : ""}`, by: actor()})).filter(m => m.qty < 0);
+        if (mvs.length) await putMany("mv", mvs);
+        await put("ex", {id: "up_" + uid(), kind: "upreq", code, old: {name: old.name, qty: oq, serials: outs.map(x => x.serial)}, parts, newName: exNew, newQty: nq, newSerials: nsn, note, status: "cho", by: actor(), at: now, date: iso(new Date()), amount: 0});
         pushTo("wh", "⬆️ Sản phẩm nâng cấp chờ nhập kho", `${old.name} → ${exNew} ×${nq}`); toast(`Đã trừ kho – gửi Kho duyệt nhập ${exNew} ×${nq}`);
-        oldI.value = ""; newI.value = ""; $("#upNote").value = ""; $("#upOldQ").value = 1; $("#upNewQ").value = 1; $("#upNewQ")._t = false; $("#upOldH").innerHTML = ""; $("#upNewH").innerHTML = ""; $("#uppRows").innerHTML = ""; lmAddRow("upp"); drawUpReq();
+        oldI.value = ""; newI.value = ""; $("#upNote").value = ""; $("#upNewSn").value = ""; oldSn = []; drawOldSn(); snH(); $("#upOldQ").value = 1; $("#upNewQ").value = 1; $("#upNewQ")._t = false; $("#upOldH").innerHTML = ""; $("#upNewH").innerHTML = ""; $("#uppRows").innerHTML = ""; lmAddRow("upp"); drawUpReq();
       } catch(e){} finally { b.disabled = false; }
     };
   }
@@ -3295,10 +3320,15 @@ window.APP_BUILD = "2026-11-23.5";
     if (ok) { if (!confirm(`Duyệt nhập kho ${x.newName} ×${x.newQty}?`)) return; ok.disabled = true;
       try { if (!findProduct(x.newName)) { const used = new Set(products.map(p => p.id)); let pid = prId(x.newName), k = 2; while (used.has(pid)) pid = prId(x.newName) + "-" + (k++);
           await put("pr", {id: pid, name: x.newName, months: findProduct(x.old.name)?.months ?? 12, noSerial: true, createdAt: now, updatedAt: now}); }
-        await put("mv", {id: "mv_" + uid(), product: x.newName, qty: x.newQty, at: now, kind: "nangcap_nhap", ref: x.code, note: `Nâng cấp từ ${x.old.name}`, by: actor()});
+        const sns = x.newSerials || [], months = findProduct(x.newName)?.months ?? findProduct(x.old.name)?.months ?? 12;
+        if (sns.length) await putMany("st", sns.map(sn => Object.assign({}, findStock(sn) || {}, {id: findStock(sn)?.id || stId(sn), serial: sn, product: x.newName, months, status: "in", importedAt: now, ref: "Nâng cấp " + x.code, orderCode: "", outAt: "", customer: ""})));
+        if (x.newQty - sns.length > 0) await put("mv", {id: "mv_" + uid(), product: x.newName, qty: x.newQty - sns.length, at: now, kind: "nangcap_nhap", ref: x.code, note: `Nâng cấp từ ${x.old.name}`, by: actor()});
         await put("ex", Object.assign({}, x, {status: "ok", doneAt: now, doneBy: actor()})); pushTo("kt", "✅ Kho đã nhập sản phẩm nâng cấp", `${x.newName} ×${x.newQty}`); toast(`Đã nhập kho ${x.newName} ×${x.newQty}`); } catch(err){ ok.disabled = false; } }
     if (no) { const why = prompt(`Từ chối nhập "${x.newName}" – hàng đã trừ sẽ được hoàn lại kho. Lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do từ chối"); return; }
-      try { await putMany("mv", [x.old, ...x.parts].map(r => ({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nangcap_huy", ref: x.code, note: `Hủy nâng cấp – ${why.trim()}`, by: actor()})));
+      try { const osn = (x.old.serials || []).map(findStock).filter(z => z && z.status === "out" && z.orderCode === x.code).map(z => { const c = Object.assign({}, z, {status: "in", returnedAt: now}); delete c.orderCode; delete c.outAt; delete c.outKind; return c; });
+        if (osn.length) await putMany("st", osn);
+        const back = [{name: x.old.name, qty: x.old.qty - osn.length}, ...x.parts].filter(r => r.qty > 0);
+        if (back.length) await putMany("mv", back.map(r => ({id: "mv_" + uid(), product: r.name, qty: r.qty, at: now, kind: "nangcap_huy", ref: x.code, note: `Hủy nâng cấp – ${why.trim()}`, by: actor()})));
         await put("ex", Object.assign({}, x, {status: "no", reply: why.trim(), doneAt: now, doneBy: actor()})); pushTo("kt", "✖ Kho từ chối nhập sản phẩm nâng cấp", `${x.newName} – ${why.trim()}`); toast("Đã từ chối – hoàn lại kho, báo Kỹ thuật"); } catch(err){} }
   }, true);
   /* ================= VẬN CHUYỂN ================= */
@@ -4237,7 +4267,9 @@ window.APP_BUILD = "2026-11-23.5";
     moves.forEach(m => { if (m.ext || !(Number(m.qty) < 0) || dayOf(m.at) !== day) return;
       const t = m.kind === "linhkien" ? "thay" : m.kind === "lk_test" ? "test" : m.kind === "doimoi" ? "doi" : m.kind === "lammoi" ? "lammoi" : m.kind === "nangcap" ? "nangcap" : null; if (!t) return;
       const tk = tkBy.get(m.ref); E.push({type: t, product: m.product, qty: -Number(m.qty), ref: m.ref || "", customer: tk?.customer || m.customer || "", phone: tk?.phone || m.phone || "", at: m.at, sns: m.serials || [], note: m.note || ""}); });
-    stock.forEach(x => { if (x.status !== "out" || !x.outAt || dayOf(x.outAt) !== day) return; const tk = tkBy.get(x.orderCode); if (!tk) return;
+    stock.forEach(x => { if (x.status !== "out" || !x.outAt || dayOf(x.outAt) !== day) return;
+      if (x.outKind === "nangcap") { E.push({type: "nangcap", product: x.product, qty: 1, ref: x.orderCode, customer: "", phone: "", at: x.outAt, sns: [x.serial], note: "Nâng cấp sản phẩm"}); return; }
+      const tk = tkBy.get(x.orderCode); if (!tk) return;
       E.push({type: tk.exchange && keySN(tk.exchange.newSerial) === keySN(x.serial) ? "doi" : "thay", product: x.product, qty: 1, ref: tk.code, customer: tk.customer, phone: tk.phone || "", at: x.outAt, sns: [x.serial]}); });
     return E.sort((a,b) => (a.at || "").localeCompare(b.at || ""));
   }
