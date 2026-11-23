@@ -424,7 +424,7 @@
                 <label>Sản phẩm mới đổi cho khách *</label><input name="exProduct" list="prodList" autocomplete="off">
                 <div class="two">
                   <div><label>Số seri cũ</label><input name="exOld" readonly style="opacity:.75"></div>
-                  <div><label>Số seri mới đổi *</label><input name="exNew" inputmode="numeric" maxlength="8" placeholder="525xxxxx"></div>
+                  <div><label>Số seri mới đổi *</label><input name="exNew" inputmode="numeric" maxlength="20" placeholder="525xxxxx"></div>
                 </div>
                 <label>Thời gian bảo hành tiếp</label>
                 <select name="exMode"><option value="keep" id="exKeepOpt">Tiếp tục hạn cũ</option><option value="new">Bảo hành mới tính từ hôm nay</option></select>
@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.21";
+window.APP_BUILD = "2026-11-23.22";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -865,7 +865,8 @@ window.APP_BUILD = "2026-11-23.21";
   const exText = t => t.exchange ? `SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
   const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)"};
   // Quy định seri hàng công ty: bắt đầu bằng 525, tổng cộng 8 chữ số (VD: 52526789)
-  const SN_RULE = /^525\d{5}$/, SN_HINT = "8 chữ số, bắt đầu bằng 525";
+  // + seri hãng Tomko: bắt đầu bằng 900 hoặc 1845 (độ dài không cố định, 6–20 ký tự)
+  const SN_RULE = /^(525\d{5}|900[0-9A-Z]{3,17}|1845[0-9A-Z]{2,16})$/i, SN_HINT = "8 chữ số bắt đầu bằng 525 – hoặc seri Tomko bắt đầu bằng 900 / 1845";
   const snOk = sn => SN_RULE.test(String(sn || "").trim());
   // "Bo mạch x1, Tụ 220uF x2" -> [{name:"Bo mạch",qty:1},{name:"Tụ 220uF",qty:2}]
   function parseParts(str){
@@ -2781,7 +2782,7 @@ window.APP_BUILD = "2026-11-23.21";
           <button type="button" class="opt psrc" data-s="thao"><span class="ic">🔩</span>Tháo từ máy</button></div></div>
         <div class="full pthao hide">
           <div style="position:relative"><label>Tháo từ máy (tên sản phẩm) *</label><input class="pdn" value="${esc(p.donor || "")}" placeholder="Máy bị tháo linh kiện" autocomplete="off"><div class="sugg hide"></div></div>
-          <label>Số seri máy bị tháo *</label><input class="pds" value="${esc(p.donorSerial || "")}" inputmode="numeric" maxlength="8" placeholder="525xxxxx">
+          <label>Số seri máy bị tháo *</label><input class="pds" value="${esc(p.donorSerial || "")}" inputmode="numeric" maxlength="20" placeholder="525xxxxx">
           <div class="sub pdw" style="color:var(--bad)"></div></div>
       </div>`);
       const el = $("#prows").lastElementChild;
@@ -5130,6 +5131,7 @@ window.APP_BUILD = "2026-11-23.21";
     String(text || "").split(/\n+/).forEach(line => {
       const digits = line.replace(/[oO]/g, "0").replace(/[lI|]/g, "1").replace(/[^\d]+/g, m => /^\s+$/.test(m) ? "" : " ");
       (digits.match(/525\d{5}/g) || []).forEach(s => { if (!out.includes(s)) out.push(s); });
+      digits.split(" ").filter(t => /^(900\d{3,17}|1845\d{2,16})$/.test(t)).forEach(s => { if (!out.includes(s)) out.push(s); });   // seri Tomko
     });
     return out;
   }
@@ -5408,7 +5410,7 @@ window.APP_BUILD = "2026-11-23.21";
       drawCost();   // số lượng đổi -> tính lại giá vốn
     };
     el._upd = upd;
-    const addSn = (v, noFocus) => { $e(".nhsns").insertAdjacentHTML("beforeend", `<div style="display:flex;gap:6px;margin-top:6px"><input class="nhsn" inputmode="numeric" maxlength="8" placeholder="Seri 525xxxxx" value="${esc(v || "")}"><button type="button" class="btn sm nhsnrm">✕</button></div>`);
+    const addSn = (v, noFocus) => { $e(".nhsns").insertAdjacentHTML("beforeend", `<div style="display:flex;gap:6px;margin-top:6px"><input class="nhsn" inputmode="numeric" maxlength="20" placeholder="Seri 525xxxxx" value="${esc(v || "")}"><button type="button" class="btn sm nhsnrm">✕</button></div>`);
       const row = $e(".nhsns").lastElementChild, inp = row.querySelector("input");
       inp.addEventListener("input", upd); inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addSn(); } });
       row.querySelector(".nhsnrm").onclick = () => { row.remove(); upd(); }; upd(); if (!noFocus) setTimeout(() => inp.focus(), 30); };
