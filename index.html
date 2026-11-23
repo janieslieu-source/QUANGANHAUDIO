@@ -748,7 +748,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.1";
+window.APP_BUILD = "2026-11-23.2";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -5357,9 +5357,10 @@ window.APP_BUILD = "2026-11-23.1";
         const k = host._kind, F = $h(".exfields"); host._calc = null;
         host.querySelectorAll(".exkind button").forEach(b => b.classList.toggle("on", b.dataset.k === k || (b.dataset.k === "nhap" && k === "tranoncc")));
         if (k === "nhap") F.innerHTML = `<div class="two"><div>${dateF("Ngày nhập *")}</div><div><label>Nhà cung cấp *</label><input class="exsupn" list="exSupList" autocomplete="off" placeholder="VD: NCC Hà Nội"></div></div>
-          <div class="two"><div><label>Sản phẩm nhập *</label><input class="expr" list="prodList" autocomplete="off" placeholder="Tên sản phẩm"></div><div><label>Số lượng *</label><input class="exqty" type="number" min="1" inputmode="numeric" value="1"></div></div>
-          <div class="two"><div><label>Số SP có VAT (0 = không VAT)</label><input class="exvq" type="number" min="0" inputmode="numeric" value="0"></div><div><label>Thuế VAT (%)</label><input class="exvr" type="number" min="0" step="0.5" value="8"></div></div>
-          <label>Tổng tiền hàng (đ) – đã gồm VAT *</label><input class="exa" inputmode="numeric" placeholder="VD: 102.400.000">
+          <label>Hàng nhập * <span class="sub">(mỗi dòng: sản phẩm · số lượng · đơn giá – tối đa 10 dòng)</span></label>
+          <div class="exlines"></div>
+          <button type="button" class="btn sm exladd" style="margin-top:8px">+ Thêm dòng hàng</button>
+          <div class="two"><div><label>Thuế VAT (%) <span class="sub">– cho dòng tick VAT</span></label><input class="exvr" type="number" min="0" step="0.5" value="8"></div><div><label>Tổng tiền hàng (đ) – tự cộng</label><input class="exa" inputmode="numeric" readonly placeholder="Tự cộng các dòng" style="font-weight:700"></div></div>
           <div class="found excost" style="display:none;margin-top:6px"></div>
           <label>Thanh toán</label><div class="choice"><button type="button" class="opt" data-pm="full"><span class="ic">✅</span>Thanh toán 1 lần (đủ)</button><button type="button" class="opt" data-pm="part"><span class="ic">💳</span>Trả một phần / chưa trả</button></div>
           <div class="expaidw hide"><label>Đã thanh toán (đ)</label><input class="expaid" inputmode="numeric" placeholder="VD: 50.000.000 (0 nếu chưa trả)"></div>
@@ -5392,15 +5393,29 @@ window.APP_BUILD = "2026-11-23.1";
           const cw = $h(".exchargew"); if (cw) { cw.style.display = host._payer === "cty" ? "flex" : "none"; if (host._payer !== "cty") $h(".excharge").checked = false; } };
         host.querySelectorAll(".exfields .opt[data-p]").forEach(o => o.onclick = () => { host._payer = o.dataset.p; syncP(); }); syncP();
         if (k === "nhap") {
-          host._calc = () => { const qty = parseInt($h(".exqty").value) || 0, total = money0($h(".exa")), c = costCalc("total", total, qty, $h(".exvq").value, $h(".exvr").value);
-            $h(".excost").innerHTML = costHtml(c); $h(".excost").style.display = c ? "" : "none";
+          const vr = () => Math.max(0, Number(String($h(".exvr").value).replace(",", ".")) || 0) / 100;
+          host._lines = () => [...host.querySelectorAll(".exln")].map(el => { const q = parseInt(el.querySelector(".exlq").value) || 0, u = money0(el.querySelector(".exlu")), v = el.querySelector(".exlv").checked;
+            return {el, product: el.querySelector(".exlp").value.trim(), qty: q, unit: u, vat: v, total: Math.round(q * u * (1 + (v ? vr() : 0)))}; });
+          const addLn = () => { const box = $h(".exlines"); if (box.children.length >= 10) { toast("Tối đa 10 dòng hàng"); return; } const i = box.children.length + 1;
+            box.insertAdjacentHTML("beforeend", `<div class="exln" style="margin-top:8px;padding:8px;border:1.5px solid var(--line);border-radius:12px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Dòng ${i}</b>${i > 1 ? `<button type="button" class="btn sm exlrm" style="width:auto;flex:0 0 auto;padding:3px 10px">✕</button>` : ""}</div>
+              <div style="margin-top:4px"><input class="exlp" list="prodList" autocomplete="off" placeholder="Sản phẩm nhập" style="width:100%"></div>
+              <div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input class="exlq" type="number" min="1" inputmode="numeric" value="1" title="Số lượng" style="width:70px;flex:0 0 auto"><input class="exlu" inputmode="numeric" placeholder="Đơn giá / 1 SP" style="flex:1;min-width:0"><label style="display:flex;align-items:center;gap:4px;margin:0;font-size:13px;color:var(--ink);flex:0 0 auto"><input type="checkbox" class="exlv" style="width:18px;height:18px;margin:0"> VAT</label></div>
+              <div class="sub exlt" style="margin-top:4px"></div></div>`);
+            const el = box.lastElementChild; fmtMoneyInput(el.querySelector(".exlu")); el.querySelector(".exlrm")?.addEventListener("click", () => { el.remove(); [...box.children].forEach((x, k) => x.querySelector("b").textContent = "Dòng " + (k + 1)); host._calc(); }); };
+          $h(".exladd").onclick = () => { addLn(); $h(".exlines").lastElementChild.querySelector(".exlp").focus(); };
+          $h(".exlines").addEventListener("input", () => host._calc()); $h(".exlines").addEventListener("change", () => host._calc());
+          addLn();
+          host._calc = () => { const L = host._lines(), total = L.reduce((a, x) => a + x.total, 0);
+            L.forEach(x => x.el.querySelector(".exlt").innerHTML = x.qty && x.unit ? `${x.qty} × ${money(x.unit)}${x.vat ? ` + VAT ${Math.round(vr() * 1000) / 10}%` : ""} = <b style="color:var(--ink)">${money(x.total)}</b>` : "");
+            $h(".exa").value = total ? total.toLocaleString("vi-VN") : "";
+            $h(".excost").innerHTML = total ? `🧮 ${L.filter(x => x.total).length} dòng hàng · tổng <b>${money(total)}</b>` : ""; $h(".excost").style.display = total ? "" : "none";
             host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.classList.toggle("sel", o.dataset.pm === host._payMode));
             $h(".expaidw").classList.toggle("hide", host._payMode !== "part");
             const paid = host._payMode === "full" ? total : Math.min(total, money0($h(".expaid"))), debt = total - paid;
             $h(".exdebt").innerHTML = total ? `Đã thanh toán: <b>${money(paid)}</b> · Còn nợ nhà cung cấp: <b style="color:${debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(debt)}</b>` : "";
             const sup = $h(".exsupn").value.trim(); if (sup && supDebtOf(sup)) $h(".exdebt").innerHTML += `<br>Nợ cũ với ${esc(sup)}: ${money(supDebtOf(sup))} → sau đợt này: <b>${money(supDebtOf(sup) + debt)}</b>`; };
           host.querySelectorAll(".exfields .opt[data-pm]").forEach(o => o.onclick = () => { host._payMode = o.dataset.pm; host._calc(); if (host._payMode === "part") $h(".expaid").focus(); });
-          [".exqty", ".exvq", ".exvr", ".exsupn"].forEach(s => $h(s).addEventListener("input", host._calc));
+          [".exvr", ".exsupn"].forEach(s => $h(s).addEventListener("input", host._calc));
         }
         if (k === "ship") $h(".exr").addEventListener("input", () => { const r = refOf($h(".exr").value.trim()), box = $h(".exrinfo");
           box.style.display = r ? "" : "none";
@@ -5421,12 +5436,20 @@ window.APP_BUILD = "2026-11-23.1";
       $h(".exq").addEventListener("input", () => drawExpenses(host));
       $h(".exgo").onclick = async () => {
         const k = host._kind, v = s => ($h(s)?.value || "").trim(), amount = money0($h(".exa")), date = v(".exd") || iso(new Date());
-        const rec = {id: "ex_" + uid(), kind: k, date, amount, note: v(".exn"), by: actor(), at: new Date().toISOString()};
+        const rec = {id: "ex_" + uid(), kind: k, date, amount, note: v(".exn"), by: actor(), at: new Date().toISOString()}; let multi = null;
         const need = (cond, msg, sel) => { if (!cond) { toast(msg); if (sel) $h(sel)?.focus(); throw new Error("x"); } };
         let shipTarget = null;
         try {
           need(amount > 0, "Nhập số tiền", ".exa");
-          if (k === "nhap") { const qty = parseInt(v(".exqty")) || 0, c = costCalc("total", amount, qty, v(".exvq"), v(".exvr"));
+          if (k === "nhap") { const L = host._lines().filter(x => x.product || x.unit);
+            need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn");
+            for (const x of L) { need(x.product, "Dòng hàng thiếu tên sản phẩm", null); need(x.qty > 0, `${x.product}: nhập số lượng`, null); need(x.unit > 0, `${x.product}: nhập đơn giá`, null); }
+            need(L.length, "Nhập ít nhất 1 dòng hàng", ".exlp");
+            const paidAll = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid"))), r = Math.max(0, Number(String(v(".exvr")).replace(",", ".")) || 0), batch = "nh_" + uid();
+            let left = paidAll; multi = L.map((x, i) => { const pd = i === L.length - 1 ? left : Math.round(paidAll * x.total / amount); left -= pd;
+              return Object.assign({}, rec, {id: "ex_" + uid(), amount: x.total, supplier: v(".exsupn"), product: x.product, qty: x.qty, vatQty: x.vat ? x.qty : 0, vatRate: x.vat ? r : 0, unit: x.unit, unitVat: Math.round(x.unit * (1 + (x.vat ? r / 100 : 0))),
+                paid: pd, debt: x.total - pd, payMode: host._payMode, whStatus: "cho", batch, batchN: L.length}); }); }
+          else if (false) { const qty = 0, c = null;
             need(v(".exsupn"), "Nhập tên nhà cung cấp", ".exsupn"); need(v(".expr"), "Nhập sản phẩm nhập", ".expr"); need(qty > 0, "Nhập số lượng", ".exqty"); need(!c?.overVat, "Số SP có VAT lớn hơn số lượng", ".exvq");
             const paid = host._payMode === "full" ? amount : Math.min(amount, money0($h(".expaid")));
             Object.assign(rec, {supplier: v(".exsupn"), product: v(".expr"), qty, vatQty: c.vatQty, vatRate: c.vatRate, unit: c.unit, unitVat: c.unitVat, paid, debt: amount - paid, payMode: host._payMode, whStatus: "cho"}); }
@@ -5442,6 +5465,9 @@ window.APP_BUILD = "2026-11-23.1";
         try {
           const ph = $h(".exph")._photos();
           rec.photos = ph.length ? await savePhotos(ph, {product: "Chi phí", ref: exTitle(rec)}) : [];
+          if (multi) { multi[0].photos = rec.photos; await putMany("ex", multi);
+            pushTo("wh", "📥 Hàng NCC chờ nhập kho", `${multi.length} dòng hàng – ${multi[0].supplier}`, multi[0].id);
+            toast(`Đã lưu ${multi.length} dòng hàng nhập ${multi[0].supplier} – ${money(amount)} · đã chuyển Kho chờ nhập`); buildFields(); $h(".exn").value = ""; $h(".exph")._clear(); return; }
           await put("ex", rec);
           let extra = "";
           if (rec.kind === "nhap") { extra = " · đã chuyển Kho chờ nhập"; pushTo("wh", "📥 Hàng NCC chờ nhập kho", `${rec.qty} ${rec.product} – ${rec.supplier}`, rec.id); }
