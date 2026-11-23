@@ -24,7 +24,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 ## Dữ liệu Firestore (collection)
 `tk` phiếu bảo hành/sửa chữa · `od` đơn hàng · `st` hàng có seri trong kho · `mv` biến động tồn kho (nhập/xuất) · `ex` chi phí + nhiều loại bản ghi khác (theo `kind`) · `reg` sổ bảo hành theo seri · `ri` nhập sổ bảo hành từ file · `ph` ảnh.
 - `mv.kind`: nhap, xuat, kiemke, linhkien (KT thay cho khách), lk_test (KT mượn test), lk_test_tra (trả lại), doimoi, lammoi, muon…
-- `ex.kind`: nhap (nhập hàng NCC – cũng là nợ NCC), tranoncc (trả nợ NCC), ship, dodung, luong, khac, và các loại KHÔNG tính chi phí: nhanvien, bangluong, chamcong, cclog, cc_cfg, muon, fw, fw_cfg, swsale, kkreq, lkmuon.
+- `ex.kind`: nhap (nhập hàng NCC – cũng là nợ NCC), tranoncc (trả nợ NCC), ship, dodung, luong, khac, và các loại KHÔNG tính chi phí: nhanvien, bangluong, chamcong, cclog, cc_cfg, muon, fw, fw_cfg, swsale, kkreq, lkmuon, lmreq, upreq.
 
 ## Quy trình chính
 - **Phiếu sửa chữa / bảo hành:** Bảo hành nhận → Giám đốc duyệt (nếu "liên hệ khách sau" thì GĐ điền lỗi) → Kho nhận hàng → Kỹ thuật kiểm tra lỗi, xử lý → Vận chuyển gửi trả → Kế toán thu tiền / công nợ.
@@ -36,6 +36,10 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Kế toán ghi thanh toán:** ô Tiền hàng + phí chành xe đã tick = Tổng công nợ, trừ tạm ứng = còn nợ.
 - **Linh kiện mượn test (tab Kỹ thuật):** chọn Test sản phẩm mới nhập về / Test cho khách (chọn phiếu) → tìm trong kho → gửi Kho đồng ý mới trừ kho → hạn trả 3 ngày, quá hạn nhắc (có Gia hạn 3 ngày) → Kho bấm Nhận lại cộng kho. Không có trong kho → ô Giải pháp chờ Kho duyệt. Khi Hoàn tất phiếu: từng linh kiện chọn Thay cho khách / Trả về kho.
 - **Kho:** xuất kho theo loại (Xuất làm mới sản phẩm, KT thay cho khách, Đổi cho khách, KT mượn test, Xuất bán theo đơn), tổng hợp + Excel; trả tiền NCC → Kho duyệt nhập hàng; sửa số tồn cần GĐ duyệt; kiểm kê theo file.
+- **Kỹ thuật – Xuất làm mới sản phẩm:** chọn hàng trong kho → gửi Kho duyệt xuất (ex kind `lmreq`) → Kho duyệt mới trừ kho (mv `lammoi`).
+- **Kỹ thuật – Nâng cấp sản phẩm:** sản phẩm cũ + linh kiện → trừ kho ngay (mv `nangcap`) → Kho duyệt nhập sản phẩm mới (mv `nangcap_nhap`, tạo sản phẩm nếu chưa có); từ chối thì hoàn kho (`nangcap_huy`). Bản ghi ex kind `upreq`.
+- **Kế toán – Nhập hàng NCC:** nhiều dòng (tối đa 10) có số lượng, đơn giá, VAT; mỗi dòng 1 bản ghi `nhap` chờ Kho duyệt nhập.
+- **Giám đốc – Báo cáo cuối ngày:** tồn kho + doanh thu ngày, tải Excel.
 - **Thông báo:** tất cả gom vào nút chuông đỏ góc dưới phải, bấm mới hiện; ẩn khi đang gõ.
 - **Tự cập nhật:** app kiểm tra `APP_BUILD` trên máy chủ mỗi phút / khi mở lại → có bản mới thì tự tải lại.
 
