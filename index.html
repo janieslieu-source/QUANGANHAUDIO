@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.25";
+window.APP_BUILD = "2026-11-23.26";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3493,13 +3493,27 @@ window.APP_BUILD = "2026-11-23.25";
       if (k === "no") { if (x.status !== "cho") return; const why = prompt(`Từ chối xuất công trình "${x.name}" – lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do"); return; }
         await save({status: "no", reply: why.trim(), doneAt: now}, `Kho từ chối xuất công trình ${x.name}`, "kt"); }
       if (k === "back" || k === "done") { if (x.status !== "out") return; const L = ctLeft(x).filter(r => r.left > 0); if (!L.length) return;
-        const rows = x.rows.map(r => Object.assign({}, r)), act = [];
-        for (const r of L) { const v = prompt(`${k === "back" ? "Số lượng TRẢ VỀ KHO" : "Số lượng ĐÃ LẮP cho khách"} – ${r.name} (còn ở công trình ${r.left}):`, String(r.left)); if (v == null) return;
-          const n = Math.min(r.left, Math.max(0, parseInt(v) || 0)); if (!n) continue; const rr = rows.find(z => z.name === r.name); rr[k === "back" ? "back" : "used"] = (rr[k === "back" ? "back" : "used"] || 0) + n; act.push({name: r.name, n}); }
-        if (!act.length) return;
-        if (k === "back") await putMany("mv", act.map(a => ({id: "mv_" + uid(), product: a.name, qty: a.n, at: now, kind: "congtrinh_tra", ref: x.code, note: `Công trình ${x.name} trả về kho`, by: actor()})));
-        const left = rows.reduce((t, r) => t + r.qty - (r.back || 0) - (r.used || 0), 0);
-        await save(Object.assign({rows}, left ? {} : {status: "done", doneAt: now}), `${k === "back" ? "↩️ Trả về kho" : "✅ Đã lắp"}: ${act.map(a => a.name + " ×" + a.n).join(", ")} – ${x.name}${left ? "" : " · công trình đã chốt xong"}`, k === "back" ? (role === "wh" ? "kt" : "wh") : null); }
+        const finish = async (act, kk) => { const rows = x.rows.map(r => Object.assign({}, r)); const at = new Date().toISOString();
+          act.forEach(a => { const rr = rows.find(z => z.name === a.name); rr[kk === "back" ? "back" : "used"] = (rr[kk === "back" ? "back" : "used"] || 0) + a.n; });
+          if (kk === "back") await putMany("mv", act.map(a => ({id: "mv_" + uid(), product: a.name, qty: a.n, at, kind: "congtrinh_tra", ref: x.code, note: `Công trình ${x.name} trả về kho`, by: actor()})));
+          const left = rows.reduce((t, r) => t + r.qty - (r.back || 0) - (r.used || 0), 0);
+          await save(Object.assign({rows}, left ? {} : {status: "done", doneAt: at}), `${kk === "back" ? "↩️ Trả về kho" : "✅ Đã lắp"}: ${act.map(a => a.name + " ×" + a.n).join(", ")} – ${x.name}${left ? "" : " · công trình đã chốt xong"}`, kk === "back" ? (role === "wh" ? "kt" : "wh") : null); };
+        if (k === "done") { if (!confirm(`Chốt đã lắp TẤT CẢ hàng còn ở công trình "${x.name}"?\n${L.map(r => "• " + r.name + " ×" + r.left).join("\n")}`)) return;
+          await finish(L.map(r => ({name: r.name, n: r.left})), "done"); return; }
+        // trả về kho: bảng tick từng món + số lượng
+        const F = $("#actForm");
+        F.innerHTML = `<div class="grab"></div><h2>↩️ Trả về kho – ${esc(x.name)}</h2><div class="sub" style="margin-bottom:6px">Tick món trả về kho, sửa số lượng nếu trả một phần.</div>
+          ${L.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px">
+            <input type="checkbox" class="ctbk" data-i="${i}" checked style="width:22px;height:22px;margin:0;flex:0 0 auto">
+            <div style="flex:1;min-width:0"><b>${esc(r.name)}</b><div class="sub">còn ở công trình ${r.left}</div></div>
+            <input type="number" class="ctbq" data-i="${i}" min="1" max="${r.left}" value="${r.left}" inputmode="numeric" style="width:76px;flex:0 0 auto"></div>`).join("")}
+          <div class="sub" id="ctbkSum" style="margin-top:8px"></div>
+          <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">↩️ Xác nhận trả về kho</button></div>`;
+        const sum = () => { const n = [...F.querySelectorAll(".ctbk")].filter(c => c.checked).reduce((t, c) => t + Math.min(L[+c.dataset.i].left, Math.max(0, parseInt(F.querySelector(`.ctbq[data-i="${c.dataset.i}"]`).value) || 0)), 0); $("#ctbkSum").innerHTML = `Trả về kho: <b>${n}</b> cái`; };
+        F.querySelectorAll(".ctbk, .ctbq").forEach(el => el.addEventListener("input", sum)); F.querySelectorAll(".ctbk").forEach(el => el.addEventListener("change", sum)); sum();
+        actCtx = {run: async () => { const act = [...F.querySelectorAll(".ctbk")].filter(c => c.checked).map(c => { const r = L[+c.dataset.i]; return {name: r.name, n: Math.min(r.left, Math.max(0, parseInt(F.querySelector(`.ctbq[data-i="${c.dataset.i}"]`).value) || 0))}; }).filter(a => a.n > 0);
+          if (!act.length) { toast("Tick ít nhất 1 món trả về kho"); throw new Error("x"); } await finish(act, "back"); }};
+        open("actBg"); }
     } catch(err){}
   }, true);
   /* ================= VẬN CHUYỂN ================= */
