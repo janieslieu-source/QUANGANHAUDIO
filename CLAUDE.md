@@ -33,6 +33,7 @@ Mỗi tab có mật mã riêng (lưu trong app, không ghi ở đây).
 - **Đơn hàng (Bán hàng):** Bán hàng tạo đơn → Kho xuất (seri) → Vận chuyển gửi → Kế toán.
   - Có thu cũ đổi mới (nhắc sau 5 ngày nếu khách chưa gửi hàng cũ), phần mềm, hàng tặng.
   - Dòng **🚚 Giao thẳng từ nhà cung cấp**: không qua kho; có ô giá nhập (không bắt buộc) → tự ghi nợ NCC; chưa có giá thì mục Chi phí nhắc, 17h chuông nhắc Kế toán/GĐ. Đơn toàn hàng giao thẳng → chuyển thẳng Kế toán.
+- **Box Android – mã kích hoạt:** Kho xuất kho dòng box Android (isBox) có ô mã kích hoạt theo thứ tự seri → ghi reg.actCode + line.actCodes → tự hiện ở tab 💿 Phần mềm (pmLicenses) và tra cứu bảo hành.
 - **Vận chuyển gửi chành xe:** phí ship (bắt buộc) + phí gửi hàng (không bắt buộc), mỗi phí chọn Công ty trả / Khách trả; tổng ghi vào Chi phí – Ship hàng.
 - **Kế toán ghi thanh toán:** ô Tiền hàng + phí chành xe đã tick = Tổng công nợ, trừ tạm ứng = còn nợ.
 - **Linh kiện mượn test (tab Kỹ thuật):** chọn Test sản phẩm mới nhập về / Test cho khách (chọn phiếu) → tìm trong kho → gửi Kho đồng ý mới trừ kho → hạn trả 3 ngày, quá hạn nhắc (có Gia hạn 3 ngày) → Kho bấm Nhận lại cộng kho. Không có trong kho → ô Giải pháp chờ Kho duyệt. Khi Hoàn tất phiếu: từng linh kiện chọn Thay cho khách / Trả về kho.

@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.19";
+window.APP_BUILD = "2026-11-23.20";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1714,6 +1714,9 @@ window.APP_BUILD = "2026-11-23.19";
   const isHead = name => { const n = norm(name); if (!n) return false;
     if (/may karaoke|\bdau\b/.test(n)) return !/dau (noi|day|chuyen|doc the)/.test(n);
     return /\b(okara|nas|smartk|vietk|vietktv)\b/.test(n) && !/\b(loa|micro|mic|vang|cuc day|hdmi|man hinh|amply|tai nghe|day|remote|phu kien|op)\b/.test(n); };
+  // box Android: khách mua có mã kích hoạt → nhập lúc xuất kho, tự vào mục Phần mềm
+  const isBox = name => { const n = norm(name); return /\bandroid\b|\btv ?box\b|\bbox\b/.test(n) && !/\b(loa|micro|mic|vang|cuc day|hdmi|amply|op|bao da)\b/.test(n); };
+  const hasAct = name => isHead(name) || isBox(name);
   const F = $("#recvForm");
   function setTKind(v){ F.ttest.value = v ? "1" : ""; document.querySelectorAll("#tKind button").forEach(b => b.classList.toggle("on", b.dataset.tk === (v ? "1" : ""))); $("#tKindHint").classList.toggle("hide", !v); }
   document.querySelectorAll("#tKind button").forEach(b => b.onclick = () => setTKind(b.dataset.tk));
@@ -1900,7 +1903,7 @@ window.APP_BUILD = "2026-11-23.19";
         : `<div class="wbox b-bad"><b>⛔ ${m === 0 ? "KHÔNG CÓ BẢO HÀNH" : "HẾT HẠN BẢO HÀNH"}</b>${m === 0 ? "Sản phẩm bán không kèm bảo hành" : `Đã hết hạn ${-S.days} ngày · hết hạn ${fmt(iso(S.exp))}`}</div>`;
       h += `<dl class="kv" style="margin-top:10px"><dt>Sản phẩm</dt><dd><b>${esc(r.product || "")}</b></dd><dt>Khách mua</dt><dd>${esc(r.customer || "")}${r.custCode ? " (" + esc(r.custCode) + ")" : ""}${r.phone ? " · " + esc(r.phone) : ""}</dd>
         <dt>Ngày bán</dt><dd><b>${r.purchaseDate ? fmt(r.purchaseDate) : "—"}</b></dd><dt>Thời hạn BH</dt><dd>${m >= 1200 ? "Vĩnh viễn" : m + " tháng"}</dd>
-        ${r.fileNote ? `<dt>Ghi chú</dt><dd>${esc(r.fileNote)}</dd>` : ""}${r.orderCode ? `<dt>Đơn bán</dt><dd>${esc(r.orderCode)}</dd>` : ""}<dt>Nguồn</dt><dd>${r.fromFile ? "📄 File " + esc(r.fromFile) : "Phần mềm"}</dd>
+        ${r.fileNote ? `<dt>Ghi chú</dt><dd>${esc(r.fileNote)}</dd>` : ""}${r.orderCode ? `<dt>Đơn bán</dt><dd>${esc(r.orderCode)}</dd>` : ""}${r.actCode || r.actCodeNew ? `<dt>Mã kích hoạt</dt><dd><b>${esc(r.actCodeNew || r.actCode)}</b></dd>` : ""}<dt>Nguồn</dt><dd>${r.fromFile ? "📄 File " + esc(r.fromFile) : "Phần mềm"}</dd>
         ${r.fileHist ? `<dt>Lịch sử file</dt><dd style="font-size:13px">${esc(r.fileHist)}</dd>` : ""}</dl>`;
       if (r.replacedBy) h += `<div class="found" style="background:var(--warnbg);color:var(--warn)">⚠️ Seri này đã được ĐỔI sang SN <b>${esc(r.replacedBy)}</b> – máy cũ đã thu hồi.</div>`;
       if (r.replacedFrom) h += `<div class="found">🔄 Máy đổi mới từ SN ${esc(r.replacedFrom)}</div>`;
@@ -2911,9 +2914,11 @@ window.APP_BUILD = "2026-11-23.19";
   function pmLicenses(){
     const L = expenses.filter(x => x.kind === "swsale").map(x => ({src: "sw", id: x.id, idx: -1, customer: x.customer, phone: x.phone || "", name: x.name, qty: x.qty || 1, term: x.term, key: x.key, start: x.start, until: x.until, price: x.price, renewals: x.renewals || [], note: x.note || "", ref: ""}));
     // mua đầu karaoke mới: phần mềm kích hoạt vĩnh viễn sẵn – tự ghi theo từng seri đã xuất kho
-    orders.filter(o => o.stage !== "huy").forEach(o => (o.lines || []).forEach((l, i) => { if (l.gift || !isHead(l.product)) return;
-      const sns = snOf(o, i), base = {src: "head", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: `Phần mềm karaoke – ${l.product}`, term: "vv", start: o.saleDate || (o.createdAt || "").slice(0, 10), until: "", price: null, renewals: [], ref: o.code, auto: true};
-      if (sns.length) sns.forEach(sn => { const r = findReg(sn) || {}; L.push(Object.assign({}, base, {qty: 1, key: r.actCodeNew || r.actCode || r.codes || "", sn, note: `Kích hoạt sẵn khi mua đầu · SN ${sn}`})); });
+    orders.filter(o => o.stage !== "huy").forEach(o => (o.lines || []).forEach((l, i) => { if (l.gift || !hasAct(l.product)) return;
+      const box = !isHead(l.product); if (box && !(l.actCodes || []).length && !snOf(o, i).some(sn => findReg(sn)?.actCode)) return;   // box Android: chỉ khi có mã kích hoạt
+      const sns = snOf(o, i), base = {src: "head", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: `${box ? "Box Android" : "Phần mềm karaoke"} – ${l.product}`, term: "vv", start: o.saleDate || (o.createdAt || "").slice(0, 10), until: "", price: null, renewals: [], ref: o.code, auto: true};
+      if (sns.length) sns.forEach((sn, k) => { const r = findReg(sn) || {}; L.push(Object.assign({}, base, {qty: 1, key: r.actCodeNew || r.actCode || r.codes || (l.actCodes || [])[k] || "", sn, note: `${box ? "Mã kích hoạt box Android" : "Kích hoạt sẵn khi mua đầu"} · SN ${sn}`})); });
+      else if (box) (l.actCodes || []).forEach(ac => L.push(Object.assign({}, base, {qty: 1, key: ac, note: "Mã kích hoạt box Android (không seri)"})));
       else L.push(Object.assign({}, base, {qty: l.qty || 1, key: "", note: "Kích hoạt sẵn khi mua đầu · chờ Kho xuất (chưa có seri)"})); }));
     orders.forEach(o => (o.software || []).forEach((w, i) => L.push({src: "od", id: o.id, idx: i, customer: o.customer, phone: o.phone || "", name: w.name, qty: w.qty || 1, term: w.term, key: w.key, start: w.start, until: w.until, price: null, renewals: w.renewals || [], note: "", ref: o.code})));
     return L.sort((a,b) => (a.term === "vv") - (b.term === "vv") || (a.until || "").localeCompare(b.until || "") || (b.start || "").localeCompare(a.start || ""));
@@ -2933,7 +2938,7 @@ window.APP_BUILD = "2026-11-23.19";
     $("#pmList").innerHTML = L.length ? L.slice(0, 150).map(x => { const st = pmState(x);
       return `<div class="item" style="cursor:default"><div class="row"><div><div class="pname">💿 ${esc(x.name)}${x.qty > 1 ? ` × ${x.qty}` : ""}</div>
         <div class="sub">👤 <b style="color:var(--ink)">${esc(x.customer)}</b>${x.phone ? " · 📞 " + esc(x.phone) : ""}${x.ref ? ` · đơn ${esc(x.ref)}` : ""}</div>
-        <div style="margin-top:4px;font-size:15px">🔑 Mã: <b>${esc(x.key || (x.auto ? (x.sn ? "SN " + x.sn : "—") : "—"))}</b> ${x.key ? copyBtn(x.key) : ""}${x.auto ? ` <span class="tag" style="background:#ede9fe;color:#6d28d9">🎤 Kèm đầu karaoke</span>` : ""}</div>
+        <div style="margin-top:4px;font-size:15px">🔑 Mã: <b>${esc(x.key || (x.auto ? (x.sn ? "SN " + x.sn : "—") : "—"))}</b> ${x.key ? copyBtn(x.key) : ""}${x.auto ? ` <span class="tag" style="background:#ede9fe;color:#6d28d9">${String(x.name).startsWith("Box Android") ? "📦 Box Android" : "🎤 Kèm đầu karaoke"}</span>` : ""}</div>
         <div class="sub">Bán ngày ${fmt(x.start)}${x.price && !hidePrice() ? " · " + money(x.price) : ""}${x.renewals.length ? ` · đã gia hạn ${x.renewals.length} lần` : ""}${x.note ? " · " + esc(x.note) : ""}</div>
         <div style="margin-top:4px"><b style="color:${st.c}">${st.t}</b></div></div></div>
         ${x.term === "1y" && canEdit ? `<div class="cardbtns"><button type="button" class="btn ${st.k === "con" ? "" : "okb"}" data-pmrenew="${esc(x.src + ":" + x.id + ":" + x.idx)}">🔁 Gia hạn 1 năm (tái gói)</button></div>` : ""}</div>`; }).join("")
@@ -4586,7 +4591,9 @@ window.APP_BUILD = "2026-11-23.19";
           <textarea class="sn" data-i="${i}" rows="${Math.min(8, Math.max(2, l.qty * snPerOf(l.product)))}" placeholder="${snPerOf(l.product) > 1 ? `Hàng bộ: mỗi sản phẩm ${snPerOf(l.product)} seri – gõ / quét đủ ${l.qty * snPerOf(l.product)} seri (mỗi dòng 1 seri)` : Array.from({length: Math.min(l.qty, 3)}, (_, k) => "525xxxxx").join("\n")}">${esc(snOf(o,i).join("\n"))}</textarea>
           <button type="button" class="btn sm pri xkscan" data-i="${i}" style="margin-top:6px">📷 Quét seri bằng camera</button>
           <div class="sub snc" data-i="${i}"></div></div>
-          <div class="xkph" data-i="${i}" style="margin-top:6px"></div></div>`).join("")}
+          <div class="xkph" data-i="${i}" style="margin-top:6px"></div>
+          ${!l.gift && isBox(l.product) ? `<div style="margin-top:8px;padding:8px;border:2px solid #7c3aed;border-radius:10px;background:rgba(124,58,237,.05)"><label style="margin-top:0;color:#7c3aed">🔑 Mã kích hoạt box Android <span class="sub">(mỗi dòng 1 mã – theo thứ tự seri; không có thì để trống)</span></label>
+            <textarea class="xkact" data-i="${i}" rows="${Math.min(6, Math.max(1, l.qty))}" placeholder="Mã kích hoạt (mỗi dòng 1 mã)">${esc((l.actCodes || []).join("\n"))}</textarea><div class="sub">Có mã → tự ghi vào sổ bảo hành và chuyển sang mục 💿 Phần mềm</div></div>` : ""}</div>`).join("")}
       <div id="xkApproveW" class="hide" style="margin-top:10px;padding:10px;border:2px solid var(--bad);border-radius:10px">
         <label style="display:flex;gap:8px;align-items:flex-start;color:var(--bad);font-size:14px;margin:0"><input type="checkbox" id="xkApprove" style="width:auto;margin:3px 0 0"> <span><b>Kho duyệt xuất các seri bị cảnh báo</b> (đã kiểm tra, không phải máy đổi cho khách khác)</span></label>
         <input id="xkApproveNote" placeholder="Ghi chú kiểm tra (bắt buộc khi duyệt)" style="margin-top:8px"></div>
@@ -4675,20 +4682,22 @@ window.APP_BUILD = "2026-11-23.19";
       const gone = serials.flat().map(findStock).filter(x => x && x.status !== "in");
       if (gone.length) { toast(`Seri ${gone[0].serial} đã xuất ở đơn ${gone[0].orderCode || "khác"}`); throw new Error("x"); }
       const now = new Date().toISOString();
+      const acts = (o.lines || []).map((l, i) => (F5.querySelector(`.xkact[data-i="${i}"]`)?.value || "").split(/[\n,;]+/).map(x => x.trim()).filter(Boolean));
+      for (let i = 0; i < acts.length; i++) if (acts[i].length > (o.lines[i].qty || 1)) { toast(`${o.lines[i].product}: ${acts[i].length} mã kích hoạt nhiều hơn số lượng ${o.lines[i].qty}`); throw new Error("x"); }
       // ghi sổ bảo hành cho từng seri -> sau này tab Bảo hành tra seri là ra hạn bảo hành
       for (let i = 0; i < serials.length; i++) {
         const l = o.lines[i]; if (!l.months) continue;
-        for (const sn of serials[i]) {
-          const r = findReg(sn);
+        for (const [k, sn] of serials[i].entries()) {
+          const r = findReg(sn), ac = acts[i][k];
           const sub = findStock(sn)?.subSerials?.length ? findStock(sn).subSerials : subOf.get(keySN(sn));
-          await put("reg", Object.assign({}, r || {id: uid(), createdAt: now}, {serial: sn, customer: o.customer, phone: o.phone, product: l.product, purchaseDate: o.saleDate, months: l.months, orderCode: o.code, updatedAt: now}, sub?.length ? {subSerials: sub} : {}));
+          await put("reg", Object.assign({}, r || {id: uid(), createdAt: now}, {serial: sn, customer: o.customer, phone: o.phone, product: l.product, purchaseDate: o.saleDate, months: l.months, orderCode: o.code, updatedAt: now}, ac ? {actCode: ac} : {}, sub?.length ? {subSerials: sub} : {}));
         }
       }
       const lines = [];
       for (let i = 0; i < (o.lines || []).length; i++) {
         const l = o.lines[i], ph = modes[i] === "khong" ? [] : F5.querySelector(`.xkph[data-i="${i}"]`)._photos();
         const ids = ph.length ? await savePhotos(ph, {product: l.product, ref: "Xuất kho " + o.code}) : [];
-        lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, setsAll[i].per > 1 ? {serialSets: setsAll[i].sets.map(g => g.join(","))} : {}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
+        lines.push(Object.assign({}, l, {serials: serials[i], snMode: modes[i]}, acts[i].length ? {actCodes: acts[i]} : {}, setsAll[i].per > 1 ? {serialSets: setsAll[i].sets.map(g => g.join(","))} : {}, ids.length ? {photos: (l.photos || []).concat(ids)} : {}));
       }
       const nAnh = modes.filter(m => m === "anh").length, nKhong = modes.filter(m => m === "khong").length;
       await advanceOrder(o, "cho_vc", `${warnSn.length ? `⚠️ Kho duyệt xuất seri cảnh báo ${warnSn.join(", ")}: ${$("#xkApproveNote").value.trim()} · ` : ""}Xuất ${serials.flat().length ? serials.flat().length + " seri" : "hàng"}${nAnh ? ` · ${nAnh} dòng đối chiếu seri bằng ảnh` : ""}${nKhong ? ` · ${nKhong} dòng không seri` : ""}`, {lines, serials: null, exportedAt: now});
