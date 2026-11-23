@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.24";
+window.APP_BUILD = "2026-11-23.25";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -4369,10 +4369,11 @@ window.APP_BUILD = "2026-11-23.24";
   function drawNccIn(){
     const L = nccPending(), box = $("#nccList"); if (!box) return;
     if (box.contains(document.activeElement) && document.activeElement.matches("input")) return;   // đang gõ – không vẽ lại
-    $("#nccPanel").classList.toggle("hide", !L.length);
+    $("#nccPanel").classList.remove("hide"); $("#nccPanel").style.borderColor = L.length ? "#f59e0b" : "var(--line)";
     $("#nccCnt").textContent = L.length ? `(${L.length})` : "";
     $("#nccBtnCnt").textContent = L.length || ""; $("#nccBtnCnt").classList.toggle("hide", !L.length);
     const exName = v => productNames().find(p => norm(p) === norm(v));
+    if (!L.length) { box.innerHTML = `<div class="sub">Chưa có hàng nhà cung cấp chờ nhập. Kế toán ghi <b>Chi phí → 📦 Nhập hàng NCC → Nhập hàng mới</b> thì hàng hiện ở đây để Kho duyệt.</div>`; return; }
     box.innerHTML = L.map(x => {
       const exact = exName(x.product), sug = nccSuggest(x.product).filter(p => p !== exact);
       const sn0 = x.hasSn != null ? !!x.hasSn : exact || sug[0] ? hasSnOf(exact || sug[0]) : false;
