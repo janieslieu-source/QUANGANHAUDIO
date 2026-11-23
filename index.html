@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.11";
+window.APP_BUILD = "2026-11-23.12";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -5509,6 +5509,38 @@ window.APP_BUILD = "2026-11-23.11";
       if (k === "ship" && x.charge) shipCharge += exAmt(x); });
     return {cty, nCty, kh, nKh, cat, goods, goodsDebt, shipCharge};
   }
+
+  /* ✏️ Điều chỉnh 1 khoản chi (số tiền, đã trả / còn nợ NCC, ngày, ghi chú…) */
+  function openExEdit(x){
+    if (!x) return; const k = exKind(x), F = $("#actForm"), m0 = v => v ? Number(v).toLocaleString("vi-VN") : (v === 0 ? "0" : "");
+    F.innerHTML = `<div class="grab"></div><h2>✏️ Điều chỉnh khoản chi</h2>
+      <div class="sub" style="margin-bottom:6px"><span class="tag ${k === "nhap" ? "vc" : k === "ship" ? "bh" : "sc"}">${esc(EX_LABEL[k] || "")}</span> ${esc(exTitle(x))}</div>
+      ${k === "nhap" || k === "tranoncc" ? `<label>Nhà cung cấp</label><input name="sup" value="${esc(x.supplier || "")}" autocomplete="off">` : ""}
+      ${k === "nhap" ? `<div class="two"><div><label>Sản phẩm</label><input name="prod" value="${esc(x.product || "")}" autocomplete="off"></div><div><label>Số lượng</label><input name="qty" type="number" min="1" inputmode="numeric" value="${x.qty || 1}"></div></div>` : ""}
+      <div class="two"><div><label>${k === "nhap" ? "Tổng tiền hàng (đ)" : "Số tiền (đ)"} *</label><input name="amt" inputmode="numeric" value="${m0(exAmt(x))}"></div><div><label>Ngày</label><input name="date" type="date" value="${x.date || iso(new Date())}"></div></div>
+      ${k === "nhap" ? `<label>Đã trả nhà cung cấp (đ)</label><input name="paid" inputmode="numeric" value="${m0(Number(x.paid) || 0)}">
+        <div class="seg" style="margin-top:6px"><button type="button" data-pq="full">✅ Đã thanh toán đủ</button><button type="button" data-pq="none">📒 Công nợ (chưa trả)</button></div>
+        <div class="sub" id="exeInfo" style="margin-top:6px"></div>` : ""}
+      ${k === "ship" || k === "khac" ? `<label>Ai trả</label><select name="payer"><option value="cty" ${x.payer !== "khach" ? "selected" : ""}>Công ty trả</option><option value="khach" ${x.payer === "khach" ? "selected" : ""}>Khách trả</option></select>` : ""}
+      <label>Ghi chú</label><input name="note" value="${esc(x.note || "")}" autocomplete="off">
+      <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">💾 Lưu điều chỉnh</button></div>`;
+    const num = el => Number(String(el?.value || "").replace(/[^\d]/g, "")) || 0;
+    const info = () => { if (k !== "nhap") return; const a = num(F.amt), p = Math.min(a, num(F.paid));
+      $("#exeInfo").innerHTML = `Tổng <b>${money(a)}</b> – đã trả <b style="color:var(--ok)">${money(p)}</b> = còn nợ <b style="color:${a - p > 0 ? "var(--bad)" : "var(--ok)"}">${money(a - p)}</b>`;
+      F.querySelectorAll("[data-pq]").forEach(b => b.classList.toggle("on", b.dataset.pq === (p >= a && a ? "full" : p === 0 ? "none" : ""))); };
+    [F.amt, F.paid].filter(Boolean).forEach(el => el.addEventListener("input", () => { el.value = el.value.trim() === "" ? "" : num(el).toLocaleString("vi-VN"); info(); }));
+    F.querySelectorAll("[data-pq]").forEach(b => b.onclick = () => { F.paid.value = b.dataset.pq === "full" ? num(F.amt).toLocaleString("vi-VN") : "0"; info(); });
+    info();
+    actCtx = {run: async () => {
+      const a = num(F.amt); if (!a) { toast("Nhập số tiền"); F.amt.focus(); throw new Error("x"); }
+      const c = Object.assign({}, x, {amount: a, date: F.date.value || x.date, note: F.note.value.trim(), editedAt: new Date().toISOString(), editedBy: actor()});
+      if (F.sup) c.supplier = F.sup.value.trim() || x.supplier;
+      if (k === "nhap") { const q = Math.max(1, parseInt(F.qty.value) || 1), p = Math.min(a, num(F.paid)); Object.assign(c, {product: F.prod.value.trim() || x.product, qty: q, unit: Math.round(a / q), paid: p, debt: a - p, payMode: p >= a ? "full" : "part"}); }
+      if (F.payer) c.payer = F.payer.value;
+      await put("ex", c); toast(`Đã điều chỉnh: ${exTitle(c)} – ${money(a)}${k === "nhap" ? ` · còn nợ ${money(c.debt)}` : ""}`);
+    }};
+    open("actBg");
+  }
   // nợ nhà cung cấp (từ trước tới nay): tiền hàng chưa trả – các lần trả nợ
   function supplierDebts(){
     const m = {};
@@ -5757,9 +5789,10 @@ window.APP_BUILD = "2026-11-23.11";
         : k === "luong" ? `Lương tháng ${x.month ? x.month.slice(5) + "/" + x.month.slice(0, 4) : ""}` : k === "khac" ? esc(x.cat || "") : "";
       return `<div class="item" style="cursor:default"><div class="row"><div><div class="pname"><span class="tag ${k === "nhap" ? "vc" : k === "ship" ? "bh" : "sc"}">${esc(EX_LABEL[k])}</span>${esc(exTitle(x))}</div>
         <div class="sub">${fmt(x.date)}${x.by ? " · " + esc(x.by) : ""}</div><div class="sub">${detail}</div>${x.note ? `<div class="sub">📝 ${esc(x.note)}</div>` : ""}</div>
-        <div style="text-align:right"><b style="color:${c ? "var(--bad)" : "var(--info)"}">${money(c || exAmt(x))}</b><div class="sub">${c ? (k === "nhap" && c < exAmt(x) ? "đã chi" : "công ty chi") : "khách trả"}</div></div></div>
-        <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + exTitle(x))}${canDel ? `<button type="button" class="btn sm danger" data-exdel="${esc(x.id)}" style="margin-left:auto">🗑 Xóa</button>` : ""}</div></div>`; }).join("")
+        <div style="text-align:right"><b style="color:${c ? "var(--bad)" : "var(--info)"}">${money(c || exAmt(x))}</b><div class="sub">${k === "nhap" ? (c >= exAmt(x) ? "đã trả đủ" : c ? "đã trả một phần" : "chưa trả – nợ NCC") : c ? "công ty chi" : "khách trả"}</div></div></div>
+        <div class="cardbtns" style="margin-top:6px">${photoBtn(x.photos, "Chi phí – " + exTitle(x))}${canDel ? `<button type="button" class="btn sm" data-exedit="${esc(x.id)}" style="margin-left:auto">✏️ Điều chỉnh</button><button type="button" class="btn sm danger" data-exdel="${esc(x.id)}">🗑 Xóa</button>` : ""}</div></div>`; }).join("")
       : `<div class="empty">${q ? "Không tìm thấy (đã tìm trong mọi thời gian)." : "Chưa có khoản chi trong kỳ."}</div>`;
+    host.querySelectorAll("[data-exedit]").forEach(b => b.onclick = () => openExEdit(expenses.find(y => y.id === b.dataset.exedit)));
     host.querySelectorAll("[data-exdel]").forEach(b => b.onclick = async () => { const x = expenses.find(y => y.id === b.dataset.exdel); if (!x) return;
       if (!confirm(`Xóa khoản chi “${exTitle(x)}” – ${money(exAmt(x))}?${x.charge ? "\n(Phí ship đã cộng vào công nợ khách sẽ KHÔNG tự trừ lại – nhờ Kế toán sửa chi phí đơn đó)" : ""}`)) return;
       try { await delDoc("ex", x.id); toast("Đã xóa khoản chi"); } catch(e){} });
