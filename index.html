@@ -785,7 +785,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-23.10";
+window.APP_BUILD = "2026-11-23.11";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -5729,8 +5729,22 @@ window.APP_BUILD = "2026-11-23.10";
       try { await put("od", Object.assign({}, o, {lines, updatedAt: new Date().toISOString()})); if (cost) await dirPayable(o, lines[+i]); toast(cost ? `Đã ghi nợ ${l.direct.ncc}: ${money(cost * l.qty)}` : "Đã bỏ qua"); } catch(e){} });
     const sup = supplierDebts().filter(r => Math.round(r.debt) !== 0);
     $h(".exsupbox").classList.toggle("hide", !sup.length);
-    $h(".exsup").innerHTML = sup.length ? `<table class="ptable"><tr><th style="text-align:left;width:auto">Nhà cung cấp</th><th style="width:100px">Đã trả</th><th style="width:110px">Còn nợ</th></tr>${sup.map(r => `<tr><td>${esc(r.name)}<div class="sub">Tiền hàng ${money(r.goods)}</div></td><td>${money(r.paid)}</td><td><b style="color:${r.debt > 0 ? "var(--bad)" : "var(--ok)"}">${money(r.debt)}</b>${r.debt > 0.5 && r.since ? (r.late ? `<div class="sub" style="color:var(--bad);font-weight:700">⏰ quá hạn ${r.age - SUP_DAYS} ngày</div>` : `<div class="sub">hạn trả ${fmt(r.due)}</div>`) : ""}</td></tr>`).join("")}</table>
-      ${sup.some(r => r.late) ? `<div class="reason" style="margin-top:6px;background:var(--badbg);color:var(--bad)">⏰ Có nợ nhà cung cấp quá ${SUP_DAYS} ngày – cần thanh toán (chọn “📦 Nhập hàng NCC” → “💳 Trả nợ NCC”).</div>` : ""}` : "";
+    $h(".exsup").innerHTML = sup.length ? sup.map(r => `<div style="padding:10px 0;border-top:1px dashed var(--line)">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="font-size:15px">🏭 ${esc(r.name)}</b><span class="sub">Tiền hàng ${money(r.goods)}</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button type="button" class="btn sm" data-suppaid="${esc(r.name)}" style="flex:1;text-align:left;border:2px solid var(--ok);background:var(--okbg,rgba(22,163,74,.08))"><span style="font-size:12px">✅ Đã thanh toán</span><br><b style="color:var(--ok);font-size:15px">${money(r.paid)}</b></button>
+          <button type="button" class="btn sm" data-supdebt="${esc(r.name)}" style="flex:1;text-align:left;border:2px solid ${r.debt > 0.5 ? "var(--bad)" : "var(--line)"};background:${r.debt > 0.5 ? "var(--badbg)" : "var(--card)"}"><span style="font-size:12px">📒 Công nợ</span><br><b style="color:${r.debt > 0.5 ? "var(--bad)" : "var(--ok)"};font-size:15px">${money(Math.max(0, r.debt))}</b>${r.debt > 0.5 && r.since ? (r.late ? `<br><span style="font-size:11px;color:var(--bad);font-weight:700">⏰ quá hạn ${r.age - SUP_DAYS} ngày</span>` : `<br><span style="font-size:11px" class="sub">hạn trả ${fmt(r.due)}</span>`) : ""}</button></div>
+        ${r.debt > 0.5 ? `<div class="sub" style="margin-top:4px">Bấm <b>📒 Công nợ</b> để ghi trả nợ (điền số tiền đã trả).</div>` : ""}</div>`).join("")
+      + (sup.some(r => r.late) ? `<div class="reason" style="margin-top:6px;background:var(--badbg);color:var(--bad)">⏰ Có nợ nhà cung cấp quá ${SUP_DAYS} ngày – cần thanh toán (bấm 📒 Công nợ của nhà cung cấp đó).</div>` : "") : "";
+    host.querySelectorAll(".exsup [data-supdebt]").forEach(b => b.onclick = async () => { const name = b.dataset.supdebt, d = supDebtOf(name);
+      if (d <= 0.5) { toast(`${name}: không còn nợ`); return; }
+      const v = prompt(`Trả nợ ${name}\nĐang nợ: ${money(d)}\nSố tiền đã trả (đ):`, Math.round(d).toLocaleString("vi-VN")); if (v == null) return;
+      const amt = Number(String(v).replace(/[^\d]/g, "")) || 0; if (!amt) { toast("Nhập số tiền đã trả"); return; }
+      if (amt > d + 0.5 && !confirm(`Số tiền ${money(amt)} lớn hơn số đang nợ ${money(d)} – vẫn ghi?`)) return;
+      try { await put("ex", {id: "ex_" + uid(), kind: "tranoncc", date: iso(new Date()), amount: amt, supplier: name, note: amt >= d - 0.5 ? "Trả hết nợ" : "Trả một phần", by: actor(), at: new Date().toISOString()});
+        toast(`Đã ghi trả nợ ${name}: ${money(amt)} – còn nợ ${money(Math.max(0, d - amt))}`); drawExpenses(host); } catch(e){} });
+    host.querySelectorAll(".exsup [data-suppaid]").forEach(b => b.onclick = () => { const name = b.dataset.suppaid, L = expenses.filter(x => norm(x.supplier || "") === norm(name) && (exKind(x) === "tranoncc" || (exKind(x) === "nhap" && Number(x.paid) > 0))).sort((a, c) => (c.date || "").localeCompare(a.date || "")).slice(0, 8);
+      toast(L.length ? `${name} – đã trả: ` + L.map(x => `${fmt(x.date)} ${money(exKind(x) === "tranoncc" ? exAmt(x) : Number(x.paid))}`).join(" · ") : `${name}: chưa trả lần nào`); });
     const q = norm($h(".exq").value);
     // có gõ tìm → tìm trong MỌI thời gian (không chỉ ngày / tuần / tháng đang xem)
     let L = (q ? exIn(new Date(0), new Date(8.64e15)) : L0).slice().sort((a,b) => (b.date || "").localeCompare(a.date || "") || (b.at || "").localeCompare(a.at || ""));
