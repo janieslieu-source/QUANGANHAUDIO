@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-24.3";
+window.APP_BUILD = "2026-11-24.4";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3270,9 +3270,10 @@ window.APP_BUILD = "2026-11-24.3";
       const ty = el.querySelector(".ctty"), tyL = () => ty.value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
       el._allSns = () => [...el._sns, ...tyL().filter(t => !el._sns.some(s => keySN(s) === keySN(t)))];
       const tySync = () => { const L = tyL(), bad = L.filter(x => !snOk(x)), out = L.filter(x => { const st = findStock(x); return st && st.status !== "in"; }), all = el._allSns();
-        el.querySelector(".cttyh").innerHTML = (L.length ? `Đã điền ${L.length} seri` : "") + (bad.length ? ` · <b style="color:var(--bad)">sai định dạng: ${bad.map(esc).join(", ")}</b>` : "") + (out.length ? ` · <b style="color:var(--bad)">đã xuất: ${out.map(esc).join(", ")}</b>` : "");
-        if (all.length) q.value = all.length; q.readOnly = !!all.length; upd(); };
-      ty.addEventListener("input", tySync);
+        if (!el._qT && all.length) q.value = all.length;
+        el.querySelector(".cttyh").innerHTML = (all.length ? `Đã có <b>${all.length}</b> seri cho <b>${parseInt(q.value) || 1}</b> cái/cặp – số lượng sửa ở ô bên cạnh` : "") + (bad.length ? ` · <b style="color:var(--bad)">sai định dạng: ${bad.map(esc).join(", ")}</b>` : "") + (out.length ? ` · <b style="color:var(--bad)">đã xuất: ${out.map(esc).join(", ")}</b>` : "");
+        upd(); };
+      ty.addEventListener("input", tySync); q.addEventListener("input", e => { if (e.isTrusted) el._qT = true; tySync(); });
       el.querySelector(".ctscan").onclick = () => openScanner(sn => { if (el._allSns().some(x => keySN(x) === keySN(sn))) return false; ty.value = tyL().concat(sn).join("\n"); tySync(); return true; }, {multi: true, has: v => el._allSns().some(x => keySN(x) === keySN(v)) ? "Seri này đã có" : false});
       const box = el.querySelector(".ctsnw");
       const modeBtns = () => el.querySelectorAll(".ctsnmode button").forEach(b => b.classList.toggle("on", b.dataset.m === (el._snMode ? "1" : "0")));
@@ -3286,7 +3287,7 @@ window.APP_BUILD = "2026-11-24.3";
           : ex && el._snMode ? `<div class="sub">Kho chưa ghi seri cho hàng này – điền seri vào ô bên dưới</div>` : hits.length ? `<div class="sub">🔍 Seri khớp trong kho – bấm để chọn:</div><div class="chips" style="flex-wrap:wrap;margin-top:4px">${hits.map(x => `<button type="button" class="chip" data-hit="${esc(x.serial)}">${esc(x.serial)} <span class="sub">· ${esc(x.product)}</span></button>`).join("")}</div>` : "";
         box.querySelectorAll("[data-sn]").forEach(c => c.onclick = () => { const k = el._sns.findIndex(s => keySN(s) === keySN(c.dataset.sn)); if (k >= 0) el._sns.splice(k, 1); else el._sns.push(c.dataset.sn);
           tySync(); el._snSync(); });
-        box.querySelectorAll("[data-hit]").forEach(c => c.onclick = () => { const st = findStock(c.dataset.hit); if (!st) return; inp.value = st.product; el._sns = [st.serial]; el._snMode = true; el._snT = true; q.value = 1; q.readOnly = true; upd(); el._snSync(); });
+        box.querySelectorAll("[data-hit]").forEach(c => c.onclick = () => { const st = findStock(c.dataset.hit); if (!st) return; inp.value = st.product; el._sns = [st.serial]; el._snMode = true; el._snT = true; tySync(); el._snSync(); });
         if (!el._allSns().length) q.readOnly = false; if (n && !ex && hits.length) el.querySelector(".lmh").innerHTML = `<b style="color:var(--brand)">Bấm seri bên dưới để chọn hàng</b>`; };
       inp.addEventListener("input", el._snSync); el._snSync();
     }
@@ -3496,7 +3497,7 @@ window.APP_BUILD = "2026-11-24.3";
   if ($("#ctGo")) {
     lmAddRow("ct"); $("#ctAdd").onclick = () => { lmAddRow("ct"); $("#ctRows").lastElementChild.querySelector(".lmn").focus(); };
     $("#ctGo").onclick = async () => {
-      const rows = [...document.querySelectorAll("#ctRows .lmrow")].map(el => Object.assign({name: el.querySelector(".lmn").value.trim(), qty: (el._allSns ? el._allSns() : []).length || Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)}, el._allSns && el._allSns().length ? {sns: el._allSns()} : {})).filter(r => r.name);
+      const rows = [...document.querySelectorAll("#ctRows .lmrow")].map(el => Object.assign({name: el.querySelector(".lmn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)}, el._allSns && el._allSns().length ? {sns: el._allSns()} : {})).filter(r => r.name);
       { const all = rows.flatMap(r => r.sns || []), bad = all.find(x => !snOk(x)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
         const k = all.map(keySN), d = k.find((x, i) => k.indexOf(x) !== i); if (d) { toast("Seri bị trùng: " + d); return; }
         const out = all.find(x => { const st = findStock(x); return st && st.status !== "in"; }); if (out) { toast(`Seri ${out} đã xuất ở ${findStock(out).orderCode || "đơn khác"}`); return; } }
@@ -3559,16 +3560,20 @@ window.APP_BUILD = "2026-11-24.3";
         const F = $("#actForm");
         F.innerHTML = `<div class="grab"></div><h2>↩️ Trả về kho – ${esc(x.name)}</h2><div class="sub" style="margin-bottom:6px">Tick món trả về kho, sửa số lượng nếu trả một phần.</div>
           ${L.map((r, i) => r.remSns.length ? `<div style="padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px"><b>${esc(r.name)}</b> <span class="sub">– tick seri trả về kho</span>
-            ${r.remSns.map(sn => `<label style="display:flex;align-items:center;gap:10px;margin:6px 0 0;color:var(--ink);font-size:15px"><input type="checkbox" class="ctbs" data-i="${i}" data-sn="${esc(sn)}" checked style="width:22px;height:22px;margin:0"> SN ${esc(sn)}</label>`).join("")}</div>` : `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px">
+            ${r.remSns.map(sn => `<label style="display:flex;align-items:center;gap:10px;margin:6px 0 0;color:var(--ink);font-size:15px"><input type="checkbox" class="ctbs" data-i="${i}" data-sn="${esc(sn)}" checked style="width:22px;height:22px;margin:0"> SN ${esc(sn)}</label>`).join("")}
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><span class="sub" style="flex:1">Số lượng trả (còn ở CT ${r.left})</span><input type="number" class="ctsq" data-i="${i}" min="0" max="${r.left}" value="${r.left}" inputmode="numeric" style="width:76px;flex:0 0 auto"></div></div>` : `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:6px">
             <input type="checkbox" class="ctbk" data-i="${i}" checked style="width:22px;height:22px;margin:0;flex:0 0 auto">
             <div style="flex:1;min-width:0"><b>${esc(r.name)}</b><div class="sub">còn ở công trình ${r.left}</div></div>
             <input type="number" class="ctbq" data-i="${i}" min="1" max="${r.left}" value="${r.left}" inputmode="numeric" style="width:76px;flex:0 0 auto"></div>`).join("")}
           <div class="sub" id="ctbkSum" style="margin-top:8px"></div>
           <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">↩️ Xác nhận trả về kho</button></div>`;
-        const sum = () => { const n = F.querySelectorAll(".ctbs:checked").length + [...F.querySelectorAll(".ctbk")].filter(c => c.checked).reduce((t, c) => t + Math.min(L[+c.dataset.i].left, Math.max(0, parseInt(F.querySelector(`.ctbq[data-i="${c.dataset.i}"]`).value) || 0)), 0); $("#ctbkSum").innerHTML = `Trả về kho: <b>${n}</b> cái`; };
-        F.querySelectorAll(".ctbk, .ctbq").forEach(el => el.addEventListener("input", sum)); F.querySelectorAll(".ctbk, .ctbs").forEach(el => el.addEventListener("change", sum)); sum();
+        const sqv = i => { const e = F.querySelector(`.ctsq[data-i="${i}"]`); return e ? Math.min(L[i].left, Math.max(0, parseInt(e.value) || 0)) : 0; };
+        F.querySelectorAll(".ctbs").forEach(c => c.addEventListener("change", () => { const i = +c.dataset.i, r = L[i], k = F.querySelectorAll(`.ctbs[data-i="${i}"]:checked`).length;
+          F.querySelector(`.ctsq[data-i="${i}"]`).value = k === r.remSns.length ? r.left : Math.min(r.left, Math.round(r.left * k / r.remSns.length)); }));
+        const sum = () => { const n = L.reduce((t, r, i) => t + sqv(i), 0) + [...F.querySelectorAll(".ctbk")].filter(c => c.checked).reduce((t, c) => t + Math.min(L[+c.dataset.i].left, Math.max(0, parseInt(F.querySelector(`.ctbq[data-i="${c.dataset.i}"]`).value) || 0)), 0); $("#ctbkSum").innerHTML = `Trả về kho: <b>${n}</b> cái`; };
+        F.querySelectorAll(".ctbk, .ctbq, .ctsq").forEach(el => el.addEventListener("input", sum)); F.querySelectorAll(".ctbk, .ctbs").forEach(el => el.addEventListener("change", sum)); sum();
         actCtx = {run: async () => { const act = [...F.querySelectorAll(".ctbk")].filter(c => c.checked).map(c => { const r = L[+c.dataset.i]; return {name: r.name, n: Math.min(r.left, Math.max(0, parseInt(F.querySelector(`.ctbq[data-i="${c.dataset.i}"]`).value) || 0))}; }).filter(a => a.n > 0);
-          L.forEach((r, i) => { const sns = [...F.querySelectorAll(`.ctbs[data-i="${i}"]:checked`)].map(c => c.dataset.sn); if (sns.length) act.push({name: r.name, n: sns.length, sns}); });
+          L.forEach((r, i) => { const sns = [...F.querySelectorAll(`.ctbs[data-i="${i}"]:checked`)].map(c => c.dataset.sn); const n = sqv(i); if (sns.length || n) act.push({name: r.name, n, sns}); });
           if (!act.length) { toast("Tick ít nhất 1 món trả về kho"); throw new Error("x"); } await finish(act, "back"); }};
         open("actBg"); }
     } catch(err){}
