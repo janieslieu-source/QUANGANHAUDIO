@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-24.1";
+window.APP_BUILD = "2026-11-24.2";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3265,18 +3265,23 @@ window.APP_BUILD = "2026-11-24.1";
     attachPicker(inp, el.querySelector(".sugg"), () => { upd(); el._snSync && el._snSync(); }, true); q.addEventListener("input", upd);
     el.querySelector(".lmrm").onclick = () => { el.remove(); if (!$("#" + px + "Rows").children.length) lmAddRow(px); };
     if (px === "ct") {   // công trình: hàng có seri → bấm chọn seri; gõ số seri cũng tìm ra hàng
-      el.insertAdjacentHTML("beforeend", `<div class="ctsnw" style="margin-top:4px"></div>`); el._sns = [];
+      el.insertAdjacentHTML("afterbegin", `<div class="seg ctsnmode" style="margin-bottom:6px"><button type="button" data-m="1">🔢 Có seri</button><button type="button" data-m="0">➖ Không có seri</button></div>`);
+      el.insertAdjacentHTML("beforeend", `<div class="ctsnw" style="margin-top:4px"></div>`); el._sns = []; el._snMode = null;
       const box = el.querySelector(".ctsnw");
-      el._snSync = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n)), av = ex ? inStock(ex) : [];
-        const qd = n.replace(/\s+/g, ""), hits = !ex && /^[0-9A-Z]{4,}$/i.test(qd) ? stock.filter(x => x.status === "in" && keySN(x.serial).includes(qd.toUpperCase())).slice(0, 12) : [];
+      const modeBtns = () => el.querySelectorAll(".ctsnmode button").forEach(b => b.classList.toggle("on", b.dataset.m === (el._snMode ? "1" : "0")));
+      el.querySelectorAll(".ctsnmode button").forEach(b => b.onclick = () => { el._snMode = b.dataset.m === "1"; el._snT = true; if (!el._snMode) { el._sns = []; q.readOnly = false; } el._snSync(); });
+      el._snSync = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n));
+        if (!el._snT) el._snMode = ex ? inStock(ex).length > 0 : true; modeBtns();
+        const av = ex && el._snMode ? inStock(ex) : [];
+        const qd = n.replace(/\s+/g, ""), hits = !ex && el._snMode && /^[0-9A-Z]{4,}$/i.test(qd) ? stock.filter(x => x.status === "in" && keySN(x.serial).includes(qd.toUpperCase())).slice(0, 12) : [];
         el._sns = el._sns.filter(sn => av.some(x => keySN(x.serial) === keySN(sn)));
         box.innerHTML = av.length ? `<div class="sub">🔢 Seri trong kho – bấm chọn máy mang đi (${el._sns.length} đã chọn):</div><div class="chips" style="flex-wrap:wrap;max-height:120px;overflow:auto;margin-top:4px">${av.slice(0, 200).map(x => `<button type="button" class="chip ${el._sns.some(s => keySN(s) === keySN(x.serial)) ? "sel" : ""}" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
-          : hits.length ? `<div class="sub">🔍 Seri khớp trong kho – bấm để chọn:</div><div class="chips" style="flex-wrap:wrap;margin-top:4px">${hits.map(x => `<button type="button" class="chip" data-hit="${esc(x.serial)}">${esc(x.serial)} <span class="sub">· ${esc(x.product)}</span></button>`).join("")}</div>` : "";
+          : ex && el._snMode ? `<div class="sub" style="color:var(--bad)">Hàng này không có seri trong kho – chọn ➖ Không có seri</div>` : hits.length ? `<div class="sub">🔍 Seri khớp trong kho – bấm để chọn:</div><div class="chips" style="flex-wrap:wrap;margin-top:4px">${hits.map(x => `<button type="button" class="chip" data-hit="${esc(x.serial)}">${esc(x.serial)} <span class="sub">· ${esc(x.product)}</span></button>`).join("")}</div>` : "";
         box.querySelectorAll("[data-sn]").forEach(c => c.onclick = () => { const k = el._sns.findIndex(s => keySN(s) === keySN(c.dataset.sn)); if (k >= 0) el._sns.splice(k, 1); else el._sns.push(c.dataset.sn);
           if (el._sns.length) q.value = el._sns.length; q.readOnly = !!el._sns.length; upd(); el._snSync(); });
-        box.querySelectorAll("[data-hit]").forEach(c => c.onclick = () => { const st = findStock(c.dataset.hit); if (!st) return; inp.value = st.product; el._sns = [st.serial]; q.value = 1; q.readOnly = true; upd(); el._snSync(); });
+        box.querySelectorAll("[data-hit]").forEach(c => c.onclick = () => { const st = findStock(c.dataset.hit); if (!st) return; inp.value = st.product; el._sns = [st.serial]; el._snMode = true; el._snT = true; q.value = 1; q.readOnly = true; upd(); el._snSync(); });
         if (!el._sns.length) q.readOnly = false; if (n && !ex && hits.length) el.querySelector(".lmh").innerHTML = `<b style="color:var(--brand)">Bấm seri bên dưới để chọn hàng</b>`; };
-      inp.addEventListener("input", el._snSync);
+      inp.addEventListener("input", el._snSync); el._snSync();
     }
   }
   // đọc + kiểm tra form xuất làm mới (dùng chung Kho / Kỹ thuật)
