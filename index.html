@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-24.2";
+window.APP_BUILD = "2026-11-24.3";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -3266,21 +3266,28 @@ window.APP_BUILD = "2026-11-24.2";
     el.querySelector(".lmrm").onclick = () => { el.remove(); if (!$("#" + px + "Rows").children.length) lmAddRow(px); };
     if (px === "ct") {   // công trình: hàng có seri → bấm chọn seri; gõ số seri cũng tìm ra hàng
       el.insertAdjacentHTML("afterbegin", `<div class="seg ctsnmode" style="margin-bottom:6px"><button type="button" data-m="1">🔢 Có seri</button><button type="button" data-m="0">➖ Không có seri</button></div>`);
-      el.insertAdjacentHTML("beforeend", `<div class="ctsnw" style="margin-top:4px"></div>`); el._sns = []; el._snMode = null;
+      el.insertAdjacentHTML("beforeend", `<div class="ctsnw" style="margin-top:4px"></div><div class="cttyw hide" style="margin-top:6px"><div class="sub">✍️ Điền số seri (mỗi dòng 1 seri – gõ hoặc quét)</div><div style="display:flex;gap:6px;align-items:flex-start;margin-top:4px"><textarea class="ctty" rows="2" placeholder="525xxxxx" style="flex:1;min-width:0"></textarea><button type="button" class="btn sm pri ctscan" style="width:auto;flex:0 0 auto">📷 Quét</button></div><div class="sub cttyh"></div></div>`); el._sns = []; el._snMode = null;
+      const ty = el.querySelector(".ctty"), tyL = () => ty.value.split(/[\n,;]+/).map(x => x.trim()).filter(Boolean);
+      el._allSns = () => [...el._sns, ...tyL().filter(t => !el._sns.some(s => keySN(s) === keySN(t)))];
+      const tySync = () => { const L = tyL(), bad = L.filter(x => !snOk(x)), out = L.filter(x => { const st = findStock(x); return st && st.status !== "in"; }), all = el._allSns();
+        el.querySelector(".cttyh").innerHTML = (L.length ? `Đã điền ${L.length} seri` : "") + (bad.length ? ` · <b style="color:var(--bad)">sai định dạng: ${bad.map(esc).join(", ")}</b>` : "") + (out.length ? ` · <b style="color:var(--bad)">đã xuất: ${out.map(esc).join(", ")}</b>` : "");
+        if (all.length) q.value = all.length; q.readOnly = !!all.length; upd(); };
+      ty.addEventListener("input", tySync);
+      el.querySelector(".ctscan").onclick = () => openScanner(sn => { if (el._allSns().some(x => keySN(x) === keySN(sn))) return false; ty.value = tyL().concat(sn).join("\n"); tySync(); return true; }, {multi: true, has: v => el._allSns().some(x => keySN(x) === keySN(v)) ? "Seri này đã có" : false});
       const box = el.querySelector(".ctsnw");
       const modeBtns = () => el.querySelectorAll(".ctsnmode button").forEach(b => b.classList.toggle("on", b.dataset.m === (el._snMode ? "1" : "0")));
       el.querySelectorAll(".ctsnmode button").forEach(b => b.onclick = () => { el._snMode = b.dataset.m === "1"; el._snT = true; if (!el._snMode) { el._sns = []; q.readOnly = false; } el._snSync(); });
       el._snSync = () => { const n = inp.value.trim(), ex = n && productNames().find(p => norm(p) === norm(n));
-        if (!el._snT) el._snMode = ex ? inStock(ex).length > 0 : true; modeBtns();
+        if (!el._snT) el._snMode = ex ? hasSnOf(ex) : true; modeBtns(); el.querySelector(".cttyw").classList.toggle("hide", !el._snMode || !n); if (!el._snMode) ty.value = "";
         const av = ex && el._snMode ? inStock(ex) : [];
         const qd = n.replace(/\s+/g, ""), hits = !ex && el._snMode && /^[0-9A-Z]{4,}$/i.test(qd) ? stock.filter(x => x.status === "in" && keySN(x.serial).includes(qd.toUpperCase())).slice(0, 12) : [];
         el._sns = el._sns.filter(sn => av.some(x => keySN(x.serial) === keySN(sn)));
         box.innerHTML = av.length ? `<div class="sub">🔢 Seri trong kho – bấm chọn máy mang đi (${el._sns.length} đã chọn):</div><div class="chips" style="flex-wrap:wrap;max-height:120px;overflow:auto;margin-top:4px">${av.slice(0, 200).map(x => `<button type="button" class="chip ${el._sns.some(s => keySN(s) === keySN(x.serial)) ? "sel" : ""}" data-sn="${esc(x.serial)}">${esc(x.serial)}</button>`).join("")}</div>`
-          : ex && el._snMode ? `<div class="sub" style="color:var(--bad)">Hàng này không có seri trong kho – chọn ➖ Không có seri</div>` : hits.length ? `<div class="sub">🔍 Seri khớp trong kho – bấm để chọn:</div><div class="chips" style="flex-wrap:wrap;margin-top:4px">${hits.map(x => `<button type="button" class="chip" data-hit="${esc(x.serial)}">${esc(x.serial)} <span class="sub">· ${esc(x.product)}</span></button>`).join("")}</div>` : "";
+          : ex && el._snMode ? `<div class="sub">Kho chưa ghi seri cho hàng này – điền seri vào ô bên dưới</div>` : hits.length ? `<div class="sub">🔍 Seri khớp trong kho – bấm để chọn:</div><div class="chips" style="flex-wrap:wrap;margin-top:4px">${hits.map(x => `<button type="button" class="chip" data-hit="${esc(x.serial)}">${esc(x.serial)} <span class="sub">· ${esc(x.product)}</span></button>`).join("")}</div>` : "";
         box.querySelectorAll("[data-sn]").forEach(c => c.onclick = () => { const k = el._sns.findIndex(s => keySN(s) === keySN(c.dataset.sn)); if (k >= 0) el._sns.splice(k, 1); else el._sns.push(c.dataset.sn);
-          if (el._sns.length) q.value = el._sns.length; q.readOnly = !!el._sns.length; upd(); el._snSync(); });
+          tySync(); el._snSync(); });
         box.querySelectorAll("[data-hit]").forEach(c => c.onclick = () => { const st = findStock(c.dataset.hit); if (!st) return; inp.value = st.product; el._sns = [st.serial]; el._snMode = true; el._snT = true; q.value = 1; q.readOnly = true; upd(); el._snSync(); });
-        if (!el._sns.length) q.readOnly = false; if (n && !ex && hits.length) el.querySelector(".lmh").innerHTML = `<b style="color:var(--brand)">Bấm seri bên dưới để chọn hàng</b>`; };
+        if (!el._allSns().length) q.readOnly = false; if (n && !ex && hits.length) el.querySelector(".lmh").innerHTML = `<b style="color:var(--brand)">Bấm seri bên dưới để chọn hàng</b>`; };
       inp.addEventListener("input", el._snSync); el._snSync();
     }
   }
@@ -3489,7 +3496,10 @@ window.APP_BUILD = "2026-11-24.2";
   if ($("#ctGo")) {
     lmAddRow("ct"); $("#ctAdd").onclick = () => { lmAddRow("ct"); $("#ctRows").lastElementChild.querySelector(".lmn").focus(); };
     $("#ctGo").onclick = async () => {
-      const rows = [...document.querySelectorAll("#ctRows .lmrow")].map(el => Object.assign({name: el.querySelector(".lmn").value.trim(), qty: (el._sns || []).length || Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)}, (el._sns || []).length ? {sns: el._sns.slice()} : {})).filter(r => r.name);
+      const rows = [...document.querySelectorAll("#ctRows .lmrow")].map(el => Object.assign({name: el.querySelector(".lmn").value.trim(), qty: (el._allSns ? el._allSns() : []).length || Math.max(1, parseInt(el.querySelector(".lmq").value) || 1)}, el._allSns && el._allSns().length ? {sns: el._allSns()} : {})).filter(r => r.name);
+      { const all = rows.flatMap(r => r.sns || []), bad = all.find(x => !snOk(x)); if (bad) { toast(`Seri ${bad} sai định dạng (${SN_HINT})`); return; }
+        const k = all.map(keySN), d = k.find((x, i) => k.indexOf(x) !== i); if (d) { toast("Seri bị trùng: " + d); return; }
+        const out = all.find(x => { const st = findStock(x); return st && st.status !== "in"; }); if (out) { toast(`Seri ${out} đã xuất ở ${findStock(out).orderCode || "đơn khác"}`); return; } }
       const v = id => $("#" + id).value.trim(), name = v("ctName"), cus = v("ctCus"), addr = v("ctAddr");
       if (!rows.length) { toast("Tìm và chọn hàng trong kho"); return; }
       if (!name) { toast("Nhập tên công trình"); $("#ctName").focus(); return; }
@@ -3507,10 +3517,11 @@ window.APP_BUILD = "2026-11-24.2";
     const now = new Date().toISOString(), save = (ch, msg, to) => put("ex", Object.assign({}, x, ch, {updatedAt: now, history: (x.history || []).concat([{at: now, by: actor(), note: msg}])})).then(() => { if (to) pushTo(to, "🏗️ " + msg, x.name); toast(msg); });
     try {
       if (k === "ok") { if (x.status !== "cho") return; const rows = x.rows.map(r => Object.assign({}, r)); if (!lmStockOk(rows)) return; if (!confirm(`Duyệt tạm xuất kho cho công trình "${x.name}"?`)) return;
-        const bad = rows.flatMap(r => r.sns || []).find(sn => { const st = findStock(sn); return !st || st.status !== "in"; }); if (bad) { toast(`Seri ${bad} không còn trong kho`); return; }
-        const outs = rows.flatMap(r => (r.sns || []).map(sn => Object.assign({}, findStock(sn), {status: "out", orderCode: x.code, customer: x.customer, outAt: now, outKind: "congtrinh"})));
+        const bad = rows.flatMap(r => r.sns || []).find(sn => { const st = findStock(sn); return st && st.status !== "in"; }); if (bad) { toast(`Seri ${bad} đã xuất – không còn trong kho`); return; }
+        const inSt = r => (r.sns || []).filter(sn => findStock(sn)?.status === "in");
+        const outs = rows.flatMap(r => inSt(r).map(sn => Object.assign({}, findStock(sn), {status: "out", orderCode: x.code, customer: x.customer, outAt: now, outKind: "congtrinh"})));
+        const mvs = rows.map(r => ({id: "mv_" + uid(), product: r.name, qty: -(r.qty - inSt(r).length), at: now, kind: "congtrinh", ref: x.code, customer: x.customer, phone: x.phone || "", note: `Tạm xuất công trình ${x.name} – ${x.address}`, by: actor()})).filter(m => m.qty < 0);
         if (outs.length) await putMany("st", outs);
-        const mvs = rows.map(r => ({id: "mv_" + uid(), product: r.name, qty: -(r.qty - (r.sns || []).length), at: now, kind: "congtrinh", ref: x.code, customer: x.customer, phone: x.phone || "", note: `Tạm xuất công trình ${x.name} – ${x.address}`, by: actor()})).filter(m => m.qty < 0);
         if (mvs.length) await putMany("mv", mvs);
         await save({status: "out", rows, outAt: now, okBy: actor()}, `Kho đã xuất hàng công trình ${x.name}`, "kt"); }
       if (k === "no") { if (x.status !== "cho") return; const why = prompt(`Từ chối xuất công trình "${x.name}" – lý do:`, ""); if (why == null) return; if (!why.trim()) { toast("Ghi lý do"); return; }
@@ -3521,7 +3532,8 @@ window.APP_BUILD = "2026-11-24.2";
             if ((a.sns || []).length) rr[kk === "back" ? "snBack" : "snUsed"] = (rr[kk === "back" ? "snBack" : "snUsed"] || []).concat(a.sns); });
           if (kk === "back") { const back = act.flatMap(a => a.sns || []).map(findStock).filter(z => z && z.status === "out" && z.orderCode === x.code).map(z => { const c = Object.assign({}, z, {status: "in", returnedAt: at, returnNote: `Công trình ${x.name} trả về`}); delete c.orderCode; delete c.outAt; delete c.outKind; delete c.customer; return c; });
             if (back.length) await putMany("st", back);
-            const mv = act.filter(a => a.n - (a.sns || []).length > 0).map(a => ({id: "mv_" + uid(), product: a.name, qty: a.n - (a.sns || []).length, at, kind: "congtrinh_tra", ref: x.code, note: `Công trình ${x.name} trả về kho`, by: actor()}));
+            const stBack = a => (a.sns || []).filter(sn => back.some(z => keySN(z.serial) === keySN(sn))).length;
+            const mv = act.filter(a => a.n - stBack(a) > 0).map(a => ({id: "mv_" + uid(), product: a.name, qty: a.n - stBack(a), at, kind: "congtrinh_tra", ref: x.code, note: `Công trình ${x.name} trả về kho`, by: actor()}));
             if (mv.length) await putMany("mv", mv); }
           else for (const a of act) for (const sn of (a.sns || [])) { const r0 = findReg(sn), mo = findProduct(a.name)?.months ?? 12;   // lắp cho khách → ghi sổ bảo hành theo seri
             await put("reg", Object.assign({}, r0 || {id: uid(), createdAt: at}, {serial: sn, customer: x.customer, phone: x.phone || "", product: a.name, purchaseDate: iso(new Date()), months: mo, orderCode: x.code, updatedAt: at})); }
