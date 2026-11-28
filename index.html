@@ -800,7 +800,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-28.3";
+window.APP_BUILD = "2026-11-28.4";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -2839,7 +2839,7 @@ window.APP_BUILD = "2026-11-28.3";
         <div id="vdSwapW">
           <label>Đổi máy cho khách? *</label><input type="hidden" name="vdMode" value="">
           <div class="choice" style="grid-template-columns:1fr;gap:8px">
-            <button type="button" class="opt" data-vm="tam" style="text-align:left"><b>🔁 Tạm đổi máy cho khách</b><span class="sub" style="display:block;font-weight:400">Hàng mới mua, còn hạn nhiều: khách dùng máy tạm → hãng trả về thì <b>đổi lại cho khách</b>, thu máy tạm về kho</span></button>
+            <button type="button" class="opt" data-vm="tam" style="text-align:left"><b>🔁 Tạm đổi máy chờ BH</b><span class="sub" style="display:block;font-weight:400">Hàng mới mua, còn hạn nhiều: khách dùng máy tạm → hãng trả về thì <b>đổi lại cho khách</b>, thu máy tạm về kho</span></button>
             <button type="button" class="opt" data-vm="luon" style="text-align:left"><b>🔄 Đổi luôn máy mới</b><span class="sub" style="display:block;font-weight:400">Khách ở xa: khách giữ máy mới luôn → hãng trả về <b>tự động cộng kho</b></span></button>
             <button type="button" class="opt" data-vm="cho" style="text-align:left"><b>⏳ Không đổi – chờ hãng trả</b><span class="sub" style="display:block;font-weight:400">Hãng trả về → Vận chuyển trả máy cho khách</span></button>
           </div>
@@ -2916,7 +2916,7 @@ window.APP_BUILD = "2026-11-28.3";
       F2.querySelectorAll("[data-vm]").forEach(b => b.classList.toggle("sel", b.dataset.vm === vm));
       $("#vdNameLbl").textContent = isH ? "Gửi hãng nào / nơi nhận *" : "Tên tiệm / nơi sửa bên ngoài *";
       F2.vdName.placeholder = isH ? "VD: Hãng Tomko, TT bảo hành JBL…" : "VD: Tiệm sửa điện tử Minh Phát";
-      $("#vdPhoneW").classList.toggle("hide", isH); $("#vdCostW").classList.toggle("hide", isH); $("#vdSwapW").classList.toggle("hide", !isH); $("#vdSwapF").classList.toggle("hide", !sw);
+      $("#vdPhoneW").classList.add("hide"); $("#vdCostW").classList.add("hide"); $("#vdSwapW").classList.toggle("hide", !isH); $("#vdSwapF").classList.toggle("hide", !sw);
       $("#vdHint").innerHTML = isH ? (vm === "tam" ? "🏭 Máy lỗi gửi hãng · 🔁 <b>Kho xuất máy tạm → Vận chuyển giao khách</b>. Hãng trả về → bấm “✅ Hãng đã trả” → Vận chuyển <b>đổi lại</b> máy cho khách và thu máy tạm (tự cộng kho)."
         : vm === "luon" ? "🏭 Máy lỗi gửi hãng · 🔄 <b>Kho xuất máy mới → Vận chuyển giao khách</b> (khách giữ luôn, sổ bảo hành đổi sang seri mới). Hãng trả về → <b>tự động cộng kho</b>." : `🏭 Máy gửi hãng – theo dõi riêng, quá <b>${VD_DAYS} ngày</b> chưa về app cảnh báo. Hãng trả máy → bấm “✅ Hãng đã trả” → Vận chuyển trả khách.`)
         : `🚚 Máy gửi tiệm sửa bên ngoài – theo dõi riêng, quá <b>${VD_DAYS} ngày</b> app cảnh báo. Nhận máy về → bấm “✅ Đã nhận về từ SC” → Vận chuyển trả khách.`;
@@ -2934,7 +2934,7 @@ window.APP_BUILD = "2026-11-28.3";
     const vdSubmit = async ktCheck => {
       const kind = jobAction === "guihang" ? "hang" : "sc", name = F2.vdName.value.trim(), now = new Date().toISOString();
       if (!name) { toast(kind === "hang" ? "Nhập tên hãng / nơi nhận" : "Nhập tên tiệm / nơi sửa bên ngoài"); F2.vdName.focus(); throw new Error("x"); }
-      const vendor = {kind, name, sentDate: F2.vdDate.value || iso(new Date()), phone: kind === "sc" ? F2.vdPhone.value.trim() : "", cost: kind === "sc" ? Number(F2.vdCost.value.replace(/[^\d]/g, "")) || 0 : 0, note: F2.vdNote.value.trim(), at: now, by: actor()};
+      const vendor = {kind, name, sentDate: F2.vdDate.value || iso(new Date()), phone: "", cost: 0, note: F2.vdNote.value.trim(), at: now, by: actor()};
       const extra = {action: jobAction, vendor, ktCheck: Object.assign(ktCheck, {by: actor()})};
       let stage = kind === "hang" ? "gui_hang" : "gui_sc";
       let note = `${kind === "hang" ? "🏭 Gửi hãng" : "🚚 Gửi SC ngoài"}: ${name} – ngày ${fmt(vendor.sentDate)}${vendor.phone ? " · ☎ " + vendor.phone : ""}${vendor.cost ? " · chi phí dự kiến " + money(vendor.cost) : ""}${vendor.note ? " – " + vendor.note : ""}`;
