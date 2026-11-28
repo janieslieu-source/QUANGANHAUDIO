@@ -213,6 +213,11 @@
   .tab .ti .ios-ic svg,#appTitle .ios-ic svg{width:66%;height:66%;stroke:#fff;filter:none}
   .tab.on .ti .ios-ic{opacity:1;transform:none;box-shadow:none;background:rgba(255,255,255,.22);border-width:2.5px}
   #appTitle .ios-ic{opacity:1}
+  /* chữ thanh đầu trang: đen viền trắng, cỡ 16 */
+  .tab,.tab.on,h1.t{color:#000;font-size:16px;text-shadow:0 0 1px #fff,1px 1px 0 #fff,-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,0 1.5px 0 #fff,0 -1.5px 0 #fff,1.5px 0 0 #fff,-1.5px 0 0 #fff}
+  .tab{flex:1 0 auto;padding-left:10px;padding-right:10px;font-weight:600}
+  .tab.on{font-weight:800}
+  .tab .cnt{text-shadow:none;color:#fff}
   .dept{background:linear-gradient(180deg,#ffffff,#f7f9ff);border:1.5px solid var(--line);border-radius:18px;padding:14px 6px 12px;box-shadow:0 2px 6px rgba(29,78,216,.06);transition:transform .12s,box-shadow .12s}
   .dept:active{transform:scale(.97)}
   .dept .ic{display:flex;justify-content:center;margin-bottom:8px;font-size:0}
@@ -806,7 +811,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-28.6";
+window.APP_BUILD = "2026-11-28.7";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
