@@ -799,7 +799,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-24.4";
+window.APP_BUILD = "2026-11-28.1";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -1511,6 +1511,7 @@ window.APP_BUILD = "2026-11-24.4";
         <span class="badge ${st.cls}">${esc(st.label)}</span></div>
       ${accLine(t)}${t.issue ? `<div style="margin-top:6px;font-size:14px">⚠️ ${esc(t.issue)}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền sau khi liên hệ khách)</span>` : ""}</div>` : ""}${t.issueLater ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>📞 Chưa rõ lỗi – chờ Giám đốc liên hệ khách</b></div>` : ""}${t.exPending ? `<div style="margin-top:6px;font-size:14px;color:#b45309"><b>🔄 Hàng đổi chờ Giám đốc duyệt:</b> SN ${esc(t.exchange.oldSerial)} → SN ${esc(t.exchange.newSerial)}${t.exchange.newProduct && t.exchange.newProduct !== t.product ? " (" + esc(t.exchange.newProduct) + ")" : ""}${t.snWarn?.length ? `<br><span style="color:var(--bad)">⚠️ ${t.snWarn.map(esc).join("<br>⚠️ ")}</span>` : ""}</div>` : ""}${ktCheckHtml(t)}${tpLine(t)}${t.tech ? `<div class="sub" style="margin-top:4px">👨‍🔧 KTV sửa: <b style="color:var(--ink)">${esc(t.tech)}</b></div>` : ""}
       ${t.action ? `<div class="sub" style="margin-top:4px">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · Linh kiện: " + esc(t.parts) : ""}${(t.stockApplied?.thao || []).length ? ` · 🔩 ${t.stockApplied.thao.length} tháo từ máy` : ""}</div>` : ""}
+      ${t.services?.length ? `<div class="sub" style="margin-top:2px;color:#0e7490">💼 Phí dịch vụ: ${esc(svcText(t))}</div>` : ""}
       ${lkLine(t)}${(() => { if (CLOSED.includes(t.stage)) return ""; const d = dupTickets(t.serial).filter(x => x.id !== t.id && !["huy"].includes(x.stage) && (!CLOSED.includes(x.stage) || iso(new Date(x.createdAt)) === iso(new Date(t.createdAt))));
         return d.length ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Trùng seri</b> với ${d.slice(0, 2).map(x => `${esc(x.code)} (nhận ${fmtTime(x.createdAt)})`).join(", ")} – nếu là phiếu nhập dư, Giám đốc mở phiếu → 🗑 Xóa vĩnh viễn</div>` : ""; })()}${t.snWarn?.length && !t.snOk && !CLOSED.includes(t.stage) && t.stage !== "kho_tra" ? `<div class="sub" style="margin-top:4px;color:var(--bad)"><b>⚠️ Cảnh báo seri trùng – chờ Kho duyệt</b></div>` : ""}
       ${t.ship ? `<div class="sub" style="margin-top:4px">🚚 ${shipText(t)} · trả ${fmt(t.ship.date)}</div>` : ""}
@@ -1541,7 +1542,8 @@ window.APP_BUILD = "2026-11-24.4";
         ${t.accessories ? `<dt>Phụ kiện kèm</dt><dd><b style="color:#7c3aed">📦 ${esc(t.accessories)}</b></dd>` : ""}<dt>Lỗi</dt><dd>${esc(t.issue)||(t.issueLater ? "📞 Chưa rõ – chờ Giám đốc liên hệ khách" : "—")}${t.issueBy ? ` <span class="sub">(${esc(t.issueBy)} điền)</span>` : ""}</dd>${t.ktCheck ? `<dt>KT kiểm tra</dt><dd>${t.ktCheck.confirmed.length ? "✔ Đúng lỗi: " + esc(t.ktCheck.confirmed.join(", ")) : "Lỗi khách báo không đúng"}${t.ktCheck.notConfirmed?.length ? "<br>✖ Không thấy: " + esc(t.ktCheck.notConfirmed.join(", ")) : ""}${t.ktCheck.added?.length ? "<br><b>➕ Lỗi thêm: " + esc(t.ktCheck.added.join(", ")) + "</b>" : ""}</dd>` : ""}
         ${t.action ? `<dt>Kỹ thuật</dt><dd>${ACTION[t.action]}</dd>` : ""}
         ${t.exchange ? `<dt>Seri cũ</dt><dd>${esc(t.exchange.oldSerial)}</dd><dt>Seri mới đổi</dt><dd><b>${esc(t.exchange.newSerial)}</b>${t.exchange.newProduct && t.exchange.newProduct !== t.product ? ` – ${esc(t.exchange.newProduct)}` : ""}</dd><dt>BH tiếp đến</dt><dd><b>${fmt(t.exchange.until)}</b> ${t.exchange.mode === "new" ? `(BH mới ${t.exchange.months} tháng)` : "(tiếp tục hạn cũ)"}</dd>` : ""}
-        ${t.partsUsed ? `<dt>Linh kiện thay</dt><dd>${t.partsUsed.map(u => `${esc(u.name)} × ${u.qty} – ${u.src === "thao" ? `🔩 tháo từ ${esc(u.donor)} (SN ${esc(u.donorSerial)})` : u.src === "ngoai" ? "🧩 linh kiện ngoài" : "📦 lấy từ kho"}`).join("<br>")}</dd>` : t.parts ? `<dt>Linh kiện thay</dt><dd>${esc(t.parts)}</dd>` : ""}
+        ${t.partsUsed?.length ? `<dt>Linh kiện thay</dt><dd>${t.partsUsed.map(u => `${esc(u.name)} × ${u.qty} – ${u.src === "thao" ? `🔩 tháo từ ${esc(u.donor)} (SN ${esc(u.donorSerial)})` : u.src === "ngoai" ? "🧩 linh kiện ngoài" : "📦 lấy từ kho"}`).join("<br>")}</dd>` : t.parts ? `<dt>Linh kiện thay</dt><dd>${esc(t.parts)}</dd>` : ""}
+        ${t.services?.length ? `<dt>Phí dịch vụ</dt><dd>${t.services.map(v => `💼 ${esc(v.name)}${v.amount ? ` – <b>${money(v.amount)}</b>` : ""}`).join("<br>")}${t.svcTotal && t.services.length > 1 ? `<br>Tổng: <b>${money(t.svcTotal)}</b>` : ""} <span class="sub">(không trừ kho)</span></dd>` : ""}
         ${t.tech ? `<dt>KTV</dt><dd>${esc(t.tech)}</dd>` : ""}
         ${t.techNote ? `<dt>Ghi chú KT</dt><dd>${esc(t.techNote)}</dd>` : ""}
         ${t.pay && !hidePrice() ? `<dt>Thanh toán</dt><dd><b>${PAY[t.pay.status]}</b> – ${money(t.pay.amount)}${t.pay.paidDate ? ` (ngày ${fmt(t.pay.paidDate)})` : ""}${t.pay.method ? " · " + esc(t.pay.method) : ""}</dd>${t.pay.note ? `<dt>Ghi chú KT</dt><dd>${esc(t.pay.note)}</dd>` : ""}` : ""}
@@ -2668,7 +2670,9 @@ window.APP_BUILD = "2026-11-24.4";
     if (st.length) await putMany("st", st);
     return {kho, thao, ngoai};
   }
-  const KTV_NAMES = ["Danh", "Khang", "Minh", "Thành"];   // kỹ thuật viên nhận sửa
+  const KTV_NAMES = ["Danh", "Khang", "Minh", "Thành"];
+  const SVC_LIST = ["Công sửa chữa", "Cập nhật phần mềm", "Vệ sinh máy", "Kiểm tra / test máy", "Cài đặt / cân chỉnh"];   // phí dịch vụ: không trừ kho
+  const svcText = t => (t.services || []).map(v => v.name + (v.amount ? " " + money(v.amount) : "")).join(", ");   // kỹ thuật viên nhận sửa
   /* ---------- Kỹ thuật kiểm tra lỗi: tick lỗi khách báo đúng + chọn thêm lỗi phát hiện ---------- */
   const KT_FAULTS = ["Rè loa", "Mất tiếng", "Không lên nguồn", "Hú / rít", "Lỗi Bluetooth", "Lỗi micro", "Lỗi màn hình", "Chập chờn", "Lỗi sạc / pin", "Lỗi nút / núm", "Lỗi cổng kết nối", "Lỗi bo mạch", "Vỡ / móp vỏ", "Vào nước"];
   const issueItems = t => { const a = String(t.issue || "").split(/[\n,;]+|\s\+\s/).map(x => x.trim()).filter(Boolean); return a.length ? a : []; };
@@ -2730,6 +2734,14 @@ window.APP_BUILD = "2026-11-24.4";
         <div class="sub">Gõ tên linh kiện: <b>có trong kho → tự trừ kho</b>; <b>không có tên trong kho → trừ vào danh mục 🧩 Linh kiện ngoài</b>. Kho có tên nhưng hết hàng → chọn 🔩 Tháo từ máy (nhập seri máy bị tháo).</div>
         <div id="prows"></div>
         <button type="button" class="btn sm" id="addPart" style="margin-top:8px">+ Thêm linh kiện</button>
+        <div class="svcbox" style="margin-top:14px;padding:10px 12px;border:1.5px dashed #0891b2;border-radius:14px;background:rgba(8,145,178,.05)">
+          <label style="margin-top:0;color:#0e7490">💼 Phí dịch vụ <span class="sub">(không trừ hàng tồn kho)</span></label>
+          <div class="sub">Công sửa, cập nhật phần mềm, vệ sinh máy… Bấm chọn hoặc gõ tên dịch vụ, ghi số tiền (nếu có).</div>
+          <div class="chips svcchips" style="flex-wrap:wrap;margin-top:6px"></div>
+          <div id="svcrows"></div>
+          <button type="button" class="btn sm" id="addSvc" style="margin-top:8px">+ Thêm phí dịch vụ</button>
+          <div class="sub" id="svcSum" style="margin-top:6px"></div>
+        </div>
         <label>Kỹ thuật viên sửa * <span class="sub">(ai sửa người đó bấm chọn)</span></label><input type="hidden" name="tech" value="${esc(t.tech || "")}">
         <div class="ccppl ktvpick" style="grid-template-columns:repeat(4,1fr)">${[...new Set([...KTV_NAMES, ...(t.tech && !KTV_NAMES.includes(t.tech) ? [t.tech] : [])])].map(n => `<button type="button" class="ccp ${n === t.tech ? "sel" : ""}" data-ktv="${esc(n)}" style="padding:12px 4px;font-size:16px">${esc(n)}</button>`).join("")}</div>
         <label>Ghi chú</label><textarea name="techNote">${esc(t.techNote)}</textarea>
@@ -2809,6 +2821,30 @@ window.APP_BUILD = "2026-11-24.4";
     const used0 = t.partsUsed || parseParts(t.parts).map(x => ({name: x.name, qty: x.qty}));
     (used0.length ? used0 : [{}]).forEach(addPart);
     $("#addPart").onclick = () => { addPart(); $("#prows").lastElementChild.querySelector(".pn").focus(); };
+    // ---- phí dịch vụ: không trừ kho ----
+    const svcNum = el => Number(String(el.value).replace(/[^\d]/g, "")) || 0;
+    const svcRead = () => [...$("#svcrows").children].map(el => ({name: el.querySelector(".svn").value.trim(), amount: svcNum(el.querySelector(".sva"))})).filter(x => x.name);
+    const svcDraw = () => { const cur = svcRead(), used = new Map();
+      tickets.forEach(x => (x.services || []).forEach(v => { const k = norm(v.name); const o = used.get(k) || [v.name, 0]; o[1]++; used.set(k, o); }));
+      const sug = [...new Map([...SVC_LIST.map(a => [norm(a), a]), ...[...used.values()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([a]) => [norm(a), a])]).values()];
+      F2.querySelector(".svcchips").innerHTML = sug.map(a => { const on = cur.some(x => norm(x.name) === norm(a)); return `<button type="button" class="chip ${on ? "sel" : ""}" data-svc="${esc(a)}">${on ? "✔ " : ""}${esc(a)}</button>`; }).join("");
+      F2.querySelectorAll("[data-svc]").forEach(b => b.onclick = () => { const a = b.dataset.svc, row = [...$("#svcrows").children].find(el => norm(el.querySelector(".svn").value) === norm(a));
+        if (row) row.remove(); else { const blank = [...$("#svcrows").children].find(el => !el.querySelector(".svn").value.trim()); if (blank) blank.querySelector(".svn").value = a; else addSvc({name: a}); const r = [...$("#svcrows").children].find(el => norm(el.querySelector(".svn").value) === norm(a)); r && r.querySelector(".sva").focus(); }
+        svcDraw(); });
+      const tot = cur.reduce((a, x) => a + x.amount, 0);
+      $("#svcSum").innerHTML = cur.length ? `${cur.length} dịch vụ${tot ? ` · tổng <b style="color:#0e7490">${money(tot)}</b>` : ""} – <b>không trừ kho</b>` : ""; };
+    const addSvc = v => { v = v || {};
+      $("#svcrows").insertAdjacentHTML("beforeend", `<div class="svrow" style="display:grid;grid-template-columns:1fr 120px 36px;gap:6px;margin-top:6px;align-items:center">
+        <input class="svn" value="${esc(v.name || "")}" placeholder="Tên dịch vụ" autocomplete="off">
+        <input class="sva" inputmode="numeric" value="${v.amount ? Number(v.amount).toLocaleString("vi-VN") : ""}" placeholder="Số tiền" autocomplete="off">
+        <button type="button" class="btn sm svrm" title="Xóa" style="padding:8px 0">✕</button></div>`);
+      const el = $("#svcrows").lastElementChild, a = el.querySelector(".sva");
+      a.addEventListener("input", () => { a.value = a.value.trim() === "" ? "" : svcNum(a).toLocaleString("vi-VN"); svcDraw(); });
+      el.querySelector(".svn").addEventListener("input", svcDraw);
+      el.querySelector(".svrm").onclick = () => { el.remove(); svcDraw(); }; };
+    (t.services || []).forEach(addSvc);
+    $("#addSvc").onclick = () => { addSvc(); svcDraw(); $("#svcrows").lastElementChild.querySelector(".svn").focus(); };
+    svcDraw();
     F2.querySelectorAll(".opt[data-a]").forEach(o => o.onclick = () => { jobAction = o.dataset.a; sync(); setTimeout(() => (jobAction === "doimoi" ? F2.newSerial : $("#prows .pn"))?.focus(), 50); });
     ["newSerial","exMode","exMonths"].forEach(n => { F2[n].addEventListener("input", sync); F2[n].addEventListener("change", sync); });
     sync();
@@ -2831,8 +2867,9 @@ window.APP_BUILD = "2026-11-24.4";
       // đọc & kiểm tra các dòng linh kiện
       const used = [...$("#prows").children].map(el => ({name: el.querySelector(".pn").value.trim(), qty: Math.max(1, parseInt(el.querySelector(".pq").value) || 1), src: el.dataset.src || "kho",
         donor: el.querySelector(".pdn").value.trim(), donorSerial: el.querySelector(".pds").value.trim()})).filter(x => x.name);
+      const services = svcRead();
       if (jobAction !== "doimoi") {
-        if (!used.length && jobAction !== "doidau") { toast("Hãy chọn linh kiện cần thay"); $("#prows .pn")?.focus(); throw new Error("x"); }
+        if (!used.length && !services.length && jobAction !== "doidau") { toast("Hãy chọn linh kiện cần thay, hoặc thêm phí dịch vụ"); $("#prows .pn")?.focus(); throw new Error("x"); }
         const need = {};
         used.filter(u => u.src === "kho").forEach(u => { const k = norm(u.name); need[k] = (need[k] || {name: u.name, q: 0}); need[k].q += u.qty; });
         const prevKho = (t.stockApplied && t.stockApplied.kho) || {};
@@ -2846,7 +2883,8 @@ window.APP_BUILD = "2026-11-24.4";
       }
       const parts = used.map(u => `${u.name} x${u.qty}`).join(", ");
       if (!F2.tech.value.trim()) { toast("Chọn kỹ thuật viên sửa máy này"); F2.querySelector(".ktvpick").scrollIntoView({block: "center"}); throw new Error("x"); }
-      const extra = {action: jobAction, parts, partsUsed: used, tech: F2.tech.value.trim(), techNote: F2.techNote.value.trim(), ktCheck: Object.assign(ktCheck, {by: F2.tech.value.trim()})};
+      const svcTotal = services.reduce((a, v) => a + v.amount, 0), svcNote = services.length ? " · 💼 Dịch vụ: " + services.map(v => v.name + (v.amount ? " " + money(v.amount) : "")).join(", ") : "";
+      const extra = {action: jobAction, parts, partsUsed: used, services, svcTotal, tech: F2.tech.value.trim(), techNote: F2.techNote.value.trim(), ktCheck: Object.assign(ktCheck, {by: F2.tech.value.trim()})};
       let note;
       if (jobAction === "doimoi") {
         const newSerial = F2.newSerial.value.trim();
@@ -2854,7 +2892,7 @@ window.APP_BUILD = "2026-11-24.4";
         if (keySN(newSerial) === keySN(t.serial)) { toast("Seri mới phải khác seri cũ"); F2.newSerial.focus(); throw new Error("x"); }
         const mode = F2.exMode.value, months = Number(F2.exMonths.value), until = iso(exchangeUntil(t, mode, months));
         extra.exchange = {oldSerial: t.serial, newSerial, mode, months: mode === "new" ? months : null, until};
-        note = `Đổi mới: SN ${t.serial} → SN ${newSerial}, bảo hành đến ${fmt(until)}`;
+        note = `Đổi mới: SN ${t.serial} → SN ${newSerial}, bảo hành đến ${fmt(until)}${svcNote}`;
         // cập nhật sổ sản phẩm: máy mới mang hạn bảo hành tiếp, máy cũ ghi đã đổi
         const now = new Date().toISOString(), oldR = findReg(t.serial), newR = findReg(newSerial);
         const base = {customer: t.customer, phone: t.phone, product: t.product};
@@ -2872,7 +2910,7 @@ window.APP_BUILD = "2026-11-24.4";
         const stN = findStock(n); if (stN && stN.status !== "in" && stN.orderCode !== t.code) { toast(`Seri ${n} đã xuất ở ${stN.orderCode || "đơn khác"}`); throw new Error("x"); }
         const now = new Date().toISOString(), lb = ddPart === "phat" ? "Đầu phát" : "Đầu thu";
         extra.exchange = null; extra.partSwap = {part: ddPart, label: lb, oldSerial: o, newSerial: n, at: now};
-        note = `🔁 Đổi ${lb.toLowerCase()}: SN ${o} → SN ${n}${parts ? " · " + parts : ""}`;
+        note = `🔁 Đổi ${lb.toLowerCase()}: SN ${o} → SN ${n}${parts ? " · " + parts : ""}${svcNote}`;
         // sổ bảo hành: thay seri cũ bằng seri mới trong bộ của khách (giữ hạn bảo hành)
         const r = findReg(o) || rg0, base = r && reg.some(x => x.id === r.id) ? r : Object.assign({id: uid(), createdAt: now}, r || {customer: t.customer, phone: t.phone, product: t.product, purchaseDate: t.purchaseDate || "", months: Number(t.months) || 12});
         const rec = Object.assign({}, base, {updatedAt: now, swaps: (base.swaps || []).concat([{part: lb, old: o, new: n, at: now, ticket: t.code}])});
@@ -2881,7 +2919,7 @@ window.APP_BUILD = "2026-11-24.4";
         if (stN && stN.status === "in") await put("st", Object.assign({}, stN, {status: "out", orderCode: t.code, customer: t.customer, outAt: now, outKind: "doidau"}));
       } else {
         extra.exchange = null;
-        note = `${ACTION[jobAction]} – ${parts}`;
+        note = `${ACTION[jobAction]} – ${parts || "không thay linh kiện"}${svcNote}`;
         note += ` · KT kiểm tra: ${ktCheck.confirmed.length ? "đúng lỗi " + ktCheck.confirmed.join(", ") : "lỗi khách báo không đúng"}${ktCheck.added.length ? " · thêm lỗi: " + ktCheck.added.join(", ") : ""}`;
       }
       try { localStorage.setItem("bh_tech", extra.tech); } catch(e){}
@@ -6470,6 +6508,7 @@ window.APP_BUILD = "2026-11-24.4";
         : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>`}
       <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""}</div>
       ${t.action ? `<div class="sub">🔧 ${ACTION[t.action]}${t.exchange ? " · " + esc(exText(t)) : ""}${t.parts ? " · " + esc(t.parts) : ""}</div>` : ""}
+      ${t.services?.length ? `<div class="sub">💼 Phí dịch vụ: ${esc(svcText(t))}${t.svcTotal ? ` · tổng <b>${money(t.svcTotal)}</b>` : ""}</div>` : ""}
       ${t.ship ? `<div class="sub">🚚 ${shipText(t)}${t.ship.date ? ` · ${isOd ? "gửi" : "trả"} ${fmt(t.ship.date)}` : ""}</div>` : ""}
       ${t.tradeIn ? `<div class="reason" style="margin-top:6px">♻️ <b>Thu cũ đổi mới:</b> ${t.tradeIn.newQty} × ${money(t.tradeIn.newPrice)} − thu cũ ${t.tradeIn.oldQty} ${esc(t.tradeIn.oldProduct)} × ${money(t.tradeIn.oldPrice)} = khách bù <b>${money(t.tradeIn.diff)}</b>${t.tradeIn.received ? " · ✅ đã nhận hàng cũ" : " · ⏳ chưa nhận hàng cũ"}</div>` : ""}
       <label>Tình trạng thanh toán *</label>
