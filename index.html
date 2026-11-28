@@ -207,6 +207,12 @@
   .tab .ti{display:flex;justify-content:center;margin:0 auto 4px}
   .tab .ti .ios-ic{width:30px;height:30px;box-shadow:0 3px 8px -2px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.55);opacity:.82;transition:transform .15s,opacity .15s}
   .tab.on .ti .ios-ic{opacity:1;transform:scale(1.12);box-shadow:0 0 0 2px #fff,0 4px 10px -2px rgba(0,0,0,.4)}
+  /* thanh đầu trang: icon một màu trắng (không ô màu) */
+  .tab .ti .ios-ic,#appTitle .ios-ic{background:none;box-shadow:none;opacity:.75}
+  .tab .ti .ios-ic::before,#appTitle .ios-ic::before{display:none}
+  .tab .ti .ios-ic svg,#appTitle .ios-ic svg{width:80%;height:80%;stroke:#fff;filter:none}
+  .tab.on .ti .ios-ic{opacity:1;transform:none;box-shadow:none;background:rgba(255,255,255,.2)}
+  #appTitle .ios-ic{opacity:1}
   .dept{background:linear-gradient(180deg,#ffffff,#f7f9ff);border:1.5px solid var(--line);border-radius:18px;padding:14px 6px 12px;box-shadow:0 2px 6px rgba(29,78,216,.06);transition:transform .12s,box-shadow .12s}
   .dept:active{transform:scale(.97)}
   .dept .ic{display:flex;justify-content:center;margin-bottom:8px;font-size:0}
@@ -800,7 +806,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-28.4";
+window.APP_BUILD = "2026-11-28.5";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
