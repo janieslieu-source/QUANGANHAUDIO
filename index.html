@@ -800,7 +800,7 @@
 
 <script>
 /* ===== TỰ CẬP NHẬT: có bản mới trên máy chủ → tự tải lại (khi không đang nhập liệu) ===== */
-window.APP_BUILD = "2026-11-28.2";
+window.APP_BUILD = "2026-11-28.3";
 (function(){
   if (location.protocol === "file:") return;
   let pending = false;
@@ -865,7 +865,7 @@ window.APP_BUILD = "2026-11-28.2";
   };
   const TYPE = {bh:"Bảo hành", sc:"Sửa chữa"};
   const ACTION = {sua:"Sửa chữa", thaymoi:"Thay mới", doimoi:"Đổi mới", doidau:"Đổi đầu thu / phát", guihang:"Gửi hãng", guisc:"Gửi SC ngoài"};
-  const exText = t => t.exchange ? `SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
+  const exText = t => t.exchange ? `${t.exchange.temp ? "🔁 Tạm đổi: " : ""}SN ${t.exchange.oldSerial} → ${t.exchange.newProduct && t.exchange.newProduct !== t.product ? t.exchange.newProduct + " " : ""}SN ${t.exchange.newSerial} · BH đến ${fmt(t.exchange.until)}` : "";
   const SHIP = {chanh:"Chành xe", buudien:"Bưu điện", grab:"Grab thường", grabgap:"🚨 Grab gấp", khachgiu:"🤝 Khách đang giữ hàng (đã mượn)", congtrinh:"🏗️ Lắp tại công trình"};
   // Quy định seri hàng công ty: bắt đầu bằng 525, tổng cộng 8 chữ số (VD: 52526789)
   // + seri hãng Tomko: bắt đầu bằng 900 hoặc 1845 (độ dài không cố định, 6–20 ký tự)
@@ -2636,7 +2636,15 @@ window.APP_BUILD = "2026-11-28.2";
   const inWarranty = t => t.type === "bh" || !!wStatus(t.serial).w?.ok;
   const vdDays = v => Math.max(0, Math.floor((today() - new Date((v.sentDate || iso(new Date(v.at))) + "T00:00:00")) / 864e5));
   const vdOpen = () => tickets.filter(t => t.vendor && !t.vendor.backAt && t.stage !== "huy").sort((a, b) => vdDays(b.vendor) - vdDays(a.vendor));
-  const vdWaitCus = () => tickets.filter(t => t.vendor?.backAt && !t.vendor.swap && !CLOSED.includes(t.stage) && t.stage !== "huy");
+  const vdWaitCus = () => tickets.filter(t => t.vendor?.backAt && (!t.vendor.swap || (t.swapBack && !t.swapBack.done)) && !CLOSED.includes(t.stage) && t.stage !== "huy");
+  const vdTemp = v => v?.swap?.mode === "tam";
+  // máy về kho: seri → bản ghi st về "in"; không seri → dòng nhập +1
+  async function vdStockIn(product, sn, ref){
+    const now = new Date().toISOString(), p = findProduct(product);
+    if (sn && !p?.noSerial) { const old = findStock(sn);
+      await put("st", Object.assign({}, old || {id: stId(sn), serial: sn, product, months: p?.months ?? 12, code: p?.code || ""}, {status: "in", orderCode: "", outAt: "", customer: "", importedAt: now, ref, by: actor()})); }
+    else await put("mv", {id: "mv_" + uid(), product, qty: 1, at: now, kind: "nhap", ref, by: actor()});
+  }
   const VD_RES = {sua: "Sửa xong", doi: "Hãng đổi máy khác", khong: "Không sửa được"};
   function vdLine(t, plain){
     const v = t.vendor; if (!v) return "";
@@ -2644,7 +2652,9 @@ window.APP_BUILD = "2026-11-28.2";
     const h = v.backAt
       ? `${who} <b>${esc(v.name)}</b> · ✅ đã nhận về ${fmt(v.backAt)} – <b>${esc(VD_RES[v.result] || "")}</b>${v.backSerial ? ` (SN ${esc(v.backSerial)})` : ""}${v.cost && !hidePrice() ? ` · chi phí ${money(v.cost)}` : ""}${v.stockIn ? " · 📦 đã nhập kho" : ""}`
       : `${who} <b>${esc(v.name)}</b> từ ${fmt(v.sentDate)} · <b>${d} ngày</b>${late ? ` – ⚠️ QUÁ ${VD_DAYS} NGÀY` : ""}${v.phone ? " · ☎ " + esc(v.phone) : ""}`;
-    const sw = v.swap ? `<br>🔄 Khách đã được đổi máy mới: ${esc(v.swap.newProduct)}${v.swap.newSerial ? " SN <b>" + esc(v.swap.newSerial) + "</b>" : ""}` : "";
+    const sn2 = v.swap ? `${esc(v.swap.newProduct)}${v.swap.newSerial ? " SN <b>" + esc(v.swap.newSerial) + "</b>" : ""}` : "", sb = t.swapBack;
+    const sw = !v.swap ? "" : vdTemp(v) ? (sb ? (sb.done ? `<br>🔁 Đã đổi lại cho khách SN <b>${esc(sb.give || "")}</b> · máy tạm đã về kho` : `<br>🔁 <b>Chờ đổi lại:</b> giao khách SN <b>${esc(sb.give || "")}</b> · thu hồi máy tạm ${sn2}`) : v.backAt ? "" : `<br>🔁 Khách đang dùng <b>máy tạm</b>: ${sn2}`)
+      : `<br>🔄 Khách đã đổi luôn máy mới: ${sn2}`;
     return plain ? h + sw : `<div class="sub" style="margin-top:4px;color:${late ? "var(--bad)" : v.backAt ? "var(--ok)" : "#b45309"}">${h}${sw}</div>`;
   }
   function drawVd(){
@@ -2688,14 +2698,16 @@ window.APP_BUILD = "2026-11-28.2";
       <label>Kết quả *</label>
       <div class="choice" style="grid-template-columns:repeat(${isH ? 3 : 2},1fr)">${Object.entries(VD_RES).filter(([k]) => isH || k !== "doi").map(([k, l]) => `<button type="button" class="opt" data-vr="${k}"><span class="ic">${k === "sua" ? "🛠️" : k === "doi" ? "🔄" : "✖"}</span>${l}</button>`).join("")}</div>
       <div id="vbNewW" class="hide"><label id="vbNewLbl">Seri máy hãng đổi *</label><div class="snrow"><input name="vbSn" inputmode="numeric" placeholder="Seri máy mới" autocomplete="off"><button type="button" class="scanbtn" id="vbScan">📷 Quét</button></div></div>
-      ${v.swap ? `<label class="kirow" style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:10px;cursor:pointer"><input type="checkbox" name="vbStock" checked style="width:22px;height:22px;margin:0"> <span>📦 Nhập máy ${isH ? "hãng" : "SC"} trả vào kho <span class="sub">(khách đã được đổi máy mới)</span></span></label>` : ""}
       ${!isH ? `<label>Chi phí sửa thực tế (đ)</label><input name="vbCost" inputmode="numeric" value="${v.cost ? Number(v.cost).toLocaleString("vi-VN") : ""}" placeholder="Không bắt buộc">` : ""}
       <label>Ghi chú</label><textarea name="vbNote"></textarea>
       <div class="sub" id="vbHint" style="margin-top:6px"></div>
       <div class="btns"><button type="button" class="btn" data-close="actBg">Hủy</button><button type="submit" class="btn pri">✅ Xác nhận đã nhận về</button></div>`;
     const sync = () => { F.querySelectorAll("[data-vr]").forEach(b => b.classList.toggle("sel", b.dataset.vr === res));
       $("#vbNewW").classList.toggle("hide", res !== "doi");
-      $("#vbHint").innerHTML = v.swap ? "Khách đã nhận máy mới trước đó – chỉ ghi nhận kết quả, không chuyển trả khách."
+      const tsn = v.swap?.newSerial ? "SN " + esc(v.swap.newSerial) : esc(v.swap?.newProduct || "");
+      $("#vbHint").innerHTML = vdTemp(v) ? (res === "khong" ? `🔁 Hãng không sửa được → <b>khách giữ luôn máy tạm</b> (${tsn}), sổ bảo hành đổi sang máy tạm. Máy lỗi không nhập kho.`
+          : `🔁 Chuyển <b>Vận chuyển đổi lại cho khách</b>: giao máy ${res === "doi" ? "hãng đổi (seri mới)" : "SN " + esc(t.serial)} · <b>thu hồi máy tạm ${tsn}</b> (về kho tự cộng lại).`)
+        : v.swap ? (res === "khong" ? "Khách đã đổi luôn máy mới – máy lỗi hãng trả không nhập kho." : `📦 Khách đã đổi luôn máy mới → máy hãng trả <b>tự động cộng kho</b>${res === "doi" ? " (theo seri hãng đổi)" : ""}.`)
         : res === "khong" ? "↩ Chuyển <b>Vận chuyển trả lại máy cho khách</b> (không sửa được)."
         : `🚚 Chuyển <b>Vận chuyển trả máy cho khách</b>${res === "doi" ? " · sổ bảo hành cập nhật seri mới, giữ hạn bảo hành cũ" : ""}.`; };
     F.querySelectorAll("[data-vr]").forEach(b => b.onclick = () => { res = b.dataset.vr; sync(); if (res === "doi") F.vbSn.focus(); });
@@ -2712,14 +2724,20 @@ window.APP_BUILD = "2026-11-28.2";
         F.vbCost ? {cost: Number(F.vbCost.value.replace(/[^\d]/g, "")) || 0} : {});
       const extra = {vendor: nv};
       let stage = t.stage, note = `✅ ${isH ? "Hãng" : "SC ngoài"} (${v.name}) đã trả máy – ${VD_RES[res]}${res === "doi" && sn ? ` SN ${sn}` : ""}${nv.cost && !isH ? ` · chi phí ${money(nv.cost)}` : ""}${nv.backNote ? " – " + nv.backNote : ""}`;
-      if (v.swap) {
-        if (F.vbStock?.checked) {   // máy hãng trả thuộc công ty → nhập kho
-          const isn = res === "doi" ? sn : t.serial, p = findProduct(t.product), ref = `${isH ? "Hãng" : "SC"} trả – phiếu ${t.code}`;
-          if (isn && needSn) { const old = findStock(isn);
-            await put("st", Object.assign({}, old || {id: stId(isn), serial: isn, product: t.product, months: p?.months ?? 12, code: p?.code || ""}, {status: "in", orderCode: "", outAt: "", importedAt: now, ref, by: actor()})); }
-          else await put("mv", {id: "mv_" + uid(), product: t.product, qty: 1, at: now, kind: "nhap", ref, by: actor()});
-          nv.stockIn = true; note += " · 📦 đã nhập kho";
+      if (vdTemp(v)) {   // tạm đổi: hãng trả → đổi lại cho khách, thu hồi máy tạm
+        const ex0 = t.exchange;
+        if (res === "khong") {   // khách giữ luôn máy tạm
+          await vdRegSwap(t, t.serial, v.swap.newSerial, v.swap.newProduct);
+          extra.exchange = Object.assign({}, ex0 || {}, {temp: false}); note += ` · khách giữ luôn máy tạm ${v.swap.newSerial ? "SN " + v.swap.newSerial : v.swap.newProduct}`;
+        } else {
+          const give = res === "doi" ? sn : t.serial;
+          if (res === "doi") await vdRegSwap(t, t.serial, sn, t.product);
+          extra.swapBack = {give, giveProduct: t.product, take: v.swap.newSerial, takeProduct: v.swap.newProduct, at: now, done: false};
+          extra.tempEx = ex0 || null; extra.exchange = res === "doi" ? {oldSerial: t.serial, newSerial: sn, newProduct: t.product, mode: "keep", months: null, until: vdUntil(t), viaHang: true} : null; extra.stockOut = true;
+          stage = "xong"; note += ` · 🔁 Chuyển Vận chuyển đổi lại: giao SN ${give || "(không seri)"}, thu hồi máy tạm ${v.swap.newSerial ? "SN " + v.swap.newSerial : v.swap.newProduct}`;
         }
+      } else if (v.swap) {   // đổi luôn: máy hãng trả tự động cộng kho
+        if (res !== "khong") { await vdStockIn(t.product, res === "doi" ? sn : t.serial, `${isH ? "Hãng" : "SC"} trả – phiếu ${t.code}`); nv.stockIn = true; note += " · 📦 tự động cộng kho"; }
       } else if (res === "khong") stage = "kt_tra";
       else {
         stage = "xong";
@@ -2727,7 +2745,7 @@ window.APP_BUILD = "2026-11-28.2";
           extra.exchange = {oldSerial: t.serial, newSerial: sn, newProduct: t.product, mode: "keep", months: null, until: vdUntil(t), viaHang: true}; extra.stockOut = true; }
       }
       await advance(t, stage, note, extra);
-      toast(v.swap ? "Đã ghi nhận máy về" : stage === "kt_tra" ? "Đã chuyển Vận chuyển trả lại khách" : "Đã chuyển Vận chuyển trả máy cho khách");
+      toast(stage === "xong" && vdTemp(v) ? "Đã chuyển Vận chuyển đổi lại máy cho khách" : v.swap ? (nv.stockIn ? "Đã ghi nhận – máy đã tự cộng kho" : "Đã ghi nhận máy về") : stage === "kt_tra" ? "Đã chuyển Vận chuyển trả lại khách" : "Đã chuyển Vận chuyển trả máy cho khách");
     }};
     open("actBg");
   }
@@ -2819,7 +2837,12 @@ window.APP_BUILD = "2026-11-28.2";
         <div class="two"><div><label>Ngày gửi</label><input name="vdDate" type="date" value="${iso(new Date())}"></div><div id="vdPhoneW"><label>SĐT nơi sửa</label><input name="vdPhone" type="tel" inputmode="tel" autocomplete="off"></div></div>
         <div id="vdCostW"><label>Chi phí sửa dự kiến (đ)</label><input name="vdCost" inputmode="numeric" placeholder="Không bắt buộc" autocomplete="off"></div>
         <div id="vdSwapW">
-          <label class="kirow" style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;margin-top:10px;cursor:pointer"><input type="checkbox" name="vdSwap" style="width:22px;height:22px;margin:0"> <span>🔄 <b>Đổi máy mới cho khách ngay</b> <span class="sub">(không chờ hãng – Kho xuất máy mới)</span></span></label>
+          <label>Đổi máy cho khách? *</label><input type="hidden" name="vdMode" value="">
+          <div class="choice" style="grid-template-columns:1fr;gap:8px">
+            <button type="button" class="opt" data-vm="tam" style="text-align:left"><b>🔁 Tạm đổi máy cho khách</b><span class="sub" style="display:block;font-weight:400">Hàng mới mua, còn hạn nhiều: khách dùng máy tạm → hãng trả về thì <b>đổi lại cho khách</b>, thu máy tạm về kho</span></button>
+            <button type="button" class="opt" data-vm="luon" style="text-align:left"><b>🔄 Đổi luôn máy mới</b><span class="sub" style="display:block;font-weight:400">Khách ở xa: khách giữ máy mới luôn → hãng trả về <b>tự động cộng kho</b></span></button>
+            <button type="button" class="opt" data-vm="cho" style="text-align:left"><b>⏳ Không đổi – chờ hãng trả</b><span class="sub" style="display:block;font-weight:400">Hãng trả về → Vận chuyển trả máy cho khách</span></button>
+          </div>
           <div id="vdSwapF" class="hide">
             <label>Sản phẩm đổi cho khách *</label><div style="position:relative"><input name="vdNewProd" value="${esc(t.product)}" autocomplete="off"><div class="sugg hide" id="vdProdSugg"></div></div>
             <label id="vdSnLbl">Seri máy mới *</label><div class="snrow"><input name="vdNewSn" inputmode="numeric" placeholder="525xxxxx" autocomplete="off"><button type="button" class="scanbtn" id="vdScan">📷 Quét</button></div>
@@ -2885,24 +2908,26 @@ window.APP_BUILD = "2026-11-28.2";
         $("#exPreview").textContent = `🛡️ Máy mới (SN ${F2.newSerial.value.trim() || "…"}) bảo hành đến ${fmt(iso(until))}`;
       }
       $("#jobOk").disabled = !jobAction;
-      $("#jobOk").textContent = jobAction === "guihang" ? (F2.vdSwap.checked ? "🏭 Gửi hãng + đổi máy cho khách" : "🏭 Gửi hãng") : jobAction === "guisc" ? "🚚 Gửi SC ngoài" : t.stage === "dang_sua" ? "Lưu" : "Bắt đầu xử lý";
+      $("#jobOk").textContent = jobAction === "guihang" ? (F2.vdMode.value === "tam" ? "🏭 Gửi hãng + tạm đổi máy" : F2.vdMode.value === "luon" ? "🏭 Gửi hãng + đổi luôn máy mới" : "🏭 Gửi hãng") : jobAction === "guisc" ? "🚚 Gửi SC ngoài" : t.stage === "dang_sua" ? "Lưu" : "Bắt đầu xử lý";
     };
     // ---- gửi hãng / gửi SC ngoài ----
     const vdNeedSn = () => !findProduct(F2.vdNewProd.value.trim() || t.product)?.noSerial;
-    const vdSync = () => { const isH = jobAction === "guihang", sw = isH && F2.vdSwap.checked;
+    const vdSync = () => { const isH = jobAction === "guihang", vm = F2.vdMode.value, sw = isH && (vm === "tam" || vm === "luon");
+      F2.querySelectorAll("[data-vm]").forEach(b => b.classList.toggle("sel", b.dataset.vm === vm));
       $("#vdNameLbl").textContent = isH ? "Gửi hãng nào / nơi nhận *" : "Tên tiệm / nơi sửa bên ngoài *";
       F2.vdName.placeholder = isH ? "VD: Hãng Tomko, TT bảo hành JBL…" : "VD: Tiệm sửa điện tử Minh Phát";
       $("#vdPhoneW").classList.toggle("hide", isH); $("#vdCostW").classList.toggle("hide", isH); $("#vdSwapW").classList.toggle("hide", !isH); $("#vdSwapF").classList.toggle("hide", !sw);
-      $("#vdHint").innerHTML = isH ? (sw ? "🏭 Máy lỗi gửi hãng (theo dõi riêng) · 🔄 khách được đổi máy mới ngay: <b>Kho xuất máy mới → Vận chuyển giao khách</b>." : `🏭 Máy gửi hãng – theo dõi riêng, quá <b>${VD_DAYS} ngày</b> chưa về app cảnh báo. Hãng trả máy → bấm “✅ Hãng đã trả” → Vận chuyển trả khách.`)
+      $("#vdHint").innerHTML = isH ? (vm === "tam" ? "🏭 Máy lỗi gửi hãng · 🔁 <b>Kho xuất máy tạm → Vận chuyển giao khách</b>. Hãng trả về → bấm “✅ Hãng đã trả” → Vận chuyển <b>đổi lại</b> máy cho khách và thu máy tạm (tự cộng kho)."
+        : vm === "luon" ? "🏭 Máy lỗi gửi hãng · 🔄 <b>Kho xuất máy mới → Vận chuyển giao khách</b> (khách giữ luôn, sổ bảo hành đổi sang seri mới). Hãng trả về → <b>tự động cộng kho</b>." : `🏭 Máy gửi hãng – theo dõi riêng, quá <b>${VD_DAYS} ngày</b> chưa về app cảnh báo. Hãng trả máy → bấm “✅ Hãng đã trả” → Vận chuyển trả khách.`)
         : `🚚 Máy gửi tiệm sửa bên ngoài – theo dõi riêng, quá <b>${VD_DAYS} ngày</b> app cảnh báo. Nhận máy về → bấm “✅ Đã nhận về từ SC” → Vận chuyển trả khách.`;
       if (sw) { const n = F2.vdNewSn.value.trim(), st = n && findStock(n), need = vdNeedSn();
         $("#vdSnLbl").textContent = need ? "Seri máy mới *" : "Seri máy mới (sản phẩm không seri – bỏ trống được)";
         $("#vdPreview").innerHTML = `🔄 SN <b>${esc(t.serial)}</b> → ${esc(F2.vdNewProd.value.trim() || t.product)} SN <b>${esc(n || "…")}</b>`
           + (n && !snOk(n) ? `<br><b style="color:var(--bad)">Seri mới sai định dạng (${SN_HINT})</b>` : "")
           + (st ? (st.status === "in" ? `<br>📦 Có trong kho – Kho sẽ xuất máy này` : `<br><b style="color:var(--bad)">Seri này đã xuất (${esc(st.orderCode || "")})</b>`) : n ? `<br><span class="sub">Seri không có trong kho – Kho xuất theo số lượng</span>` : "")
-          + `<br>🛡️ Máy mới tiếp tục hạn bảo hành cũ – đến ${fmt(vdUntil(t))}`; }
-      $("#jobOk").textContent = isH ? (sw ? "🏭 Gửi hãng + đổi máy cho khách" : "🏭 Gửi hãng") : "🚚 Gửi SC ngoài"; };
-    F2.vdSwap.addEventListener("change", vdSync); F2.vdNewSn.addEventListener("input", vdSync);
+          + (vm === "tam" ? `<br>🔁 Máy tạm – sổ bảo hành của khách giữ nguyên SN ${esc(t.serial)}` : `<br>🛡️ Máy mới tiếp tục hạn bảo hành cũ – đến ${fmt(vdUntil(t))}`); }
+      $("#jobOk").textContent = isH ? (F2.vdMode.value === "tam" ? "🏭 Gửi hãng + tạm đổi máy" : F2.vdMode.value === "luon" ? "🏭 Gửi hãng + đổi luôn máy mới" : "🏭 Gửi hãng") : "🚚 Gửi SC ngoài"; };
+    F2.querySelectorAll("[data-vm]").forEach(b => b.onclick = () => { F2.vdMode.value = b.dataset.vm; vdSync(); if (b.dataset.vm !== "cho") setTimeout(() => F2.vdNewSn.focus(), 50); }); F2.vdNewSn.addEventListener("input", vdSync);
     attachPicker(F2.vdNewProd, $("#vdProdSugg"), vdSync);
     $("#vdScan").onclick = () => openScanner(sn => { F2.vdNewSn.value = sn; vdSync(); return true; });
     F2.vdCost.addEventListener("input", () => { const n = Number(F2.vdCost.value.replace(/[^\d]/g, "")) || 0; F2.vdCost.value = F2.vdCost.value.trim() === "" ? "" : n.toLocaleString("vi-VN"); });
@@ -2913,20 +2938,22 @@ window.APP_BUILD = "2026-11-28.2";
       const extra = {action: jobAction, vendor, ktCheck: Object.assign(ktCheck, {by: actor()})};
       let stage = kind === "hang" ? "gui_hang" : "gui_sc";
       let note = `${kind === "hang" ? "🏭 Gửi hãng" : "🚚 Gửi SC ngoài"}: ${name} – ngày ${fmt(vendor.sentDate)}${vendor.phone ? " · ☎ " + vendor.phone : ""}${vendor.cost ? " · chi phí dự kiến " + money(vendor.cost) : ""}${vendor.note ? " – " + vendor.note : ""}`;
-      if (kind === "hang" && F2.vdSwap.checked) {
+      const vm = F2.vdMode.value;
+      if (kind === "hang" && !vm) { toast("Chọn: Tạm đổi / Đổi luôn / Không đổi – chờ hãng"); F2.querySelector("[data-vm]").scrollIntoView({block: "center"}); throw new Error("x"); }
+      if (kind === "hang" && (vm === "tam" || vm === "luon")) {
         const np = F2.vdNewProd.value.trim() || t.product, ns = F2.vdNewSn.value.trim();
         if (vdNeedSn() && !ns) { toast("Nhập seri máy mới đổi cho khách"); F2.vdNewSn.focus(); throw new Error("x"); }
         if (ns && !snOk(ns)) { toast(`Seri mới sai định dạng – phải ${SN_HINT}`); F2.vdNewSn.focus(); throw new Error("x"); }
         if (ns && keySN(ns) === keySN(t.serial)) { toast("Seri mới phải khác seri cũ"); throw new Error("x"); }
         const sx = ns && findStock(ns); if (sx && sx.status !== "in") { toast(`Seri ${ns} đã xuất (${sx.orderCode || "đơn khác"})`); throw new Error("x"); }
-        await vdRegSwap(t, t.serial, ns, np);
-        extra.exchange = {oldSerial: t.serial, newSerial: ns, newProduct: np, mode: "keep", months: null, until: vdUntil(t), viaHang: true};
-        extra.stockOut = false; vendor.swap = {newSerial: ns, newProduct: np, at: now};
-        stage = "cho_kho"; note += ` · 🔄 Đổi máy mới cho khách: ${np}${ns ? " SN " + ns : ""} – chuyển Kho xuất máy mới`;
+        if (vm === "luon") await vdRegSwap(t, t.serial, ns, np);
+        extra.exchange = Object.assign({oldSerial: t.serial, newSerial: ns, newProduct: np, mode: "keep", months: null, until: vdUntil(t), viaHang: true}, vm === "tam" ? {temp: true} : {});
+        extra.stockOut = false; vendor.swap = {mode: vm, newSerial: ns, newProduct: np, at: now};
+        stage = "cho_kho"; note += vm === "tam" ? ` · 🔁 Tạm đổi máy cho khách: ${np}${ns ? " SN " + ns : ""} – chuyển Kho xuất máy tạm` : ` · 🔄 Đổi luôn máy mới cho khách: ${np}${ns ? " SN " + ns : ""} – chuyển Kho xuất máy mới`;
       }
       await advance(t, stage, note, extra);
-      if (stage === "cho_kho") pushTo("wh", `🔄 Xuất máy đổi cho khách: ${t.product}`, `${t.customer} – máy lỗi đã gửi hãng`, t.id);
-      toast(stage === "cho_kho" ? "Đã gửi hãng · chuyển Kho xuất máy mới cho khách" : `Đã ghi ${kind === "hang" ? "gửi hãng" : "gửi SC ngoài"} – theo dõi ở mục 🏭 bên dưới`);
+      if (stage === "cho_kho") pushTo("wh", `${vm === "tam" ? "🔁 Xuất máy tạm" : "🔄 Xuất máy đổi"} cho khách: ${t.product}`, `${t.customer} – máy lỗi đã gửi hãng`, t.id);
+      toast(stage === "cho_kho" ? `Đã gửi hãng · chuyển Kho xuất ${vm === "tam" ? "máy tạm" : "máy mới"} cho khách` : `Đã ghi ${kind === "hang" ? "gửi hãng" : "gửi SC ngoài"} – theo dõi ở mục 🏭 bên dưới`);
     };
     // ---- đổi đầu thu / đầu phát: chọn bộ phận + seri cũ / seri mới ----
     let ddPart = t.partSwap?.part || "";
@@ -3843,6 +3870,7 @@ window.APP_BUILD = "2026-11-28.2";
         <div class="sub">Bán hàng chọn: ${OSHIP[t.ship?.method] || "—"} ${esc(t.ship?.carrier || "")}</div>`
       : `<div style="margin-bottom:4px"><span class="tag ${t.type}">${TYPE[t.type]}</span><b>${esc(t.product)}</b> <span class="sub">SN ${esc(t.serial)}</span></div>
         <div class="sub">${esc(t.customer)}${t.phone ? " · " + esc(t.phone) : ""} · ${esc(STAGES[t.stage].label)}</div>
+        ${!isOd && t.swapBack && !t.swapBack.done ? `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:2px solid #b45309;border-radius:12px;margin-top:8px;cursor:pointer;background:rgba(180,83,9,.07)"><input type="checkbox" name="sbChk" style="width:20px;height:20px;margin:0"> <span>🔁 <b>Đổi lại cho khách:</b> đã giao máy SN <b>${esc(t.swapBack.give || "")}</b> và <b>thu hồi máy tạm ${t.swapBack.take ? "SN " + esc(t.swapBack.take) : esc(t.swapBack.takeProduct || "")}</b> <span class="sub">(máy tạm tự cộng lại kho)</span></span></label>` : ""}
         ${t.accessories ? `<label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;padding:10px 12px;border:2px solid #7c3aed;border-radius:12px;margin-top:8px;cursor:pointer;background:rgba(124,58,237,.06)"><input type="checkbox" name="accChk" style="width:20px;height:20px;margin:0"> <span>📦 Đã gửi kèm phụ kiện: <b>${esc(t.accessories)}</b></span></label>` : ""}`}
       <label>Hình thức gửi *</label>
       <div class="choice">
@@ -3901,6 +3929,7 @@ window.APP_BUILD = "2026-11-28.2";
       const g = isGrab(shipMethod);
       const date = F3.date.value, carrier = (shipMethod === "chanh" ? F3.carrier.value : g ? F3.gDriver.value : F3.post.value).trim();
       if (shipMethod === "chanh" && !carrier) { toast("Hãy nhập tên chành xe"); F3.carrier.focus(); throw new Error("x"); }
+      if (F3.sbChk && !F3.sbChk.checked) { toast("Tick “Đổi lại cho khách – đã thu hồi máy tạm”"); F3.sbChk.scrollIntoView({block: "center"}); throw new Error("x"); }
       if (F3.accChk && !F3.accChk.checked) { toast(`Kiểm tra & tick “Đã gửi kèm phụ kiện: ${t.accessories}”`); F3.accChk.scrollIntoView({block: "center"}); throw new Error("x"); }
       if (shipMethod === "chanh" && !fpay.ship) { toast("Phí ship: chọn 🏢 Công ty trả hoặc 👤 Khách trả"); F3.querySelector('.fpay[data-f="ship"]').scrollIntoView({block: "center"}); throw new Error("x"); }
       if (shipMethod === "chanh" && !feeNum(F3.feeShip)) { toast("Hãy nhập số tiền phí ship (bắt buộc khi gửi chành xe)"); F3.feeShip.focus(); throw new Error("x"); }
@@ -3912,7 +3941,10 @@ window.APP_BUILD = "2026-11-28.2";
       const note = `${shipText({ship:{method:shipMethod, carrier}}, true)} · ${isOd ? "gửi" : "trả"} ngày ${fmt(date)}${!isOd && t.accessories ? ` · 📦 kèm phụ kiện: ${t.accessories}` : ""}`;
       let c;
       if (isOd) c = await advanceOrder(t, "cho_tt", note, {ship});
-      else { c = push(t, "cho_tt", note, {ship}); await put("tk", c); sendPush(c); }
+      else {
+        const sbx = t.swapBack && !t.swapBack.done ? {swapBack: Object.assign({}, t.swapBack, {done: true, doneAt: new Date().toISOString()})} : {};
+        if (sbx.swapBack) await vdStockIn(t.swapBack.takeProduct, t.swapBack.take, `Thu hồi máy tạm – phiếu ${t.code}`);
+        c = push(t, "cho_tt", note + (sbx.swapBack ? ` · 🔁 đổi lại cho khách SN ${t.swapBack.give || ""}, thu hồi máy tạm về kho` : ""), Object.assign({ship}, sbx)); await put("tk", c); sendPush(c); }
       if (fee) try { await put("ex", {id: "ex_" + uid(), kind: "ship", date, amount: fee.total, ref: t.code, customer: t.customer, saleDate: t.saleDate || (t.createdAt || "").slice(0, 10), payer: "cty", charge: false,
         custPart: fee.khach, note: `🚚 ${carrier}: phí ship ${money(fee.ship)} (${PAYER[fee.shipPayer]})${fee.send ? ` + phí gửi hàng ${money(fee.send)} (${PAYER[fee.sendPayer]})` : ""}`, by: actor(), at: new Date().toISOString()}); } catch(e){}
       toast("Đã lưu – đang tạo file Excel…");
